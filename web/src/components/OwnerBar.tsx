@@ -45,14 +45,14 @@ export function OwnerBar({ id, onDeleted }: { id: string; onDeleted: () => void 
   };
 
   return (
-    <div className="border-b bg-muted/30">
+    <div className="border-b bg-secondary">
       <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2 px-5 py-3 text-sm">
         <Button size="sm" variant="outline" onClick={copy}>
           {copied ? "Link copied" : "Copy link"}
         </Button>
         {shared ? (
           <>
-            <span className="text-emerald-700">In the gallery ✓</span>
+            <span className="text-[var(--good)]">In the gallery ✓</span>
             <Button size="sm" variant="ghost" onClick={doUnshare} disabled={busy}>
               Remove from gallery
             </Button>
@@ -70,7 +70,7 @@ export function OwnerBar({ id, onDeleted }: { id: string; onDeleted: () => void 
             </Button>
           </div>
         )}
-        <Button size="sm" variant="ghost" className="ml-auto text-red-600 hover:text-red-700" onClick={doDelete} disabled={busy}>
+        <Button size="sm" variant="ghost" className="ml-auto text-[var(--bad)] hover:text-[var(--bad)]" onClick={doDelete} disabled={busy}>
           Delete
         </Button>
       </div>

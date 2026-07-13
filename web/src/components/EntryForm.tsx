@@ -126,9 +126,10 @@ export function EntryForm({
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" size="lg" disabled={!canSubmit}>
+          <button type="submit" className="cta" disabled={!canSubmit}>
             {busy ? "Starting…" : "Build the campaign"}
-          </Button>
+            <span className="chip">→</span>
+          </button>
           <Button type="button" variant="ghost" onClick={() => setForm(EXAMPLE)} disabled={busy}>
             Use a prepared example
           </Button>

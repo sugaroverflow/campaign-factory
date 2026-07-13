@@ -8,17 +8,21 @@ import { SiteNav } from "@/components/SiteNav";
 const interTight = Inter_Tight({
   variable: "--font-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
 const instrumentSerif = Instrument_Serif({
   variable: "--font-serif",
   subsets: ["latin"],
   weight: "400",
+  style: "italic",
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {

@@ -165,10 +165,10 @@
     letter-spacing: -0.02em;
   }
 }
-/* --- awake-style scroll-reveal choreography --- */
+/* --- awake-style scroll-reveal choreography (matches awake.js / awake.css exactly) --- */
 .cf-reveal [data-anim] {
   opacity: 0;
-  transform: translateY(20px);
+  transform: translateY(24px);
   transition:
     opacity 0.5s ease,
     transform 0.5s ease;
@@ -177,9 +177,54 @@
   opacity: 1;
   transform: none;
 }
-.cf-reveal[data-on="1"] [data-anim="2"] { transition-delay: 0.12s; }
-.cf-reveal[data-on="1"] [data-anim="3"] { transition-delay: 0.24s; }
-.cf-reveal[data-on="1"] [data-anim="4"] { transition-delay: 0.36s; }
+.cf-reveal[data-on="1"] [data-anim="2"] { transition-delay: 0.18s; }
+.cf-reveal[data-on="1"] [data-anim="3"] { transition-delay: 0.36s; }
+.cf-reveal[data-on="1"] [data-anim="4"] { transition-delay: 0.48s; }
 @media (prefers-reduced-motion: reduce) {
   .cf-reveal [data-anim] { opacity: 1; transform: none; transition: none; }
+}
+
+/* --- sliding-arrow pill CTA (ported verbatim from the awake prototype) --- */
+.cta {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  background: var(--ink);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 0.55rem 0.6rem 0.55rem 1.5rem;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  text-decoration: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+.cta .chip {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  transition: transform 0.3s ease;
+}
+.cta:hover .chip { transform: rotate(45deg); }
+.cta:disabled { opacity: 0.5; cursor: not-allowed; }
+.cta:disabled:hover .chip { transform: none; }
+.keys { font-size: 0.85rem; color: var(--muted-foreground); margin-top: 1.25rem; }
+.keys kbd {
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 0.4rem;
+  padding: 0.05rem 0.5rem;
+  font-family: var(--font-sans);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cta .chip { transition: none; }
+  .cta:hover .chip { transform: none; }
 }

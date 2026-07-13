@@ -158,10 +158,11 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
   const shownSources = srcFilter === "all" ? c.sources : (c.sources || []).filter((s) => s.status === srcFilter);
 
   const eyebrow = (t: string) => <div className="eyebrow">{t}</div>;
-  const Head = ({ id, kicker, title, sub }: { id: string; kicker: string; title: string; sub?: string }) => (
+  const Head = ({ kicker, title, sub, agent }: { id?: string; kicker: string; title: string; sub?: string; agent?: string }) => (
     <div className="jhead">
       {eyebrow(kicker)}
       <h2>{title}</h2>
+      {agent ? <div><span className="agentchip">🤖 {agent}</span></div> : null}
       {sub ? <p className="jsub">{sub}</p> : null}
     </div>
   );
@@ -205,9 +206,28 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
           ) : null}
         </header>
 
+        {/* at-a-glance pastel stat tiles (honest counts from the finished plan) */}
+        {(() => {
+          const tiles: { cls: string; big: number; s: string }[] = [];
+          if (c.sources?.length)
+            tiles.push({ cls: "b", big: c.sources.length, s: c.sources.length === 1 ? "source checked & labelled" : "sources checked & labelled" });
+          if (p?.stakeholders?.length) tiles.push({ cls: "p", big: p.stakeholders.length, s: "people & institutions mapped" });
+          if (p?.tactics?.length) tiles.push({ cls: "y", big: p.tactics.length, s: "sequenced tactics" });
+          return tiles.length >= 3 ? (
+            <div className="tiles3">
+              {tiles.slice(0, 3).map((t, i) => (
+                <div key={i} className={`ptile ${t.cls}`}>
+                  <div className="big">{t.big}</div>
+                  <div className="s">{t.s}</div>
+                </div>
+              ))}
+            </div>
+          ) : null;
+        })()}
+
         {/* 1 — problem */}
         <section className={stageClass("problem")} id="j-problem" data-stage="problem" data-on={revealed.has("problem") ? "1" : "0"}>
-          <Head id="problem" kicker="Stage 1" title="The original problem" sub="The starting statement is treated as a hypothesis, not a brief — research tests it." />
+          <Head id="problem" kicker="Stage 1" title="The original problem" agent="intake" sub="The starting statement is treated as a hypothesis, not a brief — research tests it." />
           <blockquote className="userquote" data-anim="1">{c.input.problem}</blockquote>
           <div className="kvrow" data-anim="2">
             {([["Organisation", c.input.org], ["Location", c.input.location], ["Desired outcome", c.input.outcome], ["Known decision-maker", c.input.dm], ["Timeframe", c.input.timeframe], ["People affected", c.input.affected], ["Evidence", c.input.evidence], ["Resources", c.input.resources]] as [string, string | undefined][])
@@ -237,7 +257,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
         {/* 2 — research */}
         {r ? (
           <section className={stageClass("research")} id="j-research" data-stage="research" data-on={revealed.has("research") ? "1" : "0"}>
-            <Head id="research" kicker="Stage 2" title="Researched context" sub="Live web research against authoritative UK sources. Every claim is labelled and linked in Sources." />
+            <Head id="research" kicker="Stage 2" title="Researched context" agent="scout · verifier" sub="Live web research against authoritative UK sources. Every claim is labelled and linked in Sources." />
             {r.context ? (
               <div className="cols2" data-anim="1">
                 <div>
@@ -256,9 +276,19 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
             {(c.sources || []).length ? (
               <div data-anim="2">
                 <h3>Key claims on the record</h3>
-                {(c.sources || []).slice(0, 6).map((s, i) => (
-                  <div key={i} className="cite"><span className="c-src">{s.sourceOrg || s.sourceTitle || "Source"}</span><span>{s.claim} <Tag label={s.status} /></span></div>
-                ))}
+                <div className="wire">
+                  <div className="wire-bar">
+                    <span className="dots"><i /><i /><i /></span> evidence · {c.sources.length} source{c.sources.length === 1 ? "" : "s"} · every claim labelled
+                  </div>
+                  <div className="wire-body">
+                    {(c.sources || []).slice(0, 6).map((s, i) => (
+                      <div key={i} className="line">
+                        <span className="c-src">{s.sourceOrg || s.sourceTitle || "Source"}</span>
+                        <span>{s.claim} <Tag label={s.status} /></span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <p className="hint-sm">Full source register with URLs, dates and filters in <a href="#j-sources">Sources</a>.</p>
               </div>
             ) : null}
@@ -269,9 +299,11 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
         {/* 3 — objective */}
         {f ? (
           <section className={stageClass("objective")} id="j-objective" data-stage="objective" data-on={revealed.has("objective") ? "1" : "0"}>
-            <Head id="objective" kicker="Stage 3" title="Objective & minimum viable win" sub="The formula keeps it honest: a decision-maker, a specific action, a time, and a minimum viable win." />
-            <div className="formula" data-anim="1">
-              We want <b>{f.dm}</b> to <b>{f.action}</b> by <b>{f.by}</b>, even if the immediate outcome is only <b>{f.mvw}</b>.
+            <Head id="objective" kicker="Stage 3" title="Objective & minimum viable win" agent="strategy · objective check" sub="The formula keeps it honest: a decision-maker, a specific action, a time, and a minimum viable win." />
+            <div className="checkin" data-anim="1">
+              <div className="clock">⏰ Check-in formula</div>
+              We want <span className="fill">{f.dm}</span> to <span className="fill">{f.action}</span> by{" "}
+              <span className="fill">{f.by}</span>, even if the immediate outcome is only <span className="fill">{f.mvw}</span>.
             </div>
             <div className="cols2" data-anim="2" style={{ marginTop: "1.2rem" }}>
               <div>
@@ -284,13 +316,16 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
                 {p?.assumptions?.length ? (<><h3>Assumptions needing human review</h3><List items={p.assumptions} max={4} /></>) : null}
               </div>
             </div>
+            <div className="stagegate" data-anim="3">
+              <span className="g-ok">✓ Objective check</span> framed to the SMART test and the check-in formula — every stage below builds on this.
+            </div>
           </section>
         ) : null}
 
         {/* 4 — decision */}
         {r?.decisionMaker || f ? (
           <section className={stageClass("decision")} id="j-decision" data-stage="decision" data-on={revealed.has("decision") ? "1" : "0"}>
-            <Head id="decision" kicker="Stage 4" title="The decision-making route" sub="Formal authority and practical influence are different maps. This is both." />
+            <Head id="decision" kicker="Stage 4" title="The decision-making route" agent="power analyst · verifier" sub="Formal authority and practical influence are different maps. This is both." />
             <div className="routeviz" data-anim="1">
               <span className="rnode">You / the campaign</span><span className="rarrow">→</span>
               {r?.decisionMaker?.implementer ? (<><span className="rnode">{r.decisionMaker.implementer}<small>implements</small></span><span className="rarrow">→</span></>) : null}
@@ -313,7 +348,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
         {/* 5 — power */}
         {p?.stakeholders?.length ? (
           <section className={stageClass("power")} id="j-power" data-stage="power" data-on={revealed.has("power") ? "1" : "0"}>
-            <Head id="power" kicker="Stage 5" title="Power & stakeholder map" sub="Click any stakeholder for the full profile — position, evidence, ask, approach, verification status." />
+            <Head id="power" kicker="Stage 5" title="Power & stakeholder map" agent="power analyst" sub="Click any stakeholder for the full profile — position, evidence, ask, approach, verification status." />
             <div className="pmap-live" data-anim="1">
               {tiers.map(([tier, label]) => {
                 const rows = (p.stakeholders || []).filter((s) => s.tier === tier);
@@ -344,7 +379,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
         {/* 6 — pressure */}
         {p?.pressures?.length ? (
           <section className={stageClass("pressure")} id="j-pressure" data-stage="pressure" data-on={revealed.has("pressure") ? "1" : "0"}>
-            <Head id="pressure" kicker="Stage 6" title="Pressure analysis" sub={p.statusQuoCost} />
+            <Head id="pressure" kicker="Stage 6" title="Pressure analysis" agent="power · tactics · lobbying" sub={p.statusQuoCost} />
             <div className="pgrid" data-anim="1">
               {p.pressures.map((pr, i) => (
                 <div className="pcardx" key={i}>
@@ -362,7 +397,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
         {/* 7 — strategy */}
         {p?.strategy ? (
           <section className={stageClass("strategy")} id="j-strategy" data-stage="strategy" data-on={revealed.has("strategy") ? "1" : "0"}>
-            <Head id="strategy" kicker="Stage 7" title="Campaign strategy" sub="Why this approach could produce the decision — not a list of outputs." />
+            <Head id="strategy" kicker="Stage 7" title="Campaign strategy" agent="strategy · all specialists reviewed" sub="Why this approach could produce the decision — not a list of outputs." />
             {p.strategy.narrative ? <blockquote className="narr" data-anim="1">{p.strategy.narrative}</blockquote> : null}
             <div className="cols2" data-anim="2">
               <div>
@@ -388,7 +423,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
         {/* 8 — tactics */}
         {p?.tactics?.length ? (
           <section className={stageClass("tactics")} id="j-tactics" data-stage="tactics" data-on={revealed.has("tactics") ? "1" : "0"}>
-            <Head id="tactics" kicker="Stage 8" title="Tactics & timeline" sub="Each tactic has a target, an owner, a success sign, and a human approval point." />
+            <Head id="tactics" kicker="Stage 8" title="Tactics & timeline" agent="tactics · lobbying · media · digital" sub="Each tactic has a target, an owner, a success sign, and a human approval point." />
             {p.strategy?.phases?.length ? (
               <div className="tl" data-anim="1">{p.strategy.phases.map((ph, i) => (<div key={i} className={`tl-ph p${(i % 4) + 1}`}><b>{ph.name}</b><small>{ph.when}</small><br />{ph.focus}</div>))}</div>
             ) : null}
@@ -412,7 +447,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
         {/* 9 — organising */}
         {p?.organising ? (
           <section className={stageClass("organising")} id="j-organising" data-stage="organising" data-on={revealed.has("organising") ? "1" : "0"}>
-            <Head id="organising" kicker="Stage 9" title="Organising people" sub={p.organising.whoActs} />
+            <Head id="organising" kicker="Stage 9" title="Organising people" agent="organising · digital" sub={p.organising.whoActs} />
             <div className="cols2" data-anim="1">
               <div>
                 {p.organising.whyParticipate ? (<><h3>Why people will take part</h3><p>{p.organising.whyParticipate}</p></>) : null}
@@ -421,7 +456,19 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
                 {p.organising.oneToOne?.length ? (<><h3>One-to-one conversation guide</h3><ol>{p.organising.oneToOne.map((x, i) => <li key={i}>{x}</li>)}</ol></>) : null}
               </div>
               <div>
-                {p.organising.ladder?.length ? (<><h3>Ladder of engagement</h3><table><tbody>{p.organising.ladder.map((l, i) => (<tr key={i}><td><b>{l.rung}</b></td><td>{l.action}</td></tr>))}</tbody></table></>) : null}
+                {p.organising.ladder?.length ? (
+                  <>
+                    <h3>Ladder of engagement</h3>
+                    <div className="sladder">
+                      {p.organising.ladder.map((l, i, arr) => (
+                        <div key={i} className={`srung ${i === Math.min(2, arr.length - 1) ? "hot" : ""}`}>
+                          <div className="r-t">{l.rung}</div>
+                          <div className="r-a">{l.action}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
                 {p.organising.channels?.length ? (<><h3>Channels</h3><List items={p.organising.channels} /></>) : null}
                 {p.organising.event ? (<><h3>Event</h3><p>{p.organising.event}</p></>) : null}
                 {p.organising.humanEssential?.length ? (<><h3>Where trust and relationships stay human</h3><List items={p.organising.humanEssential} /></>) : null}
@@ -433,7 +480,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
         {/* 10 — drafts */}
         {d?.lobbying || d?.media || d?.digital ? (
           <section className={stageClass("drafts")} id="j-drafts" data-stage="drafts" data-on={revealed.has("drafts") ? "1" : "0"}>
-            <Head id="drafts" kicker="Stage 10" title="Drafted campaign resources" sub="Complete first drafts from the shared plan. [VERIFY: …] items are unresolved facts — never send without resolving them." />
+            <Head id="drafts" kicker="Stage 10" title="Drafted campaign resources" agent="lobbying · media · digital" sub="Complete first drafts from the shared plan. [VERIFY: …] items are unresolved facts — never send without resolving them." />
             {d.lobbying ? (
               <>
                 <h3 className="draftgroup" data-anim="1">Lobbying</h3>
@@ -501,7 +548,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
         {/* 12 — sources */}
         {c.sources?.length ? (
           <section className={stageClass("sources")} id="j-sources" data-stage="sources" data-on={revealed.has("sources") ? "1" : "0"}>
-            <Head id="sources" kicker="Sources & verification" title="Every source used" sub="Filter by verification status. Nothing invented is presented as verified." />
+            <Head id="sources" kicker="Sources & verification" title="Every source used" agent="verifier" sub="Filter by verification status. Nothing invented is presented as verified." />
             <div className="srcfilters" data-anim="1">
               <button className={`toolbtn ${srcFilter === "all" ? "on" : ""}`} onClick={() => setSrcFilter("all")}>All ({c.sources.length})</button>
               {present.map((l) => (

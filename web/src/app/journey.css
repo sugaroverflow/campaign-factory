@@ -31,7 +31,11 @@
 
 .userquote { margin: 0 0 1rem; padding: 1.1rem 1.4rem; background: var(--secondary); border-left: 3px solid var(--ink); border-radius: 0 var(--r-lg) var(--r-lg) 0; font-size: 1.05rem; color: var(--ink); }
 .narr { margin: 0 0 1.2rem; padding: 1.1rem 1.4rem; background: var(--tint-yellow); border-radius: var(--r-xl); font-size: 1.1rem; }
-.formula { background: var(--pale-yellow); border-radius: var(--r-xl); padding: 1.1rem 1.4rem; font-size: 1.15rem; line-height: 1.5; }
+
+/* check-in formula (deck slide 24) — ported from campaign-planner.html */
+.checkin { background: var(--pale-yellow); border-radius: var(--r-2xl); padding: 1.5rem 2rem; font-size: 1.25rem; line-height: 1.5; }
+.checkin .clock { font-size: .85rem; text-transform: uppercase; letter-spacing: .08em; margin-bottom: .5rem; color: rgba(27, 29, 30, .6); }
+.checkin .fill { border-bottom: 2px solid var(--ink); font-weight: 600; padding: 0 .2rem; white-space: normal; }
 .kvrow { display: flex; flex-wrap: wrap; gap: .5rem; margin: .6rem 0; }
 .kv { font-size: .82rem; background: var(--secondary); border-radius: 999px; padding: .25rem .8rem; }
 .hint-sm { font-size: .82rem; color: var(--muted-foreground); }
@@ -141,3 +145,39 @@
 
 /* incomplete banner */
 .jbanner { border: 1px solid var(--warn); background: var(--tint-yellow); border-radius: var(--r-xl); padding: .9rem 1.2rem; font-size: .92rem; margin: 1rem 0; color: var(--ink); }
+
+/* ===== awake components ported from campaign-planner.html ===== */
+
+/* agent attribution chip (🤖 specialist) on stage heads */
+.agentchip { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; color: var(--muted-foreground); border: 1px solid var(--border); border-radius: 999px; padding: .12rem .6rem; margin: .1rem 0 .2rem; }
+
+/* wireframe app panel — bordered card with a title bar */
+.wire { border: 1px solid rgba(27, 29, 30, .12); border-radius: var(--r-2xl); background: var(--card); overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, .04); margin: 1rem 0; }
+.wire-bar { display: flex; align-items: center; gap: .6rem; padding: .6rem 1rem; border-bottom: 1px solid rgba(27, 29, 30, .08); background: var(--secondary); font-size: .8rem; color: var(--muted-foreground); }
+.wire-bar .dots { display: flex; gap: .3rem; }
+.wire-bar .dots i { width: .55rem; height: .55rem; border-radius: 999px; background: #d4d4d4; }
+.wire-body { padding: 1.25rem; }
+.wire .line { font-size: .92rem; padding: .5rem 0; border-bottom: 1px dashed var(--border); display: flex; gap: .55rem; align-items: baseline; }
+.wire .line:last-child { border-bottom: none; }
+.wire .line .c-src { font-weight: 600; white-space: nowrap; }
+
+/* pastel stat tiles — "at a glance" */
+.tiles3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1.2rem 0; }
+@media (max-width: 800px) { .tiles3 { grid-template-columns: 1fr; } }
+.ptile { border-radius: var(--r-2xl); padding: 1.4rem 1.5rem; }
+.ptile.y { background: var(--pale-yellow); }
+.ptile.b { background: var(--tint-blue); }
+.ptile.p { background: rgba(186, 129, 238, .25); }
+.ptile .big { font-size: 2.4rem; font-weight: 500; letter-spacing: -.02em; line-height: 1.05; }
+.ptile .s { font-size: .9rem; margin-top: .5rem; color: rgba(27, 29, 30, .75); }
+
+/* supporter ladder — each rung a concrete action */
+.sladder { display: flex; gap: .5rem; align-items: stretch; flex-wrap: wrap; margin: .4rem 0; }
+.srung { flex: 1; min-width: 140px; border: 1px solid var(--border); border-radius: var(--r-xl); padding: .8rem; font-size: .82rem; background: var(--card); }
+.srung .r-t { font-weight: 700; font-size: .85rem; margin-bottom: .3rem; }
+.srung .r-a { color: var(--muted-foreground); }
+.srung.hot { background: var(--tint-yellow); border-color: transparent; }
+
+/* stage checkpoint gate */
+.stagegate { display: flex; gap: .8rem; align-items: center; flex-wrap: wrap; background: var(--secondary); border-radius: 999px; padding: .6rem 1.4rem; font-size: .9rem; margin-top: 1.25rem; color: var(--muted-foreground); }
+.stagegate .g-ok { color: var(--good); font-weight: 700; white-space: nowrap; }

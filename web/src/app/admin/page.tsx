@@ -57,7 +57,7 @@ export default function AdminPage() {
             <Link href={`/c/${it.id}`} className="min-w-0 truncate hover:underline">
               {it.title || it.name}
             </Link>
-            <Button size="sm" variant="outline" className="text-red-600" onClick={() => hide(it.id)} disabled={!key}>
+            <Button size="sm" variant="outline" className="text-[var(--bad)]" onClick={() => hide(it.id)} disabled={!key}>
               Hide
             </Button>
           </div>
