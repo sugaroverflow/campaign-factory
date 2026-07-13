@@ -6,12 +6,13 @@ import { runCount, incrRun, runCountByIp, incrIpRun } from "@/lib/db/sessions";
 import { SID_COOKIE, parseSid, newSid, clientIp } from "@/lib/session";
 import { type RunInput } from "@/lib/pipeline/types";
 
-// Keep the function alive while the pipeline runs via after(), capped at the
-// Hobby-plan ceiling (300s). The full 6–15 min pipeline EXCEEDS this, so on this
-// plan a run cannot complete in one function — durable step execution (Vercel
-// Workflow) is required for runs to finish. Node runtime for the Postgres driver.
+// Keep the function alive while the pipeline runs via after(). On Pro + Fluid
+// Compute the ceiling is 800s (~13 min), which covers the 6–15 min pipeline for
+// all but the longest runs — set to that max here. Truly long runs still need
+// durable step execution (Vercel Workflow) to survive across the boundary.
+// Node runtime for the Postgres driver.
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 // POST /api/runs — start a campaign run. Gate order (all pre-spend):
 //   1. readonly (sunset)      → 503 { capacity, reason: "closed" }
