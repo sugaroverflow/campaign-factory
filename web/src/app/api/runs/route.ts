@@ -6,11 +6,12 @@ import { runCount, incrRun } from "@/lib/db/sessions";
 import { SID_COOKIE, parseSid, newSid } from "@/lib/session";
 import { type RunInput } from "@/lib/pipeline/types";
 
-// Keep the function alive while the (long) pipeline runs via after(); capped here.
-// 800s is the Vercel Pro/Fluid ceiling — runs that exceed it need Vercel Workflow
-// (the durable-execution follow-up). Node runtime for the Postgres TCP driver.
+// Keep the function alive while the pipeline runs via after(), capped at the
+// Hobby-plan ceiling (300s). The full 6–15 min pipeline EXCEEDS this, so on this
+// plan a run cannot complete in one function — durable step execution (Vercel
+// Workflow) is required for runs to finish. Node runtime for the Postgres driver.
 export const runtime = "nodejs";
-export const maxDuration = 800;
+export const maxDuration = 300;
 
 // POST /api/runs — start a campaign run. Gate order (all pre-spend):
 //   1. readonly (sunset)      → 503 { capacity, reason: "closed" }
