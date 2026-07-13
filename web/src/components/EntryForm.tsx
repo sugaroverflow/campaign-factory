@@ -52,12 +52,12 @@ export function EntryForm({
       <header className="mb-8">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium tracking-wide text-muted-foreground">Campaign Factory</p>
-          <a href="/wall" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+          <a href="/wall" className="text-sm text-brand underline-offset-4 hover:underline">
             Campaign Gallery →
           </a>
         </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
-          Turn a local problem into a whole campaign.
+          Turn a local problem into a <span className="font-serif font-normal italic">whole campaign</span>.
         </h1>
         <p className="mt-3 text-muted-foreground">
           Describe a UK local or public-policy problem. Campaign Factory researches it live, builds the

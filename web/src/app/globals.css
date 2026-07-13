@@ -7,7 +7,14 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* awake accents */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-pale-yellow: var(--pale-yellow);
+  --color-tint-blue: var(--tint-blue);
+  --color-tint-yellow: var(--tint-yellow);
   --font-sans: var(--font-sans);
+  --font-serif: var(--font-serif);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -49,38 +56,52 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Awake theme — ported from archive/prototypes/awake.css (tokens verified from
+     the shadcnspace 'awake' template demo). Light-only. */
+  --background: #ffffff;
+  --foreground: #1b1d1e;
+  --card: #ffffff;
+  --card-foreground: #1b1d1e;
+  --popover: #ffffff;
+  --popover-foreground: #1b1d1e;
+  --primary: #171717;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  /* accent = the awake purple-blue brand, used for hover/selected surfaces */
+  --accent: #eeeafe;
+  --accent-foreground: #4928fd;
+  --destructive: #df2225;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #a1a1a1;
+
+  /* awake brand + pastels */
+  --brand: #4928fd;
+  --brand-foreground: #ffffff;
+  --pale-yellow: #f6e683;
+  --pastel-blue: #70b5ff;
+  --pastel-green: #79d45e;
+  --pastel-purple: #ba81ee;
+  --tint-blue: #d9f3fc;
+  --tint-yellow: #fdf1d3;
+
+  --chart-1: #4928fd;
+  --chart-2: #70b5ff;
+  --chart-3: #79d45e;
+  --chart-4: #f6e683;
+  --chart-5: #ba81ee;
+  --radius: 0.75rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1b1d1e;
+  --sidebar-primary: #171717;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #f5f5f5;
+  --sidebar-accent-foreground: #171717;
+  --sidebar-border: #e5e5e5;
+  --sidebar-ring: #a1a1a1;
 }
 
 .dark {
