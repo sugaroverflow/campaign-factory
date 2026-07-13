@@ -8,6 +8,13 @@ flagged. Built for a conference launch. Full product plan and decisions: [`../PL
 sources with 7 verification labels; drafts mark unresolved facts as `[VERIFY: …]`;
 failed stages are shown as failed, never faked.
 
+## Status
+
+- **Repo:** [`sugaroverflow/campaign-factory`](https://github.com/sugaroverflow/campaign-factory) — GitHub-connected to Vercel; pushes to `main` **auto-deploy** (build root: `web/`).
+- **Deployed:** Vercel project `campaign-factory` on the **Hobby** plan, with **Neon** Postgres.
+- **Not yet publicly usable** — see [go-live requirements](#️-technical-requirements-before-going-live): deployment protection is on, and the Hobby 300s function cap can't fit a full run (durable execution tracked in [issue #1](https://github.com/sugaroverflow/campaign-factory/issues/1)).
+- **Docs:** [`../PLAN.md`](../PLAN.md) (plan) · [`../HOW_IT_WAS_BUILT.md`](../HOW_IT_WAS_BUILT.md) (architecture) · [`../EXECUTION_JOURNAL.md`](../EXECUTION_JOURNAL.md) (build log) · [issues](https://github.com/sugaroverflow/campaign-factory/issues).
+
 ## Stack
 
 - Next.js 16 (App Router) · React 19 · Tailwind v4 · shadcn/ui
