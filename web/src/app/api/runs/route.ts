@@ -1,10 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { startRun } from "@/lib/jobs/store";
 import { config } from "@/lib/config";
 import { overBudget } from "@/lib/db/spend";
 import { runCount, incrRun } from "@/lib/db/sessions";
 import { SID_COOKIE, parseSid, newSid } from "@/lib/session";
 import { type RunInput } from "@/lib/pipeline/types";
+
+// Keep the function alive while the (long) pipeline runs via after(); capped here.
+// 800s is the Vercel Pro/Fluid ceiling — runs that exceed it need Vercel Workflow
+// (the durable-execution follow-up). Node runtime for the Postgres TCP driver.
+export const runtime = "nodejs";
+export const maxDuration = 800;
 
 // POST /api/runs — start a campaign run. Gate order (all pre-spend):
 //   1. readonly (sunset)      → 503 { capacity, reason: "closed" }
@@ -76,7 +82,8 @@ export async function POST(req: Request) {
 
   try {
     await incrRun(sid);
-    const state = await startRun(input, sid);
+    const { state, work } = await startRun(input, sid);
+    after(work); // keep the function alive until the pipeline settles
     const res = NextResponse.json({ id: state.id, status: state.status }, { status: 202 });
     if (isNewSid) {
       res.cookies.set(SID_COOKIE, sid, {

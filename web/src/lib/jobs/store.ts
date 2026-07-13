@@ -28,14 +28,21 @@ function scheduleSave(id: string) {
   );
 }
 
-export async function startRun(input: RunInput, ownerSid?: string): Promise<RunState> {
+export interface StartedRun {
+  state: RunState;
+  // The pipeline execution promise. The caller (route) hands this to `after()`
+  // so Vercel keeps the function alive until it settles (bounded by maxDuration).
+  work: Promise<void>;
+}
+
+export async function startRun(input: RunInput, ownerSid?: string): Promise<StartedRun> {
   const id = randomUUID();
   const state = initialRunState(id, input);
   mem.set(id, state);
   await saveRun(state); // initial persist so the run is pollable immediately
   if (ownerSid) await setRunOwner(id, ownerSid); // browser-session owner (share/delete)
 
-  void runPipeline(input, (patch) => {
+  const work = runPipeline(input, (patch) => {
     patch(state);
     scheduleSave(id);
   })
@@ -53,7 +60,7 @@ export async function startRun(input: RunInput, ownerSid?: string): Promise<RunS
       mem.delete(id);
     });
 
-  return state;
+  return { state, work };
 }
 
 export async function getRun(id: string): Promise<RunState | undefined> {
