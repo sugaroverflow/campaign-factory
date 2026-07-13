@@ -31,9 +31,12 @@ Four model calls over one shared campaign state (`web/src/lib/pipeline/`):
 | C · Drafts | Claude **Sonnet 5** ×3 parallel | Nine documents in three audience packs (decision-maker / press / supporter) |
 | Lint | Claude **Haiku 4.5** | Cheap consistency check: labels present, `[VERIFY:]` markers, no invented specifics |
 
-Model routing was designed to keep the expensive/coherence-critical work on Opus while
-using cheaper models where quality is auditable — ~$0.33/run, ~4.5–15 min. No Fable 5
-in the pipeline (cost/latency not justified here).
+Model routing keeps coherence-critical work on Opus and uses cheaper models where
+quality is auditable. Research runs at **high** effort — quality is prioritised over
+cost. Measured in rehearsal: a full run is **~$1.15 and ~15–18 min** (Stage A research
+is the long pole at high effort). Cost is controlled by **usage caps** (per-IP,
+per-session, and the £150/day kill-switch), not by degrading research. No Fable 5 in the
+pipeline.
 
 ## How a run flows
 

@@ -13,3 +13,11 @@ export function parseSid(cookieHeader: string | null): string | null {
 export function newSid(): string {
   return randomUUID();
 }
+
+// Best-effort client IP for the per-IP run cap. On Vercel the real client IP is
+// the first entry of x-forwarded-for.
+export function clientIp(req: Request): string {
+  const xff = req.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+  return req.headers.get("x-real-ip")?.trim() || "local";
+}

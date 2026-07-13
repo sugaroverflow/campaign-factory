@@ -2,8 +2,8 @@ import { NextResponse, after } from "next/server";
 import { startRun } from "@/lib/jobs/store";
 import { config } from "@/lib/config";
 import { overBudget } from "@/lib/db/spend";
-import { runCount, incrRun } from "@/lib/db/sessions";
-import { SID_COOKIE, parseSid, newSid } from "@/lib/session";
+import { runCount, incrRun, runCountByIp, incrIpRun } from "@/lib/db/sessions";
+import { SID_COOKIE, parseSid, newSid, clientIp } from "@/lib/session";
 import { type RunInput } from "@/lib/pipeline/types";
 
 // Keep the function alive while the pipeline runs via after(), capped at the
@@ -56,7 +56,16 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4. Per-session run cap
+  // 4. Per-IP run cap (harder backstop than the cookie session cap)
+  const ip = clientIp(req);
+  if ((await runCountByIp(ip)) >= config.ipRunCap) {
+    return NextResponse.json(
+      { error: `This network has reached its run limit (${config.ipRunCap}).`, capReached: true },
+      { status: 429 },
+    );
+  }
+
+  // 5. Per-session run cap
   const cookie = req.headers.get("cookie");
   let sid = parseSid(cookie);
   const isNewSid = !sid;
@@ -83,6 +92,7 @@ export async function POST(req: Request) {
 
   try {
     await incrRun(sid);
+    await incrIpRun(ip);
     const { state, work } = await startRun(input, sid);
     after(work); // keep the function alive until the pipeline settles
     const res = NextResponse.json({ id: state.id, status: state.status }, { status: 202 });

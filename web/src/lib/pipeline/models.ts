@@ -11,6 +11,11 @@
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export const MODELS = {
+  // Research stays at HIGH effort — quality of research is prioritised over cost
+  // (cost is controlled by usage caps, not by degrading effort). The truncation
+  // seen in rehearsal at high effort is fixed by giving Stage A a large
+  // max_tokens budget (thinking + the big JSON) plus a corrective retry, not by
+  // lowering effort. `xhigh` is acceptable if research quality needs it.
   research: { model: "claude-sonnet-5", effort: "high" as Effort },
   plan: { model: "claude-opus-4-8", effort: "high" as Effort },
   drafts: { model: "claude-sonnet-5", effort: "medium" as Effort },

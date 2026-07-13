@@ -48,5 +48,11 @@ export function migrate(): Promise<void> {
         run_count int not null default 0,
         updated_at timestamptz not null default now()
       )`;
+    await sql`
+      create table if not exists ip_usage (
+        ip text primary key,
+        run_count int not null default 0,
+        updated_at timestamptz not null default now()
+      )`;
   })());
 }

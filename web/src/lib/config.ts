@@ -19,8 +19,11 @@ function boolEnv(name: string, fallback: boolean): boolean {
 export const config = {
   // Conference access code. Empty string = gate disabled (local dev).
   accessCode: (process.env.CF_ACCESS_CODE || "").trim(),
-  // Runs allowed per browser session.
+  // Runs allowed per browser session (cookie — easy to reset by clearing cookies).
   runCap: intEnv("CF_RUN_CAP", 3),
+  // Runs allowed per client IP (harder backstop against abuse). Set to 1 for
+  // "everyone gets one run". Cost is controlled here, not by degrading research.
+  ipRunCap: intEnv("CF_IP_RUN_CAP", 3),
   // Global daily spend ceiling (kill-switch), in GBP, converted to USD for the
   // ledger. Sized ~2x expected launch-day cost.
   dailyBudgetGBP: numEnv("CF_DAILY_BUDGET_GBP", 150),

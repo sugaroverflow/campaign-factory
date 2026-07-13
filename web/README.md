@@ -63,7 +63,8 @@ there is no separate migration step.
 | `DATABASE_URL` | yes | — | Postgres connection string. Use the **pooled** endpoint on Neon. |
 | `ANTHROPIC_API_KEY` | yes (for live runs) | — | Server-side key for the pipeline. Without it, runs fail fast (no spend). |
 | `CF_ACCESS_CODE` | recommended | _(empty = gate off)_ | Conference access code required to start a run. |
-| `CF_RUN_CAP` | no | `3` | Max runs per browser session. |
+| `CF_RUN_CAP` | no | `3` | Max runs per browser session (cookie). |
+| `CF_IP_RUN_CAP` | no | `3` | Max runs per client IP (harder backstop; set to `1` for one-per-person). |
 | `CF_DAILY_BUDGET_GBP` | no | `150` | Global daily spend kill-switch (GBP). Flips to "at capacity" when exceeded. |
 | `CF_FX_GBP_USD` | no | `1.27` | GBP→USD rate for the ledger. |
 | `CF_READONLY` | no | `false` | Sunset switch — disables new runs; existing URLs stay readable. |
