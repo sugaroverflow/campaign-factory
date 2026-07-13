@@ -27,12 +27,15 @@ export function migrate(): Promise<void> {
         notes jsonb not null,
         campaign jsonb not null,
         cost_usd numeric not null default 0,
+        owner_sid text,
         shared boolean not null default false,
         wall_title text,
         hidden boolean not null default false,
         created_at timestamptz not null default now(),
         updated_at timestamptz not null default now()
       )`;
+    // idempotent add for DBs created before owner tracking
+    await sql`alter table runs add column if not exists owner_sid text`;
     await sql`create index if not exists runs_wall_idx on runs (shared, hidden, updated_at desc)`;
     await sql`
       create table if not exists spend_ledger (

@@ -27,6 +27,8 @@ export const config = {
   fxGbpUsd: numEnv("CF_FX_GBP_USD", 1.27),
   // Sunset / maintenance switch — disables new runs, existing URLs stay readable.
   readonly: boolEnv("CF_READONLY", false),
+  // Admin secret for the wall hide control. Empty = admin actions disabled.
+  adminKey: (process.env.CF_ADMIN_KEY || "").trim(),
 };
 
 export function dailyBudgetUSD(): number {

@@ -68,3 +68,40 @@ export async function pollRun(id: string): Promise<RunState | null> {
 
 // localStorage key for the conference access code (entered once, reused).
 export const ACCESS_CODE_KEY = "cf_access_code";
+
+export interface WallItem {
+  id: string;
+  name: string;
+  title: string | null;
+  updatedAt: string;
+}
+
+export async function getWall(): Promise<WallItem[]> {
+  const r = await fetch("/api/wall", { cache: "no-store" });
+  if (!r.ok) return [];
+  const d = await r.json();
+  return d.items ?? [];
+}
+
+export async function shareCampaign(id: string, title?: string): Promise<boolean> {
+  const r = await fetch(`/api/runs/${id}/share`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  return r.ok;
+}
+
+export async function unshareCampaign(id: string): Promise<boolean> {
+  const r = await fetch(`/api/runs/${id}/share`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ unshare: true }),
+  });
+  return r.ok;
+}
+
+export async function deleteCampaign(id: string): Promise<boolean> {
+  const r = await fetch(`/api/runs/${id}`, { method: "DELETE" });
+  return r.ok;
+}

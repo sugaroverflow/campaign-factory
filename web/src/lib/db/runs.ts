@@ -34,6 +34,11 @@ export async function saveRun(s: RunState): Promise<void> {
   `;
 }
 
+export async function setRunOwner(id: string, sid: string): Promise<void> {
+  await migrate();
+  await sql`update runs set owner_sid = ${sid} where id = ${id}`;
+}
+
 export async function getRunState(id: string): Promise<RunState | null> {
   await migrate();
   const rows = await sql`

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { initialRunState, runPipeline } from "@/lib/pipeline/run";
-import { saveRun, getRunState } from "@/lib/db/runs";
+import { saveRun, getRunState, setRunOwner } from "@/lib/db/runs";
 import { type RunInput, type RunState } from "@/lib/pipeline/types";
 
 // Durable job store. Run state lives in Postgres (source of truth for polling
@@ -28,11 +28,12 @@ function scheduleSave(id: string) {
   );
 }
 
-export async function startRun(input: RunInput): Promise<RunState> {
+export async function startRun(input: RunInput, ownerSid?: string): Promise<RunState> {
   const id = randomUUID();
   const state = initialRunState(id, input);
   mem.set(id, state);
   await saveRun(state); // initial persist so the run is pollable immediately
+  if (ownerSid) await setRunOwner(id, ownerSid); // browser-session owner (share/delete)
 
   void runPipeline(input, (patch) => {
     patch(state);

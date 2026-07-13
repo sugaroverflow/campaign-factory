@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { EntryForm } from "@/components/EntryForm";
 import { RunProgress } from "@/components/RunProgress";
 import { Journey } from "@/components/Journey";
+import { OwnerBar } from "@/components/OwnerBar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -91,7 +92,12 @@ export function CampaignApp() {
   }
 
   if (phase === "done" && campaign) {
-    return <Journey campaign={campaign} onReset={reset} />;
+    return (
+      <>
+        <OwnerBar id={campaign.id} onDeleted={reset} />
+        <Journey campaign={campaign} onReset={reset} />
+      </>
+    );
   }
 
   if (phase === "failed") {

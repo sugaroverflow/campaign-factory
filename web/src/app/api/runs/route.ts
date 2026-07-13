@@ -76,7 +76,7 @@ export async function POST(req: Request) {
 
   try {
     await incrRun(sid);
-    const state = await startRun(input);
+    const state = await startRun(input, sid);
     const res = NextResponse.json({ id: state.id, status: state.status }, { status: 202 });
     if (isNewSid) {
       res.cookies.set(SID_COOKIE, sid, {
