@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter_Tight, Instrument_Serif, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./journey.css";
 import { SiteNav } from "@/components/SiteNav";
 
 // Awake pairing: Inter Tight (sans) + Instrument Serif (italic display accents).

@@ -87,6 +87,15 @@
   --pastel-purple: #ba81ee;
   --tint-blue: #d9f3fc;
   --tint-yellow: #fdf1d3;
+  /* prototype aliases so the ported journey.css works verbatim */
+  --ink: #1b1d1e;
+  --good: #178a3a;
+  --warn: #a86a00;
+  --bad: #df2225;
+  --r-lg: 0.5rem;
+  --r-xl: 0.75rem;
+  --r-2xl: 1rem;
+  --r-3xl: 1.5rem;
 
   --chart-1: #4928fd;
   --chart-2: #70b5ff;
