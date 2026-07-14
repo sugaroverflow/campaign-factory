@@ -20,11 +20,14 @@ function Tag({ label }: { label: string }) {
   return <span className={`tag ${TAG_CLS[label] || "gen"}`}>{label}</span>;
 }
 
-/* highlight [VERIFY: …] so unresolved facts stay visible */
+/* highlight every [ … ] placeholder (VERIFY items and fill-in blanks alike) so
+   nothing unresolved slips through unmarked */
 function withVerify(text: string): ReactNode {
   if (!text) return null;
-  return text.split(/(\[VERIFY:[^\]]*\])/g).map((p, i) =>
-    /^\[VERIFY:/.test(p) ? <mark key={i}>{p}</mark> : <span key={i}>{p}</span>,
+  return text.split(/(\[[^\]\n]+\])/g).map((p, i) =>
+    /^\[[^\]\n]+\]$/.test(p)
+      ? <mark key={i} className={/^\[verify\b/i.test(p) ? "ph-verify" : undefined}>{p}</mark>
+      : <span key={i}>{p}</span>,
   );
 }
 
@@ -35,12 +38,24 @@ const List = ({ items, max }: { items?: string[]; max?: number }) => (
 function copyText(text: string) {
   navigator.clipboard?.writeText(text).catch(() => {});
 }
-function downloadText(title: string, text: string) {
-  const blob = new Blob([text], { type: "text/plain" });
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+// Download as a Word-openable document (.doc / Word HTML) — opens editable in
+// Word and Google Docs, no dependency. Blank lines become paragraph breaks.
+function downloadDoc(title: string, text: string) {
+  const body = text
+    .split(/\n{2,}/)
+    .map((para) => `<p>${esc(para).replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+  const html =
+    `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">` +
+    `<head><meta charset="utf-8"><title>${esc(title)}</title>` +
+    `<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;line-height:1.45;}h1{font-size:15pt;margin:0 0 12pt;}p{margin:0 0 10pt;}</style></head>` +
+    `<body><h1>${esc(title)}</h1>${body}</body></html>`;
+  const blob = new Blob(["﻿", html], { type: "application/msword" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.txt`;
+  a.download = `${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.doc`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -55,7 +70,7 @@ function DraftBlock({ title, body, tag }: { title: string; body?: string; tag?: 
         </b>
         <span className="dd-actions">
           <button className="toolbtn" onClick={() => copyText(body)} title="Copy">⧉ Copy</button>
-          <button className="toolbtn" onClick={() => downloadText(title, body)} title="Download">↓</button>
+          <button className="toolbtn" onClick={() => downloadDoc(title, body)} title="Download">↓</button>
         </span>
       </div>
       <div className="db-body">
@@ -184,7 +199,6 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
     (d?.lobbying || d?.media || d?.digital) && ["drafts", "Drafts"],
     docs.length && ["documents", "Documents"],
     c.sources?.length && ["sources", "Sources"],
-    ["how", "How it works"],
   ].filter(Boolean) as [string, string][];
   const num = (id: string) => nav.findIndex(([x]) => x === id) + 1;
 
@@ -220,13 +234,13 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
           Live campaign · researched and generated just now · every output requires human review
         </div>
         <h1>{c.name}</h1>
-        {f ? (
+        {c.refinedProblem ? (
+          <p className="obj">{c.refinedProblem}</p>
+        ) : f ? (
           <p className="obj">
             We want <b>{f.dm}</b> to <b>{f.action}</b> by <b>{f.by}</b>, even if the immediate outcome is only{" "}
             <b>{f.mvw}</b>.
           </p>
-        ) : c.refinedProblem ? (
-          <p className="obj">{c.refinedProblem}</p>
         ) : null}
         {onReset ? (
           <p style={{ marginTop: "1.1rem" }}>
@@ -282,7 +296,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
         {c.interpretation ? (
           <div data-anim="2">
             <h3>How the system read it <Tag label="Generated campaign recommendation" /></h3>
-            <p>{c.interpretation}</p>
+            <p className="callout warm">{c.interpretation}</p>
           </div>
         ) : null}
         {r && (r.missingInfo?.length || r.researchQuestions?.length) ? (
@@ -317,7 +331,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
                 <h3>The situation <Tag label="Verified public information" /></h3>
                 <p>{r.context.situation}</p>
                 {r.context.currentPolicy ? (<><h3>Current policy / restriction</h3><p>{r.context.currentPolicy}</p></>) : null}
-                {r.context.howItChanged ? (<><h3>How research changed the request</h3><p>{r.context.howItChanged}</p></>) : null}
+                {r.context.howItChanged ? (<><h3>How research changed the request</h3><p className="callout">{r.context.howItChanged}</p></>) : null}
               </div>
               <div>
                 {r.context.keyDates?.length ? (<><h3>Key dates &amp; processes</h3><List items={r.context.keyDates} /></>) : null}
@@ -404,7 +418,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
           </div>
           <div className="cols2" data-anim="2">
             <div>
-              {r?.decisionMaker?.practical ? (<><h3>How it works in practice <Tag label="Supported inference" /></h3><p>{r.decisionMaker.practical}</p></>) : null}
+              {r?.decisionMaker?.practical ? (<><h3>How it works in practice <Tag label="Supported inference" /></h3><p className="callout">{r.decisionMaker.practical}</p></>) : null}
               {r?.decisionMaker?.processes?.length ? (<><h3>Processes &amp; committees</h3><List items={r.decisionMaker.processes} /></>) : null}
             </div>
             <div>
@@ -570,7 +584,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
                   <div className="sladder">
                     {p.organising.ladder.map((l, i, arr) => (
                       <div key={i} className={`srung ${i === Math.min(2, arr.length - 1) ? "hot" : ""}`}>
-                        <div className="r-t">{l.rung}</div>
+                        <div className="r-t"><span className="r-n">{i + 1}</span>{l.rung}</div>
                         <div className="r-a">{l.action}</div>
                       </div>
                     ))}
@@ -661,7 +675,7 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
                 <div className="d-prev">{doc.text.slice(0, 150)}…</div>
                 <div className="dd-actions">
                   <button className="toolbtn" onClick={() => copyText(doc.text)}>⧉ Copy</button>
-                  <button className="toolbtn" onClick={() => downloadText(doc.title, doc.text)}>↓ Download</button>
+                  <button className="toolbtn" onClick={() => downloadDoc(doc.title, doc.text)}>↓ Word</button>
                 </div>
               </div>
             ))}
@@ -681,6 +695,12 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
           revealed={revealed}
           active={active}
         >
+          {c.lint?.flags?.length ? (
+            <div className="jbanner" data-anim="1" style={{ marginTop: 0 }}>
+              <b>{c.lint.flags.length} statement{c.lint.flags.length === 1 ? "" : "s"} to verify before use.</b> The consistency check couldn&apos;t fully reconcile these against the sources — check them before sending anything.
+              <List items={c.lint.flags.slice(0, 6).map((fl) => fl.issue)} />
+            </div>
+          ) : null}
           <div className="srcfilters" data-anim="1">
             <button className={`toolbtn ${srcFilter === "all" ? "on" : ""}`} onClick={() => setSrcFilter("all")}>All ({c.sources.length})</button>
             {present.map((l) => (
@@ -699,50 +719,6 @@ export function Journey({ campaign, onReset }: { campaign: Campaign; onReset?: (
           </div>
         </Stage>
       ) : null}
-
-      {/* 13 — how it works */}
-      <Stage
-        id="how"
-        n={num("how")}
-        title={<>How this was <span className="serif">built</span></>}
-        agent="orchestrator"
-        sub="One problem in, one connected campaign out."
-        limit="The factory drafts and tracks; humans hold every relationship, send and decision."
-        revealed={revealed}
-        active={active}
-      >
-        <div className="diagram" data-anim="1">
-          <div className="dg-label">Problem → connected campaign</div>
-          <div className="howviz">
-            <span className="rnode">Campaign input</span><span className="rarrow">→</span>
-            <span className="rnode">Live research<small>web + public data</small></span><span className="rarrow">→</span>
-            <span className="rnode dm">Shared campaign plan<small>one structured state</small></span><span className="rarrow">→</span>
-            <span className="rnode">Specialist tasks<small>power · strategy · drafting · checking</small></span><span className="rarrow">→</span>
-            <span className="rnode gate">Human review</span><span className="rarrow">→</span>
-            <span className="rnode">Campaign resources</span>
-          </div>
-        </div>
-        <div className="cols2" data-anim="2">
-          <div><ul>
-            <li>Research establishes the real local and institutional context first; every claim is labelled.</li>
-            <li>One shared campaign state connects the objective, power map, strategy, tactics, organising and documents.</li>
-            <li>A consistency check flags anything unverified — facts it could not verify are labelled, never invented.</li>
-          </ul></div>
-          <div>
-            {c.lint && c.lint.flags.length ? (
-              <>
-                <h3>Statements to verify before use</h3>
-                <p className="hint-sm">The consistency check flagged {c.lint.flags.length} statement{c.lint.flags.length === 1 ? "" : "s"} it couldn&apos;t fully reconcile against the sources — review these before sending anything.</p>
-                <List items={c.lint.flags.slice(0, 6).map((fl) => fl.issue)} />
-              </>
-            ) : (
-              <ul>
-                <li><b>Human review remains required.</b> Local knowledge, political judgement, relationships and accountability stay with people.</li>
-              </ul>
-            )}
-          </div>
-        </div>
-      </Stage>
 
       {/* stakeholder detail panel */}
       {stake ? (

@@ -228,3 +228,10 @@
   .cta .chip { transition: none; }
   .cta:hover .chip { transform: none; }
 }
+
+/* --- app footer --- */
+.footer { border-top: 1px solid var(--border); padding: 1.75rem 1.75rem 2.5rem; font-size: 0.88rem; color: var(--muted-foreground); }
+.footer-in { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; align-items: baseline; }
+.footer-links { display: flex; gap: 1.25rem; flex-wrap: wrap; }
+.footer-links a { color: var(--muted-foreground); text-decoration: none; }
+.footer-links a:hover { color: var(--ink); }

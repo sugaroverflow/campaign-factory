@@ -16,9 +16,6 @@ export default async function WallPage() {
           <p className="mt-2 text-muted-foreground">Campaigns people made here and chose to share.</p>
         </div>
         <div className="flex gap-3 text-sm">
-          <Link href="/wall/projector" className="rounded-full border px-4 py-1.5 transition-colors hover:border-foreground">
-            Projector mode
-          </Link>
           <Link href="/" className="rounded-full bg-foreground px-4 py-1.5 text-background transition-colors hover:bg-foreground/85">
             Make your own
           </Link>

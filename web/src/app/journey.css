@@ -28,6 +28,10 @@
 .rc li { margin: .18rem 0; }
 .rc li::marker { color: var(--muted-foreground); }
 .rc a { color: var(--brand); }
+/* tinted callout to break up dense text blocks / anchor a key insight */
+.rc .callout { background: var(--tint-blue); border-radius: var(--r-xl); padding: .9rem 1.1rem; margin: .5rem 0 0; }
+.rc .callout.warm { background: var(--tint-yellow); }
+.rc .callout.mint { background: rgba(121, 212, 94, .18); }
 
 .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
 @media (max-width: 860px) { .cols2 { grid-template-columns: 1fr; } }
@@ -125,8 +129,10 @@
 .draftblock { border: 1px solid var(--border); border-radius: var(--r-xl); margin: .8rem 0; overflow: hidden; }
 .db-head { display: flex; justify-content: space-between; align-items: center; gap: .6rem; padding: .6rem 1.1rem; background: var(--secondary); font-size: .88rem; }
 .db-body { padding: 1rem 1.2rem; }
-.db-body p { white-space: pre-wrap; }
+.db-body p { white-space: pre-wrap; margin: 0 0 .7rem; }
+.db-body p:last-child { margin-bottom: 0; }
 .db-body mark { background: rgba(246, 230, 131, .8); border-radius: 3px; padding: 0 2px; color: var(--ink); }
+.db-body mark.ph-verify { background: rgba(223, 34, 37, .12); box-shadow: inset 0 -2px 0 rgba(223, 34, 37, .5); }
 
 /* sources */
 .srcfilters { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1rem; }
@@ -177,7 +183,8 @@
 /* supporter ladder — each rung a concrete action */
 .sladder { display: flex; gap: .5rem; align-items: stretch; flex-wrap: wrap; margin: .4rem 0; }
 .srung { flex: 1; min-width: 140px; border: 1px solid var(--border); border-radius: var(--r-xl); padding: .8rem; font-size: .82rem; background: var(--card); }
-.srung .r-t { font-weight: 700; font-size: .85rem; margin-bottom: .3rem; }
+.srung .r-t { font-weight: 700; font-size: .85rem; margin-bottom: .3rem; display: flex; align-items: center; gap: .4rem; }
+.srung .r-n { display: inline-flex; align-items: center; justify-content: center; width: 1.2rem; height: 1.2rem; border-radius: 999px; background: var(--brand); color: #fff; font-size: .68rem; font-weight: 700; flex: none; }
 .srung .r-a { color: var(--muted-foreground); }
 .srung.hot { background: var(--tint-yellow); border-color: transparent; }
 
