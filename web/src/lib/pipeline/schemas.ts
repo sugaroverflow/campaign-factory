@@ -144,3 +144,18 @@ export const DRAFTS_SCHEMA = {
 } as const;
 
 export type DraftGroup = keyof typeof DRAFTS_SCHEMA;
+
+/* ------------------------------------------- lint (structured output) --- */
+// Small enough to compile as a grammar; enforcing it makes Haiku's JSON valid
+// by construction, so the consistency check no longer drops out on malformed
+// output. Shape mirrors LintResult in types.ts.
+export const LINT_SCHEMA: JSchema = S({
+  ok: { type: "boolean" },
+  flags: A(
+    S({
+      document: str,
+      issue: str,
+      severity: { type: "string", enum: ["block", "warn"] },
+    }),
+  ),
+});

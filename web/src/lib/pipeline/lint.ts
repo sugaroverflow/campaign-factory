@@ -1,6 +1,7 @@
 import { getClient, call, textOf, parseJSONLoose } from "../anthropic";
 import { MODELS } from "./models";
 import { LINT_SYSTEM } from "./prompts";
+import { LINT_SCHEMA } from "./schemas";
 import { type UsageSink } from "../spend/pricing";
 import { type RunInput, type ResearchResult, type Drafts, type LintResult } from "./types";
 
@@ -21,6 +22,7 @@ export async function runLint(
       model: MODELS.lint.model,
       max_tokens: 2000,
       system: LINT_SYSTEM,
+      jsonSchema: LINT_SCHEMA,
       messages: [
         {
           role: "user",

@@ -97,6 +97,10 @@ export function textOf(msg: Anthropic.Message): string {
     .join("\n");
 }
 
+// Matches ASCII control chars (U+0000–U+001F) that are illegal inside a JSON
+// string. Built via RegExp() so no literal control bytes live in this source.
+const CONTROL_CHARS = new RegExp("[\\u0000-\\u001F]", "g");
+
 // Tolerant JSON extraction (mirrors the prototype's parseJSON).
 export function parseJSONLoose<T = unknown>(text: string): T {
   try {
@@ -107,8 +111,17 @@ export function parseJSONLoose<T = unknown>(text: string): T {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start >= 0 && end > start) {
+    const slice = text.slice(start, end + 1);
     try {
-      return JSON.parse(text.slice(start, end + 1)) as T;
+      return JSON.parse(slice) as T;
+    } catch {
+      /* fall through */
+    }
+    // Last resort: drop stray control characters (a raw newline/tab inside a
+    // string is invalid JSON and the most common cause of a parse failure) and
+    // retry. CONTROL_CHARS is built without literal control bytes in source.
+    try {
+      return JSON.parse(slice.replace(CONTROL_CHARS, " ")) as T;
     } catch {
       /* fall through */
     }
