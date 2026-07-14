@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,7 +15,15 @@ export function SiteNav() {
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-7">
-        <Link href="/" className="flex min-w-0 items-baseline gap-2">
+        <Link href="/" className="flex min-w-0 items-center gap-2">
+          <Image
+            src="/campaign-factory-logo.png"
+            alt="Campaign Factory"
+            width={32}
+            height={32}
+            priority
+            className="h-7 w-7 shrink-0 dark:invert"
+          />
           <span className="text-base font-semibold tracking-tight sm:text-[1.05rem]">Campaign Factory</span>
           <span className="hidden text-xs font-normal text-muted-foreground md:inline">
             UK local &amp; public-policy campaigns
