@@ -13,21 +13,21 @@ export function SiteNav() {
   const path = usePathname() || "/";
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-border/60 bg-background/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3 sm:px-7">
-        <Link href="/" className="flex items-baseline gap-2">
-          <span className="text-[1.05rem] font-semibold tracking-tight">Campaign Factory</span>
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-4 sm:px-7">
+        <Link href="/" className="flex min-w-0 items-baseline gap-2">
+          <span className="text-base font-semibold tracking-tight sm:text-[1.05rem]">Campaign Factory</span>
           <span className="hidden text-xs font-normal text-muted-foreground md:inline">
             UK local &amp; public-policy campaigns
           </span>
         </Link>
-        <nav className="flex gap-1 rounded-full bg-foreground/[0.05] p-1">
+        <nav className="flex shrink-0 gap-1 rounded-full bg-foreground/[0.05] p-1">
           {LINKS.map((l) => {
             const active = l.href === "/" ? path === "/" : path.startsWith(l.href);
             return (
               <Link
                 key={l.href}
                 href={l.href}
-                className={`rounded-full px-3.5 py-1.5 text-sm transition-colors sm:px-4 ${
+                className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs transition-colors sm:px-4 sm:py-1.5 sm:text-sm ${
                   active ? "bg-foreground text-background" : "text-foreground hover:bg-foreground/[0.07]"
                 }`}
               >
