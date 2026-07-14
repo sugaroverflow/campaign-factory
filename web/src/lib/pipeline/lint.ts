@@ -32,7 +32,17 @@ export async function runLint(
     },
     { onUsage },
   );
-  const out = parseJSONLoose<LintResult>(textOf(msg));
+  const raw = textOf(msg);
+  let out: LintResult;
+  try {
+    out = parseJSONLoose<LintResult>(raw);
+  } catch (e) {
+    // TEMP DIAGNOSTIC: surface why the parse failed so we can see it in prod.
+    const blockTypes = (msg.content || []).map((b) => b.type).join(",");
+    throw new Error(
+      `${e instanceof Error ? e.message : "parse failed"} | stop=${msg.stop_reason} blocks=[${blockTypes}] textLen=${raw.length} head=${JSON.stringify(raw.slice(0, 120))} tail=${JSON.stringify(raw.slice(-120))}`,
+    );
+  }
   out.flags = out.flags || [];
   out.ok = !out.flags.some((f) => f.severity === "block");
   return out;
