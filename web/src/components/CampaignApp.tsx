@@ -9,13 +9,36 @@ import { Button } from "@/components/ui/button";
 import {
   getStatus,
   startRun,
+  pollRun,
   ACCESS_CODE_KEY,
+  RUN_ID_KEY,
   type StatusResp,
   type StartInput,
 } from "@/lib/client/api";
 import { type Campaign } from "@/lib/pipeline/types";
 
 type Phase = "form" | "running" | "done" | "failed";
+
+// How long after a run starts we'll still auto-restore it on load. Covers an
+// accidental refresh plus reviewing the finished campaign, without hijacking a
+// returning visitor into a stale run days later.
+const RUN_RESTORE_MS = 90 * 60 * 1000;
+
+function rememberRun(id: string) {
+  try {
+    localStorage.setItem(RUN_ID_KEY, JSON.stringify({ id, ts: Date.now() }));
+  } catch {
+    /* ignore quota/availability errors — persistence is best-effort */
+  }
+}
+
+function forgetRun() {
+  try {
+    localStorage.removeItem(RUN_ID_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 export function CampaignApp() {
   const [status, setStatus] = useState<StatusResp | null>(null);
@@ -31,6 +54,34 @@ export function CampaignApp() {
     void getStatus().then(setStatus);
     const saved = typeof window !== "undefined" ? localStorage.getItem(ACCESS_CODE_KEY) : null;
     if (saved) setCode(saved);
+
+    // Recover an in-flight/recent run after an accidental refresh. We confirm
+    // the run still exists (a 404 clears the pointer) and only restore recent
+    // ones; restoring into "running" lets RunProgress drive a terminal run
+    // straight to the done/failed view via onComplete.
+    const raw = typeof window !== "undefined" ? localStorage.getItem(RUN_ID_KEY) : null;
+    if (!raw) return;
+    let id: string | undefined;
+    try {
+      const parsed = JSON.parse(raw) as { id?: string; ts?: number };
+      if (parsed.id && typeof parsed.ts === "number" && Date.now() - parsed.ts < RUN_RESTORE_MS) {
+        id = parsed.id;
+      }
+    } catch {
+      /* corrupt value — fall through to clear */
+    }
+    if (!id) {
+      forgetRun();
+      return;
+    }
+    void pollRun(id).then((s) => {
+      if (!s) {
+        forgetRun();
+        return;
+      }
+      setRunId(id!);
+      setPhase("running");
+    });
   }, []);
 
   const begin = useCallback(
@@ -43,6 +94,7 @@ export function CampaignApp() {
       setBusy(false);
       if (res.ok && res.id) {
         if (submittedCode) localStorage.setItem(ACCESS_CODE_KEY, submittedCode);
+        rememberRun(res.id);
         setRunId(res.id);
         setPhase("running");
         return;
@@ -65,6 +117,7 @@ export function CampaignApp() {
   }, [lastInput, begin, code]);
 
   const reset = useCallback(() => {
+    forgetRun();
     setPhase("form");
     setRunId(null);
     setCampaign(null);

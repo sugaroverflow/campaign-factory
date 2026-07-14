@@ -69,6 +69,12 @@ export async function pollRun(id: string): Promise<RunState | null> {
 // localStorage key for the conference access code (entered once, reused).
 export const ACCESS_CODE_KEY = "cf_access_code";
 
+// localStorage key for the in-flight/most-recent run, so an accidental refresh
+// can drop the user back into their running (or just-finished) campaign instead
+// of the empty form. Stored as JSON { id, ts } — see CampaignApp for the
+// freshness window that prevents restoring stale runs on later visits.
+export const RUN_ID_KEY = "cf_run";
+
 export interface WallItem {
   id: string;
   name: string;
