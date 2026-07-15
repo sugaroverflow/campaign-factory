@@ -10,10 +10,10 @@ failed stages are shown as failed, never faked.
 
 ## Status
 
-- **Repo:** [`sugaroverflow/campaign-factory`](https://github.com/sugaroverflow/campaign-factory) — GitHub-connected to Vercel; pushes to `main` **auto-deploy** (build root: `web/`).
+- **Repo:** [`CampaignLab/campaign-factory`](https://github.com/CampaignLab/campaign-factory) — GitHub-connected to Vercel; pushes to `main` **auto-deploy** (build root: `web/`).
 - **Deployed:** Vercel project `campaign-factory` on the **Hobby** plan, with **Neon** Postgres.
-- **Not yet publicly usable** — see [go-live requirements](#️-technical-requirements-before-going-live): deployment protection is on, and the Hobby 300s function cap can't fit a full run (durable execution tracked in [issue #1](https://github.com/sugaroverflow/campaign-factory/issues/1)).
-- **Docs:** [`../PLAN.md`](../PLAN.md) (plan) · [`../HOW_IT_WAS_BUILT.md`](../HOW_IT_WAS_BUILT.md) (architecture) · [`../EXECUTION_JOURNAL.md`](../EXECUTION_JOURNAL.md) (build log) · [issues](https://github.com/sugaroverflow/campaign-factory/issues).
+- **Not yet publicly usable** — see [go-live requirements](#️-technical-requirements-before-going-live): deployment protection is on, and the Hobby 300s function cap can't fit a full run (durable execution tracked in [issue #1](https://github.com/CampaignLab/campaign-factory/issues/1)).
+- **Docs:** [`../PLAN.md`](../PLAN.md) (current baseline) · [`../docs/product/factory-implementation-parameters.md`](../docs/product/factory-implementation-parameters.md) (factory rewrite) · [`../HOW_IT_WAS_BUILT.md`](../HOW_IT_WAS_BUILT.md) (architecture) · [`../EXECUTION_JOURNAL.md`](../EXECUTION_JOURNAL.md) (build log) · [issues](https://github.com/CampaignLab/campaign-factory/issues).
 
 ## Stack
 
@@ -75,7 +75,7 @@ there is no separate migration step.
 
 ## Vercel setup
 
-The project is already linked to **`sugaroverflow/campaign-factory`** with Neon
+The project is already linked to **`CampaignLab/campaign-factory`** with Neon
 provisioned. To reproduce from scratch:
 
 ```bash
@@ -103,18 +103,17 @@ vercel deploy --prod                # build + deploy to production
 The current deploy is on the **Hobby** plan and is **not yet publicly usable**. Address
 these before the conference (the Vercel account will be switched later):
 
-1. **Function duration vs. run length — the blocker.** A full run takes **6–15 min**,
+1. **Function duration vs. run length — the current-production blocker.** A full run takes **6–15 min**,
    but Hobby caps serverless functions at **300s (5 min)** (`maxDuration` in
    `src/app/api/runs/route.ts`). On Hobby a run **cannot complete in one function**.
    To fix, do one (ideally both):
    - **Upgrade the plan** (Pro allows up to ~800s ≈ 13 min via Fluid Compute — raise
      `maxDuration` accordingly). Note the plan stage alone has hit ~10 min, so 800s is
      tight for the tail.
-   - **Implement durable step execution with [Vercel Workflow (WDK)](https://vercel.com/docs/workflow)**
-     — run each pipeline stage within limits and survive across invocations. This is the
-     robust fix and is recommended regardless of plan. The pipeline is already written as
-     discrete stage functions over a state mutator (`src/lib/pipeline/`), so wrapping it
-     in a workflow is the intended next step.
+   - The accepted factory rewrite replaces `after()` execution with an isolated,
+     always-on Railway worker using open-source LangGraph JS, Postgres checkpoints, and a
+     durable Postgres queue. It deliberately does not stack Vercel Workflow around
+     LangGraph. See `../docs/product/factory-implementation-parameters.md` and ADRs 0015–0016.
 
 2. **Deployment Protection is ON.** Every request redirects to Vercel SSO, so the app
    isn't public. Disable it at **Project → Settings → Deployment Protection**

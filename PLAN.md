@@ -1,4 +1,10 @@
-# Campaign Factory — Production Build Plan
+# Campaign Factory — Current Production Baseline Plan
+
+> This document describes the existing four-stage production application. The accepted
+> multi-agent factory rewrite is specified in
+> [`docs/product/factory-implementation-parameters.md`](docs/product/factory-implementation-parameters.md)
+> and its ADRs. Current Production remains on this baseline until explicit Factory
+> Promotion.
 
 Turning the `app/` prototype into a public self-serve production application on Vercel,
 launching at a ~45-person conference. Decisions locked in the grilling session of 13 Jul 2026.
