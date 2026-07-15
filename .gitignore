@@ -8,3 +8,4 @@ assets/*.txt
 app/.env
 app/local-key.js
 .codex-staging/
+.vercel

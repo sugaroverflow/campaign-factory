@@ -111,7 +111,11 @@ export async function startWorkers(run: RunFn, dead: DeadFn): Promise<void> {
   // worker with an independent polling loop — so N slots of batchSize=1 keep
   // delivery continuous. Per-model-call fairness stays in the gate; a slot that
   // throws fails only ITS job (per-job retry/dead-letter, no batch coupling).
-  const slots = RUNTIME_LIMITS.campaignsPerPresenterBatch;
+  // Presenter-batch width plus headroom for concurrent public (express) solo
+  // runs — measured live 15 Jul 2026: an audience run fired during a full
+  // batch sat queued behind all five batch slots until one freed.
+  const PUBLIC_RUN_SLOTS = 3;
+  const slots = RUNTIME_LIMITS.campaignsPerPresenterBatch + PUBLIC_RUN_SLOTS;
   for (let i = 0; i < slots; i++) {
     await b.work<RunJobData>(RUN_QUEUE, { batchSize: 1 }, async (jobs) => {
       for (const job of jobs) await run(job.data);
