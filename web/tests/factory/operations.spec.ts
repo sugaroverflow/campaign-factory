@@ -15,6 +15,7 @@ test("operations workbench: cross-view local review and demo queue flow", async 
   await page.getByRole("button", { name: /Drafts/ }).first().click();
   await expect(page.getByRole("heading", { name: /Parent update for nearby ward parents/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /Supporter email/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Copy follows the runway" })).toBeVisible();
   await page.getByRole("button", { name: /Decision-maker letter/ }).click();
   await expect(page.getByRole("heading", { name: "Decision-maker letter" }).first()).toBeVisible();
   await expect(page.getByText(/formal decision path is checked/i).first()).toBeVisible();
@@ -47,6 +48,8 @@ test("operations workbench: cross-view local review and demo queue flow", async 
 
   await page.getByRole("button", { name: "Mark ready for review" }).click();
   await expect(page.getByRole("heading", { name: "Human approval gate" })).toBeVisible();
+  await expect(page.getByLabel("Approval gates")).toContainText("External action blocked");
+  await expect(page.getByLabel("Communication preview for approval")).toContainText("Back the permanent school street before the order lapses");
   await expect(page.getByRole("heading", { name: "Needs human review" })).toBeVisible();
 
   await page.getByRole("button", { name: "Approve as human reviewer" }).click();
@@ -58,6 +61,8 @@ test("operations workbench: cross-view local review and demo queue flow", async 
 
   await page.getByRole("button", { name: "Queue locally for demo" }).click();
   await expect(page.getByRole("heading", { name: "One local queue item" })).toBeVisible();
+  await expect(page.getByLabel("Local dispatch runway")).toContainText("Provider");
+  await expect(page.getByLabel("Local dispatch runway")).toContainText("Complete");
   await expect(page.getByText(/It is not connected to an email provider/)).toBeVisible();
   await expect(page.getByText("Demo intent: next school-run morning after provider setup", { exact: true })).toBeVisible();
 
@@ -82,6 +87,8 @@ test("operations workbench: all sidebar destinations are navigable and designed"
   await expect(page.getByRole("heading", { name: "Brief to safe local outbox, one stage at a time." })).toBeVisible();
   await page.getByRole("button", { name: /Evidence: Current, Checks in view/ }).click();
   await expect(page.getByRole("heading", { name: "Evidence & checks" })).toBeVisible();
+  await page.getByRole("button", { name: /Power map/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Leicester transport decision route" })).toBeVisible();
   await page.getByRole("button", { name: /Overview/ }).first().click();
   await page.getByRole("button", { name: /Local outbox: Coming soon boundary, Provider off/ }).click();
   await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();

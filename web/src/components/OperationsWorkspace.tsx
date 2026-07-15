@@ -704,7 +704,7 @@ export function OperationsWorkspace() {
                         ? "border-white/15 bg-ops-yellow text-ops-ink shadow-sm"
                         : "border-foreground bg-foreground text-background"
                       : ink
-                        ? "border-transparent text-white/88 hover:border-white/15 hover:bg-white/8"
+                        ? "border-transparent text-white/88 hover:border-white/15 hover:bg-white/[0.08]"
                         : "border-transparent text-foreground hover:border-border hover:bg-secondary"
                   }`}
                   aria-current={active ? "page" : undefined}
@@ -777,35 +777,35 @@ export function OperationsWorkspace() {
   );
 
   const renderDraftsView = () => (
-    <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
-      <Panel>
+    <div className="grid gap-5 xl:grid-cols-[285px_minmax(0,1fr)_275px]">
+      <Panel className="bg-ops-ink text-white">
         <SmallLabel>Draft library</SmallLabel>
         <h2 className="mt-2 text-2xl font-medium tracking-tight">Communications</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Three draft types are visible so campaigners can see the outreach sequence. Only the supporter email is working/editable in this local demo.
+        <p className="mt-2 text-sm text-white/65">
+          An editorial desk for the outreach sequence. Only the supporter email is working/editable in this local demo.
         </p>
         <div className="mt-5 space-y-3">
-          {draftLibrary.map((draft) => (
+          {draftLibrary.map((draft, index) => (
             <button
               key={draft.id}
               type="button"
               onClick={() => setActiveDraft(draft.id)}
-              className={`w-full rounded-[var(--r-xl)] border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-                state.activeDraft === draft.id ? "border-foreground bg-tint-blue" : "border-border hover:bg-secondary"
+              className={`w-full rounded-[var(--r-xl)] border p-3 text-left motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ops-yellow/70 ${
+                state.activeDraft === draft.id ? "border-ops-yellow bg-ops-yellow text-ops-ink" : "border-white/15 bg-white/[0.07] text-white hover:bg-white/[0.12]"
               }`}
               aria-pressed={state.activeDraft === draft.id}
             >
               <div className="flex items-center justify-between gap-2">
-                <p className="font-medium">{draft.title}</p>
-                <span className="rounded-full bg-background px-2 py-0.5 text-xs">{draft.id === "supporter_email" ? status.label : draft.state}</span>
+                <p className="font-medium">{index + 1}. {draft.title}</p>
+                <span className={`rounded-full px-2 py-0.5 text-xs ${state.activeDraft === draft.id ? "bg-background/70" : "bg-white/10"}`}>{draft.id === "supporter_email" ? status.label : draft.state}</span>
               </div>
-              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">{draft.channel}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{draft.detail}</p>
+              <p className={`mt-1 text-xs font-semibold uppercase tracking-[0.1em] ${state.activeDraft === draft.id ? "text-ops-ink/65" : "text-white/50"}`}>{draft.channel}</p>
+              <p className={`mt-1 text-sm ${state.activeDraft === draft.id ? "text-ops-ink/75" : "text-white/[0.62]"}`}>{draft.detail}</p>
             </button>
           ))}
         </div>
       </Panel>
-      <Panel className="shadow-sm">
+      <Panel className="bg-[linear-gradient(90deg,oklch(0.96_0.012_82)_0_1px,transparent_1px),linear-gradient(oklch(0.96_0.012_82)_0_1px,transparent_1px)] bg-[size:28px_28px] shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <SmallLabel>{activeDraft.channel} draft</SmallLabel>
@@ -816,15 +816,15 @@ export function OperationsWorkspace() {
               {activeDraftEditable ? selected.ask : activeDraft.detail}
             </p>
           </div>
-          <div className="flex rounded-full bg-secondary p-1" aria-label="Draft mode">
+          <div className="flex rounded-full border border-border bg-background p-1" aria-label="Draft mode">
             {(["compose", "preview"] as const).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 onClick={() => setState((current) => ({ ...current, mode }))}
                 disabled={!activeDraftEditable}
-                className={`rounded-full px-4 py-1.5 text-sm capitalize transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-                  state.mode === mode && activeDraftEditable ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className={`rounded-full px-4 py-1.5 text-sm capitalize motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+                  state.mode === mode && activeDraftEditable ? "bg-ops-ink text-white" : "text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 }`}
                 aria-pressed={state.mode === mode}
               >
@@ -834,26 +834,26 @@ export function OperationsWorkspace() {
           </div>
         </div>
 
-        <div className="mt-6 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-secondary/70 p-4 text-sm text-muted-foreground">
+        <div className="mt-6 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-ops-yellow/45 p-4 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">Review warning:</span> {activeDraft.requires} {activeDraftEditable ? selected.caveat : "This staged fixture is not available for approval or queueing."}
         </div>
 
         {!activeDraftEditable ? (
           <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
-            <div className="rounded-[var(--r-2xl)] border border-border bg-white p-5">
+            <div className="rounded-[var(--r-2xl)] border border-border bg-white p-6 shadow-sm">
               <SmallLabel>Staged outline</SmallLabel>
               <h3 className="mt-2 text-2xl font-medium">{activeDraft.title}</h3>
               <p className="mt-3 text-sm text-muted-foreground"><span className="font-medium text-foreground">Intended audience:</span> {activeDraft.audience}</p>
               <ol className="mt-5 space-y-3 text-sm">
                 {activeDraft.outline.map((item, index) => (
                   <li key={item} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-xs font-semibold">{index + 1}</span>
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-ops-blue text-xs font-semibold">{index + 1}</span>
                     <span>{item}</span>
                   </li>
                 ))}
               </ol>
             </div>
-            <div className="rounded-[var(--r-2xl)] border border-border bg-secondary/60 p-4 text-sm">
+            <div className="rounded-[var(--r-2xl)] border border-border bg-background/80 p-4 text-sm">
               <p className="font-medium">Why this is not editable yet</p>
               <p className="mt-2 text-muted-foreground">Campaign Factory can show the operational placeholder, but real recipients, evidence, and escalation judgement must be resolved before this item becomes working copy.</p>
               <div className="mt-4 flex flex-col gap-3">
@@ -863,7 +863,7 @@ export function OperationsWorkspace() {
             </div>
           </div>
         ) : state.mode === "compose" ? (
-          <div className="mt-6 space-y-5">
+          <div className="mt-6 space-y-5 rounded-[var(--r-2xl)] border border-border bg-background p-5 shadow-sm">
             <div className="space-y-2">
               <Label htmlFor="operations-subject">Subject</Label>
               <Input
@@ -885,7 +885,7 @@ export function OperationsWorkspace() {
             </div>
           </div>
         ) : (
-          <article className="mt-6 rounded-[var(--r-2xl)] border border-border bg-white p-5">
+          <article className="mt-6 rounded-[var(--r-2xl)] border border-border bg-white p-6 shadow-sm">
             <div className="border-b border-border pb-4 text-sm text-muted-foreground">
               <p><span className="font-medium text-foreground">To:</span> {selected.name} · {selected.ready} ready fixture contacts</p>
               <p><span className="font-medium text-foreground">Status:</span> {status.label}</p>
@@ -902,28 +902,46 @@ export function OperationsWorkspace() {
           {goButton("reviews", "Open review gate")}
         </div>
       </Panel>
+      <Panel className="bg-ops-blue/[0.65]">
+        <SmallLabel>Desk notes</SmallLabel>
+        <h3 className="mt-2 text-2xl font-medium">Copy follows the runway</h3>
+        <div className="mt-5 space-y-4 text-sm">
+          <div className="rounded-[var(--r-xl)] border border-ops-line bg-background/75 p-3">
+            <p className="font-medium">Audience</p>
+            <p className="mt-1 text-muted-foreground">{selected.name}: {selected.ready}/{selected.contacts} ready fixtures.</p>
+          </div>
+          <div className="rounded-[var(--r-xl)] border border-ops-line bg-background/75 p-3">
+            <p className="font-medium">Approval state</p>
+            <p className="mt-1 text-muted-foreground">{status.text}</p>
+          </div>
+          <div className="rounded-[var(--r-xl)] border border-ops-line bg-background/75 p-3">
+            <p className="font-medium">Boundary</p>
+            <p className="mt-1 text-muted-foreground">Provider, import, and production scheduling are not connected.</p>
+          </div>
+        </div>
+      </Panel>
     </div>
   );
 
   const renderReviewView = () => (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <Panel>
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.65fr)]">
+      <Panel className="bg-ops-paper">
         <SmallLabel>Reviews & approvals</SmallLabel>
         <h2 className="mt-2 text-3xl font-medium tracking-tight">Human approval gate</h2>
         <p className="mt-3 text-muted-foreground">
           A draft cannot enter the local queue until a person explicitly approves it. Blockers are shown in text, not just colour.
         </p>
-        <div className="mt-6 space-y-3">
+        <div className="mt-6 grid gap-3 md:grid-cols-2" aria-label="Approval gates">
           {[
             { label: "Message has enough substance to review", ok: canRequestReview, detail: canRequestReview ? "Subject and body are long enough for a meaningful check." : "Add a clear subject and message before requesting review." },
             { label: "Audience readiness understood", ok: selected.ready > 0, detail: `${selected.ready}/${selected.contacts} selected fixture contacts are marked ready.` },
             { label: "Evidence checks still visible", ok: true, detail: "Council timing, legal-order wording, and consent remain called out before any real provider use." },
             { label: "External action blocked", ok: true, detail: "Provider connection is not active; approval only unlocks the local demo queue." },
           ].map((item) => (
-            <div key={item.label} className="rounded-[var(--r-xl)] border border-border p-4">
+            <div key={item.label} className={`rounded-[var(--r-xl)] border p-4 motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out ${item.ok ? "border-ops-line bg-background" : "border-ops-coral bg-ops-coral/[0.55]"}`}>
               <div className="flex items-start justify-between gap-3">
                 <p className="font-medium">{item.label}</p>
-                <span className={`rounded-full px-2.5 py-1 text-xs ${item.ok ? "bg-tint-blue" : "bg-tint-yellow"}`}>
+                <span className={`rounded-full px-2.5 py-1 text-xs ${item.ok ? "bg-ops-mint" : "bg-background"}`}>
                   {item.ok ? "Clear" : "Blocked"}
                 </span>
               </div>
@@ -943,18 +961,23 @@ export function OperationsWorkspace() {
           </Button>
         </div>
       </Panel>
-      <Panel>
+      <Panel className="bg-ops-ink text-white">
         <SmallLabel>Current review item</SmallLabel>
         <h3 className="mt-2 text-2xl font-medium">{status.label}</h3>
-        <p className="mt-3 text-sm text-muted-foreground">{status.text}</p>
+        <p className="mt-3 text-sm text-white/65">{status.text}</p>
         {reviewBlocked ? (
-          <p className="mt-4 rounded-[var(--r-xl)] bg-tint-yellow px-4 py-3 text-sm">
+          <p className="mt-4 rounded-[var(--r-xl)] bg-ops-coral px-4 py-3 text-sm text-ops-ink">
             Blocked: the supporter email needs enough copy before it can be checked.
           </p>
         ) : null}
-        <div className="mt-5 rounded-[var(--r-xl)] border border-border p-3 text-sm">
+        <article className="mt-5 rounded-[var(--r-xl)] border border-white/15 bg-white p-4 text-sm text-foreground shadow-sm" aria-label="Communication preview for approval">
           <p className="font-medium">{state.subject || "Untitled campaign email"}</p>
           <p className="mt-1 text-muted-foreground">Audience: {selected.name}</p>
+          <div className="mt-4 line-clamp-6 whitespace-pre-wrap border-t border-border pt-4 text-muted-foreground">{state.body}</div>
+        </article>
+        <div className="mt-5 rounded-[var(--r-xl)] border border-white/15 bg-white/[0.08] p-3 text-sm">
+          <p className="font-medium">Approval desk rule</p>
+          <p className="mt-1 text-white/60">Human approval changes only this browser-local workflow. It never connects the provider.</p>
         </div>
       </Panel>
     </div>
@@ -962,7 +985,7 @@ export function OperationsWorkspace() {
 
   const renderOutboxView = () => (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <Panel>
+      <Panel className="bg-ops-paper">
         <SmallLabel>Outbox & schedule</SmallLabel>
         <h2 className="mt-2 text-3xl font-medium tracking-tight">{state.status === "queued" ? "One local queue item" : "Nothing queued yet"}</h2>
         <p id="operations-provider-note" className="mt-3 text-muted-foreground">
@@ -970,7 +993,27 @@ export function OperationsWorkspace() {
             ? "The approved draft is stored in this browser for the conference demo. It is not connected to an email provider."
             : "Approve the draft before it can enter the local demo queue. Provider outreach stays disabled."}
         </p>
-        <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-border">
+        <div className="mt-6 rounded-[var(--r-2xl)] border border-border bg-background p-4">
+          <SmallLabel>Local dispatch runway</SmallLabel>
+          <div className="mt-4 grid gap-3 md:grid-cols-4" aria-label="Local dispatch runway">
+            {[
+              { label: "Human approval", state: state.status === "draft" ? "Blocked" : state.status === "review" ? "Current" : "Complete", tone: state.status === "draft" ? "bg-ops-coral" : state.status === "review" ? "bg-ops-yellow" : "bg-ops-mint", detail: status.label },
+              { label: "Local queue", state: state.status === "queued" ? "Complete" : state.status === "approved" ? "Current" : "Locked", tone: state.status === "queued" ? "bg-ops-mint" : state.status === "approved" ? "bg-ops-yellow" : "bg-ops-blue", detail: state.status === "queued" ? "Stored in this browser" : "Needs approval first" },
+              { label: "Provider", state: "Locked", tone: "bg-ops-blue", detail: "Coming soon · not connected" },
+              { label: "Responses", state: "Locked", tone: "bg-ops-blue", detail: "Coming soon · no response stream" },
+            ].map((step, index) => (
+              <div key={step.label} className={`rounded-[var(--r-xl)] border border-ops-line p-4 motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out ${step.tone}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-background/70 text-xs font-semibold">{index + 1}</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.1em]">{step.state}</span>
+                </div>
+                <p className="mt-4 font-medium">{step.label}</p>
+                <p className="mt-1 text-sm text-ops-ink/70">{step.detail}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="mt-5 overflow-hidden rounded-[var(--r-2xl)] border border-border bg-background">
           <div className="hidden grid-cols-[1.1fr_0.8fr_0.7fr_0.8fr] gap-3 border-b border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground md:grid">
             <span>Communication</span><span>Audience</span><span>State</span><span>Local timing</span>
           </div>
@@ -1119,6 +1162,73 @@ export function OperationsWorkspace() {
           </ul>
         </Panel>
       </div>
+    </div>
+  );
+
+  const renderPowerMapView = () => (
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <Panel className="bg-ops-paper">
+        <SmallLabel>Influence map</SmallLabel>
+        <h2 className="mt-2 text-3xl font-medium tracking-tight">Power map</h2>
+        <p className="mt-3 max-w-3xl text-muted-foreground">
+          A spatial influence board for allies, persuadables, blockers, and the decision target. It is fixture-grounded and uses text labels as well as colour.
+        </p>
+        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.65fr)_minmax(0,1fr)] lg:items-stretch">
+          <div className="space-y-4">
+            <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-mint p-4">
+              <SmallLabel>Allies · ready to validate</SmallLabel>
+              <h3 className="mt-2 text-xl font-medium">School-gate families</h3>
+              <p className="mt-2 text-sm text-ops-ink/72">Primary supporter base; selected audience can move directly into the supporter email after review.</p>
+            </div>
+            <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-mint/[0.70] p-4">
+              <SmallLabel>Allies · process check</SmallLabel>
+              <h3 className="mt-2 text-xl font-medium">Clean-air supporters</h3>
+              <p className="mt-2 text-sm text-ops-ink/72">Useful for spotting escalation risks before a public-facing press prompt exists.</p>
+            </div>
+          </div>
+          <div className="flex flex-col justify-between rounded-[var(--r-2xl)] border-2 border-ops-ink bg-background p-5 text-center shadow-sm">
+            <SmallLabel>Decision target</SmallLabel>
+            <h3 className="mt-3 text-2xl font-medium">Leicester transport decision route</h3>
+            <p className="mt-3 text-sm text-muted-foreground">Exact committee/officer path must be verified before formal decision-maker copy is unlocked.</p>
+            <div className="mt-5 rounded-full bg-ops-coral px-3 py-2 text-sm font-medium text-ops-ink">Current blocker: route verification</div>
+          </div>
+          <div className="space-y-4">
+            <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-yellow p-4">
+              <SmallLabel>Persuadables · broaden pressure</SmallLabel>
+              <h3 className="mt-2 text-xl font-medium">Nearby ward parents</h3>
+              <p className="mt-2 text-sm text-ops-ink/72">Neighbourhood framing makes the safety issue wider than one school gate.</p>
+            </div>
+            <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-coral p-4">
+              <SmallLabel>Potential blockers · answer carefully</SmallLabel>
+              <h3 className="mt-2 text-xl font-medium">Cost, enforcement, traffic objections</h3>
+              <p className="mt-2 text-sm text-ops-ink/72">Keep public claims conservative until evidence checks and local consent are clear.</p>
+            </div>
+          </div>
+        </div>
+        <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-border bg-background">
+          <div className="hidden gap-3 border-b border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground md:grid md:grid-cols-[0.75fr_minmax(0,1.15fr)_minmax(0,1fr)_0.55fr]">
+            <span>Group</span><span>What the fixture says</span><span>Operational use</span><span>Owner</span>
+          </div>
+          {campaignContext.power.rows.map((row) => (
+            <div key={row.label} className="grid gap-2 border-b border-border px-4 py-4 text-sm last:border-0 md:grid-cols-[0.75fr_minmax(0,1.15fr)_minmax(0,1fr)_0.55fr]">
+              <div><span className="font-medium md:hidden">Group: </span><span className="font-medium">{row.label}</span></div>
+              <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">What the fixture says: </span>{row.detail}</div>
+              <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">Operational use: </span>{row.use}</div>
+              <div><span className="font-medium md:hidden">Owner: </span>{row.owner}</div>
+            </div>
+          ))}
+        </div>
+      </Panel>
+      <Panel>
+        <SmallLabel>Use this map next</SmallLabel>
+        <h3 className="mt-2 text-2xl font-medium">Move from influence to copy</h3>
+        <p className="mt-3 text-sm text-muted-foreground">Select the audience that best matches the pressure path, then keep blockers visible in review.</p>
+        <div className="mt-5 flex flex-col gap-3">
+          {goButton("audiences", "Choose audience")}
+          {goButton("drafts", "Open drafts")}
+          {goButton("evidence", "Review blockers")}
+        </div>
+      </Panel>
     </div>
   );
 
@@ -1313,7 +1423,7 @@ export function OperationsWorkspace() {
     overview: renderOverview(),
     brief: renderCampaignContextView(campaignContext.brief),
     objectives: renderCampaignContextView(campaignContext.objectives),
-    power: renderCampaignContextView(campaignContext.power),
+    power: renderPowerMapView(),
     strategy: renderCampaignContextView(campaignContext.strategy),
     evidence: renderCampaignContextView(campaignContext.evidence),
     audiences: renderAudienceView(),
