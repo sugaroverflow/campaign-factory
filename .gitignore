@@ -7,3 +7,5 @@ assets/*.txt
 # Secrets — both contain the Anthropic API key
 app/.env
 app/local-key.js
+.codex-staging/
+.vercel

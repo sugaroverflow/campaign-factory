@@ -1,0 +1,194 @@
+/* W6 Document Library (light Awake surface). Reuses awake tokens (globals.css)
+   and the .docgrid / .doccard / .tag / .rc typography (journey.css). Only the
+   fa-doc* additions live here. `.fa-doc-note` also styles the compiler's inline
+   "needs verification" / gap markers wherever the compiled html renders. */
+
+.fa-doclib__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.fa-doclib__head h3 {
+  font-size: 1.05rem;
+  margin: 0;
+}
+.fa-doclib__count {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+.fa-doclib__count b {
+  color: var(--good);
+  font-size: 1rem;
+}
+
+/* doccard as a button (grid tile) */
+.fa-doccard {
+  text-align: left;
+  cursor: pointer;
+  background: #fff;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+  font: inherit;
+  color: inherit;
+}
+.fa-doccard:hover {
+  border-color: var(--ink);
+  transform: translateY(-1px);
+}
+.fa-doccard--open {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+.fa-doccard .d-prev {
+  display: flex;
+  align-items: center;
+}
+
+/* inline "needs verification" / gap marker inside compiled html + the view */
+.fa-doc-note {
+  color: var(--warn);
+  font-style: italic;
+  font-size: 0.9rem;
+  margin: 0.4rem 0;
+}
+
+/* footer disclaimer on every compiled document — mirrors the app footer
+   (globals.css .footer): top rule, muted small text */
+.fa-doc-footer {
+  display: block;
+  border-top: 1px solid var(--border);
+  margin-top: 1.5rem;
+  padding-top: 0.9rem;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+
+/* the "sources disagree" question-mark inside prose — same .pm-inf visual as
+   the power-map nodes (journey.css), inline instead of absolutely positioned,
+   linking to Evidence and next checks */
+a.pm-inf--inline,
+.pm-inf--inline {
+  position: static;
+  display: inline-flex;
+  vertical-align: super;
+  margin-left: 0.15rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Evidence & Next Checks — collapsed plain-English groups (also used by the
+   assembly EvidencePanel; <details>/<summary> so exported HTML degrades) */
+.fa-evgroup {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 0.6rem 0.85rem;
+  margin: 0 0 0.55rem;
+  background: linear-gradient(180deg, rgba(245, 245, 245, 0.45), transparent);
+}
+.fa-evgroup > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.fa-evgroup__cap {
+  font-size: 0.82rem;
+  color: var(--muted-foreground);
+  margin: 0.35rem 0 0.5rem;
+}
+.fa-evclaim {
+  margin: 0.3rem 0;
+  padding-left: 0.2rem;
+}
+.fa-evclaim > summary {
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.fa-evclaim__meta {
+  list-style: none;
+  margin: 0.3rem 0 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border-left: 3px solid var(--border);
+  font-size: 0.82rem;
+  color: var(--muted-foreground);
+}
+.fa-evclaim__meta li {
+  margin: 0.15rem 0;
+}
+
+/* per-document view panel */
+.fa-docview {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-2xl);
+  padding: 1.1rem 1.3rem 1.4rem;
+  background: linear-gradient(180deg, rgba(245, 245, 245, 0.45), transparent 30%);
+  animation: fa-doc-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.fa-docview__bar {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+.fa-docview__bar h3 {
+  margin: 0.15rem 0 0;
+  font-size: 1.25rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.fa-docview__meta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.fa-docview__flags {
+  margin: 0.5rem 0 0.2rem;
+}
+.fa-docview__confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--ink);
+  background: rgba(223, 34, 37, 0.06);
+  border: 1px solid rgba(223, 34, 37, 0.25);
+  border-radius: var(--r-lg);
+  padding: 0.55rem 0.75rem;
+  margin: 0.3rem 0 0.2rem;
+}
+.fa-docview__confirm input {
+  margin-top: 0.15rem;
+}
+.fa-docview__body {
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 0.4rem;
+}
+.fa-docview__body blockquote.narr {
+  font-size: 1rem;
+}
+
+@keyframes fa-doc-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fa-docview {
+    animation: none;
+  }
+  .fa-doccard:hover {
+    transform: none;
+  }
+}

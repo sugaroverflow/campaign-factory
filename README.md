@@ -6,74 +6,115 @@ Its soul is a **no-synthetic-data integrity principle**: research runs against r
 
 This repo contains two implementations of that idea:
 
-- **Current Production** (`main`, this branch) — a routed pipeline of four model calls, deployed on Vercel + Neon. This README describes it.
-- **The multi-agent factory** ([`factory/multi-agent-build`](https://github.com/CampaignLab/campaign-factory/tree/factory/multi-agent-build), [PR #10](https://github.com/CampaignLab/campaign-factory/pull/10)) — a real fifteen-agent LangGraph campaign graph on a dedicated always-on worker. Same product, same integrity principle, different runtime. No production cutover happens without an explicit Factory Promotion.
+- **Current Production** (`main`, unchanged) — a routed pipeline of four model calls, deployed on Vercel + Neon.
+- **The multi-agent factory** (this branch, `factory/multi-agent-build`, PR #10) — a real fifteen-agent LangGraph campaign graph on a dedicated always-on worker. Same product, same integrity principle, different runtime. No production cutover happens without an explicit Factory Promotion.
 
 ## How it works
 
-- **You enter a problem at `/`.** Starting a run is gated by the conference access code, a per-session run cap, a per-IP cap, and a global £150/day spend kill-switch — checked before anything spends money.
-- **A routed pipeline of four model calls runs over one shared campaign state** (`web/src/lib/pipeline/`): Stage A research (Claude Sonnet 5 + web search, high effort → claims carrying the 7 verification labels), Stage B plan (Claude Opus 4.8 — plan coherence is un-lintable, so never split or downgraded), Stage C drafts (Sonnet 5 ×3 parallel → nine documents in three audience packs: decision-maker / press / supporter), and a Haiku 4.5 lint (labels present, `[VERIFY:]` markers present, no invented names, dates, or contacts).
-- **The run is a background job** with write-through Postgres persistence; the client polls for progress and the journey UI **reveals progressively** — research is readable while the plan and drafts still generate.
-- **Failure is honest.** A failed stage surfaces a banner and whatever completed is kept; there is no synthetic fallback.
-- **Finished campaigns are durable and shareable** at `/c/[id]`. The owner can opt into the conference wall or delete; an admin can hide wall items.
-- **The multi-agent rewrite** replaces this pipeline with a fifteen-agent LangGraph graph on an always-on worker — built and verified on the `factory/multi-agent-build` branch (PR #10), not yet promoted to production.
+- **You enter a problem and a named place** at `/factory`. The place must be specific — the input gate rejects "UK" or "online" because research needs a real decision route to run against.
+- **A campaign graph assembles the campaign live.** Thirteen fixed agent responsibilities plus up to two campaign-selected specialists (20 hard cap) run as a LangGraph over one shared campaign state. The public path uses an **express profile** (~8 agents, 15-minute hard cap); the presenter desk can fire full-profile runs.
+- **Agent execution runs on a separate worker, not in Vercel functions.** An always-on Node worker (`worker/`) owns the durable `pg-boss` queue, the graph, and `PostgresSaver` checkpoints, so a crashed run resumes from its last node. The web app talks to it only across a signed HMAC boundary (ADR 0015/0016).
+- **You watch it happen.** The worker appends Factory Events to Postgres; the browser streams them over SSE (run-scoped token) into the **Campaign Assembly View** — Agent Work Cards, evidence states, the progressive ten-step Campaign Brief, then nine canonical documents and a Campaign Completion Receipt.
+- **Limits are enforced, honestly.** Cost guards and hard time limits are checked at node boundaries; crossing one finalises deterministically and records remaining work as **Terminal Gaps** — it never fabricates completion.
+- **Everything runs without an API key in mock mode.** `FACTORY_MODEL_MODE=mock` exercises the full graph, events, UI, recovery, and replay with deterministic fixtures and zero model calls. Live runs start the moment `ANTHROPIC_API_KEY` is present.
+- **Current Production (`main`) works differently:** a routed pipeline — Sonnet 5 research → Opus 4.8 plan → Sonnet 5 ×3 drafts → Haiku 4.5 lint — run as a background job with a polling, progressively-revealing journey UI.
 
 ## Repository layout
 
 | Path | What it is |
 |---|---|
-| [`web/`](web/) | The production **Next.js** app. **See [`web/README.md`](web/README.md) to run it.** |
-| [`app/`](app/) | The original localhost prototype — **reference only** (not deployed). |
-| [`archive/`](archive/) | Earlier HTML prototypes, preserved and inspectable. |
-| [`docs/adr/`](docs/adr/) | Architecture decision records 0001–0016 — the design record for the multi-agent factory rewrite. |
-| [`docs/product/`](docs/product/) | The [implementation parameters](docs/product/factory-implementation-parameters.md) and the [12-hour build plan](docs/product/factory-12-hour-build-plan.md) for the rewrite. |
+| [`web/`](web/) | The **Next.js** app: current-production surfaces plus all factory surfaces. See [`web/README.md`](web/README.md) to run it. |
+| [`worker/`](worker/) | The **Factory Runtime Worker** — LangGraph JS + pg-boss + Postgres checkpoints. See [`worker/README.md`](worker/README.md). |
+| [`db/factory/`](db/factory/) | Factory database migrations (applied automatically by the worker on boot). |
+| [`Dockerfile`](Dockerfile) / [`railway.toml`](railway.toml) | Worker deployment to Railway (ADR 0016); built from the repo root because the worker imports shared modules from `web/src`. |
+| [`docs/adr/`](docs/adr/) | Architecture decision records 0001–0016. |
+| [`docs/product/`](docs/product/) | The [implementation parameters](docs/product/factory-implementation-parameters.md), the [12-hour build plan](docs/product/factory-12-hour-build-plan.md), and the [verification results](docs/product/factory-verification-results.md) (measured cost/latency, honest defects). |
 | [`docs/research/`](docs/research/) | Deep-research notes (e.g. why this is a workflow, not a multi-agent system). |
 | [`PLAN.md`](PLAN.md) | Full product plan and locked decisions. |
 | [`HOW_IT_WAS_BUILT.md`](HOW_IT_WAS_BUILT.md) | Architecture-and-story companion. |
 | [`EXECUTION_JOURNAL.md`](EXECUTION_JOURNAL.md) | Chronological build log (summarised at the end of this README). |
 | [`CONTEXT.md`](CONTEXT.md) | The shared campaign-design language the product uses. |
+| [`app/`](app/) | The original localhost prototype — reference only, not deployed. |
+| [`archive/`](archive/) | Earlier HTML prototypes, preserved and inspectable. |
 
 ## Quick start
 
+The web app and the worker are two processes against the same Postgres.
+
 ```bash
-# 1. Postgres — local Docker…
-docker run -d --name cf-pg -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=campaign_factory -p 5433:5432 postgres:16
-# …or pull the linked Vercel/Neon env vars instead:  vercel env pull
-
-# 2. web/.env.local
-#   DATABASE_URL=postgres://postgres:postgres@localhost:5433/campaign_factory
-#   ANTHROPIC_API_KEY=sk-ant-...   # optional locally; without it, runs fail cheap by design
-
-# 3. Install + run
-cd web
+# 1. Worker (from the repo root)
+cd worker
+cp .env.example .env      # set FACTORY_SIGNING_SECRET and FACTORY_MODEL_MODE
 npm install
-npm run dev            # http://localhost:3000
+npm run start             # :8787 — applies factory migrations on boot
+
+# 2. Web
+cd ../web
+npm install
+npm run dev               # :3000 — needs DATABASE_URL + FACTORY_* vars in .env.local
 ```
 
-The DB schema is created automatically on first request, so there is no separate migration step. `node scripts/seed-fixture.mjs` inserts a real campaign fixture as a completed run, so the UI (`/c/<id>`, `/wall`) is explorable without a live run. Full detail — environment variables, Vercel setup, go-live requirements — is in [`web/README.md`](web/README.md).
+Key points (full detail in [`web/README.md`](web/README.md) and [`worker/README.md`](worker/README.md)):
+
+- `FACTORY_SIGNING_SECRET`, `FACTORY_ENV_ID`, and `FACTORY_MODEL_MODE` **must agree** across web and worker, or runs fail closed.
+- `FACTORY_MODEL_MODE=mock` needs no API key; `live` requires `ANTHROPIC_API_KEY`.
+- A Postgres `DATABASE_URL` is required (local Docker or Neon); both apps migrate themselves — there is no separate migration step.
 
 ## The URLs
 
+### Public product (the factory)
+
 | URL | What it does |
 |---|---|
-| [`/`](web/src/app/page.tsx) | The **Campaign Builder**: entry form → live run progress (stage ticker + research feed) → the scroll-reveal campaign journey. Starting a run requires the access code. |
-| [`/c/[id]`](web/src/app/c/%5Bid%5D/page.tsx) | Shareable, read-only campaign page (private-by-default URL, durable Postgres read). |
-| [`/wall`](web/src/app/wall/page.tsx) | The **conference wall** — campaigns people made here and chose to share. |
+| `/` | Redirects to `/factory` — the factory is the front door (conference decision, 15 Jul 2026). |
+| [`/factory`](web/src/app/factory/page.tsx) | Public intake: problem + named place. Starts an express-profile run and redirects to the assembly view. |
+| [`/factory/c/[campaignId]`](web/src/app/factory/c/%5BcampaignId%5D/page.tsx) | The **Campaign Assembly View** — the live per-campaign page. The brief opens immediately; the client attaches the SSE/polling event stream. |
+| [`/gallery`](web/src/app/gallery/page.tsx) | The **Campaign Gallery**: finished on-stage batch campaigns as individual cards, alongside shared campaigns from the legacy builder (marked with a legacy pill). `/wall` redirects here. |
 | [`/how`](web/src/app/how/page.tsx) | Standalone "how it works" explainer, linked from the footer. |
+
+### Conference / session surfaces
+
+| URL | What it does |
+|---|---|
+| [`/live`](web/src/app/live/page.tsx) | **Audience link for the session** — redirects to `/factory/replay/conference`. |
+| [`/factory/replay/conference`](web/src/app/factory/replay/conference/page.tsx) | The pinned, immutable **recorded run**, condensed to exactly 15:00 (honestly labelled, real-time toggle). Rendered entirely from stored Factory Events through the same renderer as a live run — zero model calls, zero writes. The route never changes; promotion is a back-office CLI step (`scripts/promote-replay.mjs`). Shows an honest empty state if nothing is pinned. |
+| [`/factory/live`](web/src/app/factory/live/page.tsx) | The **true real-time spectator view**: read-only mirror of the most recent presenter batch's gallery (polling, no tokens). Falls back to the recorded replay when no batch has run. |
+| [`/presenter`](web/src/app/presenter/page.tsx) | Alias — redirects to `/factory/multi-campaign-demo`. |
+| [`/factory/multi-campaign-demo`](web/src/app/factory/multi-campaign-demo/page.tsx) | The **multi-campaign demo** (presenter desk): fire a batch of 1–5 campaigns on stage (full or express profile). A presenter session auto-issues as an HttpOnly cookie (verified server-side, ADR 0013); a valid one skips straight to batch intake. `/factory/present` redirects here. |
+| [`/factory/gallery/[batchId]`](web/src/app/factory/gallery/%5BbatchId%5D/page.tsx) | The presenter's live **Factory Gallery** for a batch — every agent workspace open at once over the assembling brief, plus a Batch Receipt. Requires the presenter cookie; otherwise redirects to `/factory/multi-campaign-demo`. |
+
+### Legacy (single-agent builder)
+
+| URL | What it does |
+|---|---|
+| [`/legacy`](web/src/app/legacy/page.tsx) | The original single-agent Campaign Builder (the routed pipeline that is production on `main`), moved off the homepage and unlinked from the nav. Kept as the tested fallback and comparison point. |
+| [`/c/[id]`](web/src/app/c/%5Bid%5D/page.tsx) | Shareable, read-only campaign page from the legacy builder (private-by-default URL, durable Postgres read). |
+| `/wall` | Old gallery path — redirects to `/gallery`. |
+
+### Admin & dev
+
+| URL | What it does |
+|---|---|
 | [`/admin`](web/src/app/admin/page.tsx) | The fire extinguisher: enter the admin key, see the wall, hide anything. |
-| [`/dev/preview`](web/src/app/dev/preview/page.tsx) | Dev-only: renders the journey from a bundled fixture (no DB, no run). |
-
-Key API routes: `POST /api/runs` (gated start) · `GET /api/runs/[id]` (poll) · `/api/runs/[id]/share` · `/api/status` · `/api/wall` · `/api/admin/hide`.
-
-> On the [`factory/multi-agent-build`](https://github.com/CampaignLab/campaign-factory/tree/factory/multi-agent-build) branch the map changes: `/` redirects to the multi-agent `/factory`, and this builder moves to `/legacy`. See that branch's README for the full factory URL map.
+| [`/factory/admin/costs`](web/src/app/factory/admin/costs/page.tsx) | Internal cost + latency ledger: per-campaign spend vs the $4/$8 guards, per-batch vs $20/$35, and the latency milestone table. Gated by `CF_ADMIN_KEY` (`?key=` or header). Deliberately plain — not product UI. |
+| `/dev/preview`, `/factory/dev/*` | Dev-only component previews (journey, gallery, documents) rendered from bundled fixtures — no DB, no run. |
 
 ## Components & how it was built
 
-A summary of [`EXECUTION_JOURNAL.md`](EXECUTION_JOURNAL.md); the narrative version is [`HOW_IT_WAS_BUILT.md`](HOW_IT_WAS_BUILT.md).
+A summary of [`EXECUTION_JOURNAL.md`](EXECUTION_JOURNAL.md) and the branch history; the narrative version is [`HOW_IT_WAS_BUILT.md`](HOW_IT_WAS_BUILT.md).
 
-**13 Jul 2026 — Current Production built and deployed (M1–M5).** The localhost prototype (`app/`) was rewritten as a public Next.js app after a decision-locking grilling session: public self-serve, durable background runs, access code + session cap + £150/day kill-switch, server-side persistence with shareable URLs and an opt-in wall, and **no synthetic data, ever**. Milestones: M1 scaffold + the routed pipeline, M2 launch controls and the spend ledger, M3 the scroll-reveal journey UI, M4 Postgres persistence + serverless execution via `after()`, M5 the wall and admin surfaces. Deployed on Vercel (build root `web/`) + Neon Postgres, auto-deploying from `main`. Known constraint: function-duration limits mean a full 6–15 min run can't complete in one function on the current plan — one driver of the worker architecture below (see the go-live requirements in [`web/README.md`](web/README.md)).
+**13 Jul 2026 — Current Production built and deployed (M1–M5).** The localhost prototype (`app/`) was rewritten as a public Next.js app after a decision-locking grilling session: public self-serve, durable background runs, access code + session cap + £150/day kill-switch, server-side persistence with shareable URLs and an opt-in wall, and **no synthetic data, ever**. Milestones: M1 scaffold + routed pipeline (Sonnet 5 research / Opus 4.8 plan / Sonnet 5 ×3 drafts / Haiku 4.5 lint), M2 launch controls and spend ledger, M3 the scroll-reveal journey UI, M4 Postgres persistence + serverless execution via `after()`, M5 the wall and admin surfaces. Deployed on Vercel (root `web/`) + Neon Postgres, auto-deploying from `main`. Known constraint: function-duration limits mean full runs can't complete in one function on the current plan — one driver of the worker architecture below.
 
-**The multi-agent factory rewrite (PR #10).** The same product re-expressed as a genuine fifteen-agent LangGraph campaign graph, designed through ADRs [0001](docs/adr/0001-visible-agents-correspond-to-runtime-work.md)–[0016](docs/adr/0016-use-an-oss-langgraph-worker-on-railway.md) and the accepted [implementation-parameters envelope](docs/product/factory-implementation-parameters.md), then built as a compressed parallel effort per the [12-hour build plan](docs/product/factory-12-hour-build-plan.md). It lives on [`factory/multi-agent-build`](https://github.com/CampaignLab/campaign-factory/tree/factory/multi-agent-build): an always-on Railway worker (pg-boss durable queue, LangGraph over one shared state, Postgres checkpoints with orphan recovery), a signed HMAC web ↔ worker boundary with SSE event streaming, four screens (public intake + Campaign Assembly View, presenter desk + Factory Gallery, a pinned 15-minute conference replay, and this builder kept at `/legacy`), and a mock mode that exercises the whole system with zero model calls. It runs end to end and has completed live single-campaign and presenter-batch runs.
+**13–15 Jul 2026 — the multi-agent factory rewrite (this branch, PR #10).** The four-call pipeline was re-expressed as a genuine fifteen-agent LangGraph campaign graph, designed through ADRs [0001](docs/adr/0001-visible-agents-correspond-to-runtime-work.md)–[0016](docs/adr/0016-use-an-oss-langgraph-worker-on-railway.md) and an accepted [implementation-parameters envelope](docs/product/factory-implementation-parameters.md), then built as a compressed parallel effort per the [12-hour build plan](docs/product/factory-12-hour-build-plan.md). The main components:
 
-**Status.** Current production (this branch) remains unchanged while the rewrite is built; the existing `after()` pipeline and its function-duration limit remain current-production constraints until an explicit Factory Promotion. Open work is tracked in the [issues](https://github.com/CampaignLab/campaign-factory/issues).
+- **The worker** (`worker/`) — always-on Node service on Railway: `pg-boss` durable queue → LangGraph graph over one shared campaign state → `PostgresSaver` checkpoints at every node boundary, with boot-time orphan recovery, cost/time guards at node boundaries, and Terminal Gaps instead of fabricated completion.
+- **The signed boundary** — web ↔ worker over HMAC-signed HTTP; browsers stream Factory Events over SSE with run-scoped tokens (Postgres `LISTEN` with a polling fallback).
+- **The four screens** — public intake + Campaign Assembly View, the presenter desk + Factory Gallery for on-stage batches, the pinned 15-minute conference replay, and the legacy builder kept for comparison.
+- **Mock mode** — the whole system runs on deterministic fixtures with zero model calls, so everything was exercisable before (and independently of) live keys.
+- **Conference decisions (15 Jul):** the factory became the front door (`/` → `/factory`, legacy to `/legacy`), the presenter access-code lock was removed in favour of spend guards, express profile became the default everywhere, and the replay opens at 4× condensed playback.
+
+It runs end to end in mock mode and has completed live single-campaign and presenter-batch runs — cost inside guardrails, latency tuning still open ([verification results](docs/product/factory-verification-results.md)).
+
+**15 Jul 2026 — OpenClaw build reveal.** A separate, bounded coding agent ("Pip", outside the factory runtime) was provisioned to build a Campaign Operations workspace in public view for the conference: [issue #11](https://github.com/CampaignLab/campaign-factory/issues/11) and draft [PR #12](https://github.com/CampaignLab/campaign-factory/pull/12), demo-safe (browser-local fixture state, no real delivery), with visible commit-and-comment checkpoints. It demonstrates bounded build-time autonomy — it cannot merge, deploy, or touch production.
+
+**Status.** Current production on `main` is live and unchanged. The factory rewrite is complete on this branch and gated behind an explicit Factory Promotion; open work is tracked in the [issues](https://github.com/CampaignLab/campaign-factory/issues).

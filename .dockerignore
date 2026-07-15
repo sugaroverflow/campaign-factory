@@ -1,0 +1,14 @@
+**/node_modules
+**/.next
+**/.turbo
+web/test-results
+web/.env*
+worker/.env
+!worker/.env.example
+.git
+app
+archive
+assets
+docs
+EXECUTION_JOURNAL.md
+HOW_IT_WAS_BUILT.md

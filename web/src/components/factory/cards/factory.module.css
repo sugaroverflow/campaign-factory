@@ -1,0 +1,126 @@
+/* Factory overlay motion + chrome. Transform/opacity only. Durations and
+   easings are the parameters §6 motion budget. prefers-reduced-motion disables
+   all of it (also protects presenter recovery). */
+
+:root {
+  --cf-ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --cf-ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* --- Agent Work Card / Compact / Pill entrance (220ms ease-out-quint) --- */
+.cardEnter {
+  animation: cfCardEnter 220ms var(--cf-ease-out-quint) both;
+  will-change: transform, opacity;
+}
+@keyframes cfCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Glassy overlay surface: the dark translucent card picks up the light page
+   (and the paper brief substrate) through a backdrop blur — layered machine
+   depth, not a flat dashboard. Compositor-only; falls back to plain alpha. */
+.glass {
+  backdrop-filter: blur(9px) saturate(1.15);
+  -webkit-backdrop-filter: blur(9px) saturate(1.15);
+}
+
+/* Running-state pulse on the status dot: the swarm reads as alive from the
+   back of the room. Opacity-only (compositor), disabled with reduced motion. */
+.livePulse {
+  animation: cfLivePulse 1.5s ease-in-out infinite;
+}
+@keyframes cfLivePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Reposition (240ms ease-out-quart) — applied to the absolutely-positioned
+   wrapper the gallery moves; we only ever transition transform. */
+.reposition {
+  transition: transform 240ms var(--cf-ease-out-quart);
+  will-change: transform;
+}
+
+/* Collapse to pill (180ms ease-out-quart). */
+.collapse {
+  animation: cfCollapse 180ms var(--cf-ease-out-quart) both;
+}
+@keyframes cfCollapse {
+  from {
+    opacity: 0.6;
+    transform: scale(1.02);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Backscroll append (120ms opacity/translate). */
+.backscrollRow {
+  animation: cfRow 120ms var(--cf-ease-out-quart) both;
+}
+@keyframes cfRow {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Handoff pulse: a short dot travelling a connector once (600ms). Distance is
+   parametrised per edge via --cf-dx/--cf-dy so one keyframe serves every line.
+   The ConnectorLayer mounts the dot only for a genuinely new edge. */
+.pulseDot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  animation: cfPulseMove 600ms var(--cf-ease-out-quart) forwards;
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+@keyframes cfPulseMove {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--cf-dx, 0), var(--cf-dy, 0));
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cardEnter,
+  .collapse,
+  .backscrollRow,
+  .pulseDot,
+  .livePulse {
+    animation: none !important;
+  }
+  .reposition {
+    transition: none !important;
+  }
+}

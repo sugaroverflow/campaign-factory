@@ -191,7 +191,7 @@ function Capacity({ reason }: { reason: "closed" | "budget" | null }) {
           ? "New campaigns aren't being generated anymore, but the campaigns made here are still readable."
           : "A lot of campaigns are being built at once. Explore the ones others have made while we catch up, and try again shortly."}
       </p>
-      <a href="/wall" className="mt-6 inline-block rounded-full bg-foreground px-5 py-2 text-sm text-background transition-colors hover:bg-foreground/85">
+      <a href="/gallery" className="mt-6 inline-block rounded-full bg-foreground px-5 py-2 text-sm text-background transition-colors hover:bg-foreground/85">
         Explore the Campaign Gallery
       </a>
     </div>

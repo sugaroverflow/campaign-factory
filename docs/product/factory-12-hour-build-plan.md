@@ -18,7 +18,7 @@ The parameters document plans for 15 build days + 5 hardening days for one engin
 
 ### Additional 12-hour deferrals
 
-- **Railway deployment deferred.** No Railway account access exists on this machine. The worker is built as an independently deployable Node 22+ package (`worker/`) with health endpoints and a Railway-ready start command, but runs locally (and can run on any Node host) until account access exists. This satisfies ADR 0015's *dedicated worker* boundary; ADR 0016's Railway placement is executed later without code change.
+- **Railway deployment deferred.** *(Superseded within the window: the user provided Railway access mid-build and the worker was deployed — service `worker`, Dockerfile at the repo root, `railway.toml` health checks — and passed the preview infrastructure batch. See the verification results.)* Original position: no Railway account access existed; the worker was built independently deployable and ran locally per ADR 0015's boundary.
 - **`factory-dev` Vercel Custom Environment** created only if team plan allows during the window; otherwise preview deployments + local worker stand in. Environment Identity Check is built regardless and fails closed.
 - **Evaluation suite** reduced to: one full live single-campaign run (Leicester school-street fixture), one worker-restart recovery test, one cancellation test, cost measurement, and one presenter-batch smoke run. The remaining four fixtures and the three-consecutive-rehearsal release thresholds are follow-up hardening.
 - **Replay promotion**: mechanism + renderer + pinned route built; the actual conference replay batch is promoted from the first good rehearsal run, which may land after the window.

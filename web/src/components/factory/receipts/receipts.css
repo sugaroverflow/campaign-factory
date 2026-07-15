@@ -1,0 +1,153 @@
+/* Campaign Completion Receipt + Batch Receipt — light Awake surfaces (globals.css
+   tokens). Matches the existing Campaign Brief / gallery typography. */
+
+.fa-rcpt {
+  border: 1px solid var(--border);
+  border-radius: var(--r-2xl);
+  padding: 1rem 1.2rem;
+  background: linear-gradient(180deg, rgba(245, 245, 245, 0.5), transparent 40%);
+  color: var(--ink);
+}
+.fa-rcpt--partial {
+  border-color: var(--warn);
+}
+.fa-rcpt--compact {
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--r-xl);
+}
+
+.fa-rcpt__head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.fa-rcpt__title {
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+.fa-rcpt--compact .fa-rcpt__title {
+  font-size: 0.9rem;
+}
+.fa-rcpt__sub {
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+  margin: 0.4rem 0 0;
+  max-width: 68ch;
+}
+
+.fa-rcpt__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin: 0.8rem 0 0.2rem;
+}
+@media (max-width: 560px) {
+  .fa-rcpt__stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.fa-rcpt__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  background: var(--secondary);
+  border-radius: var(--r-lg);
+  padding: 0.5rem 0.7rem;
+}
+.fa-rcpt--compact .fa-rcpt__stat {
+  background: transparent;
+  padding: 0.2rem 0;
+}
+.fa-rcpt__big {
+  font-size: 1.4rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.fa-rcpt--compact .fa-rcpt__big {
+  font-size: 1.15rem;
+}
+.fa-rcpt__lbl {
+  font-size: 0.74rem;
+  color: var(--muted-foreground);
+}
+
+.fa-rcpt__meta {
+  display: flex;
+  gap: 0.5rem 0.9rem;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0.7rem 0 0.2rem;
+}
+.fa-rcpt__meta-item {
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+}
+.fa-rcpt__flag {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--warn);
+  background: rgba(168, 106, 0, 0.1);
+  border-radius: 999px;
+  padding: 0.12rem 0.6rem;
+}
+.fa-rcpt__flag--gap {
+  color: var(--bad);
+  background: rgba(223, 34, 37, 0.08);
+}
+
+.fa-rcpt__open {
+  display: inline-block;
+  margin-top: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ink);
+  border-radius: 999px;
+  padding: 0.4rem 0.95rem;
+  text-decoration: none;
+}
+.fa-rcpt__open:hover {
+  background: var(--brand);
+}
+
+/* ---- Batch Receipt ---- */
+.fa-batch {
+  border: 1px solid var(--border);
+  border-radius: var(--r-2xl);
+  padding: 1.1rem 1.3rem;
+  background: var(--card);
+}
+.fa-batch__stats {
+  margin-bottom: 0.3rem;
+}
+.fa-batch__table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  font-size: 0.88rem;
+}
+.fa-batch__table th {
+  text-align: left;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted-foreground);
+  font-weight: 600;
+  padding: 0.4rem 0.6rem 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.fa-batch__table td {
+  padding: 0.55rem 0.6rem 0.55rem 0;
+  border-bottom: 1px solid var(--secondary);
+  vertical-align: middle;
+}
+.fa-batch__table a {
+  color: var(--brand);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.fa-batch__table a:hover {
+  text-decoration: underline;
+}

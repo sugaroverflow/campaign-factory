@@ -1,0 +1,215 @@
+/* Factory Gallery layout. The five campaign anchors are a 5-column field that
+   collapses to 3+2 below 1500px (parameters §6). The dark overlay sits over the
+   light Awake page, so the field itself stays on the page background. */
+
+.field {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px;
+  padding: 16px 20px 64px;
+  align-items: start;
+}
+@media (max-width: 1500px) {
+  /* 3 + 2: five items reflow into three then two. */
+  .field {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 980px) {
+  .field {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.column {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* The cards area is the positioning context for the connector overlay AND a
+   single-cell grid that overlays its two layers: the paper brief substrate
+   (z 0) and the full-width agent card stack (z 1). Both occupy the same grid
+   cell, so the area is as tall as the taller layer and nothing gets clipped —
+   the translucent agent workspaces pop over the assembling brief. */
+.cardsArea {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Agent layer: every workspace open, full column width, stacked. */
+.cardStack {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-content: start;
+  height: fit-content;
+}
+
+.connectorSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+}
+
+/* Legacy grouped-card layout (kept for compatibility with older callers). */
+.cardGroup {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Anchors always render above connectors and agent cards. */
+.anchor {
+  position: sticky;
+  top: 60px; /* below the fixed nav + ledger */
+  z-index: 3;
+}
+/* Legacy judgement stack (judgement cards no longer render in gallery columns;
+   class kept for compatibility). */
+.judgementStack {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --- Published brief pieces: light paper artefacts vs the dark agent chrome.
+   They accumulate down the column as sections are accepted and NEVER collapse
+   into pills — end state is receipt + this stack. --- */
+.briefStack {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.briefStackHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+}
+.briefStackTitle {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(27, 29, 30, 0.55);
+}
+.briefStackCount {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  color: rgba(27, 29, 30, 0.5);
+}
+.briefCard {
+  background: rgba(255, 253, 247, 0.93); /* warm paper, distinct from the dark ink agent cards */
+  border: 1px solid rgba(27, 29, 30, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07);
+  color: #1b1d1e;
+  overflow: hidden;
+  animation: cfBriefIn 260ms var(--cf-brief-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
+}
+
+/* The brief stack is the SUBSTRATE layer of the cards area in BOTH running and
+   done states: it shares the agent stack's grid cell at z 0, so the paper sits
+   fully behind the translucent workspaces and shows through them, around their
+   edges, and below a shorter card stack. Slightly inset so paper edges peek
+   out from under the dark layer. */
+.briefSubstrate {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  z-index: 0;
+  min-width: 0;
+  padding: 14px 0 0 6px;
+  height: fit-content;
+}
+@keyframes cfBriefIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/* Non-interactive document header: every published piece stays fully open. */
+.briefCardHead {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 6px 9px 2px;
+}
+.briefCardStep {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: rgba(27, 29, 30, 0.5);
+  flex-shrink: 0;
+}
+.briefCardTitle {
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  flex: 1;
+  min-width: 0;
+  white-space: normal; /* full title, no truncation */
+}
+.briefCardExcerpt {
+  margin: 0;
+  padding: 0 9px 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(27, 29, 30, 0.78);
+  /* full excerpt — no clamp: the brief renders uncollapsed */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .briefCard {
+    animation: none !important;
+  }
+}
+
+/* Factory Ledger — fixed below the nav, ≤44px tall. */
+.ledger {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 20px;
+  background: rgba(22, 24, 27, 0.94);
+  color: #f2f3f5;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  overflow-x: auto;
+  white-space: nowrap;
+}
