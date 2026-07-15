@@ -9,7 +9,7 @@
 // the compiler only renders it). Missing evidence yields explicit
 // "needs verification" markers — never invented completion.
 
-import type { JourneyStepKey, SectionStatus } from "../contracts/journey";
+import type { JourneyStepKey } from "../contracts/journey";
 import { JOURNEY_STEPS } from "../contracts/journey";
 import {
   CANONICAL_DOCUMENTS,
@@ -23,10 +23,12 @@ import {
   SECTION_RENDERERS,
   blocksToHtml,
   blocksToText,
+  escapeHtml,
   isUnresolvedLabel,
   type Block,
 } from "./render";
 import { buildEvidenceAndNextChecks, evidenceSection } from "./evidence";
+import { DOCUMENT_DISCLAIMER, plainDocStatus, sectionStatusPhrase } from "./language";
 
 export interface CompiledDocument {
   key: CanonicalDocumentKey;
@@ -79,22 +81,10 @@ const PACK_KEYS: ReadonlySet<CanonicalDocumentKey> = new Set([
 
 const STEP_TITLE = new Map<JourneyStepKey, string>(JOURNEY_STEPS.map((s) => [s.key, s.title]));
 
-function humanSectionStatus(status: SectionStatus): string {
-  switch (status) {
-    case "empty":
-      return "not started";
-    case "assembling":
-      return "assembling";
-    case "under_review":
-      return "under review";
-    case "accepted":
-      return "accepted";
-    case "needs_verification":
-      return "needs verification";
-    default:
-      return status;
-  }
-}
+// Plain-English note for a section that couldn't be fully checked in time —
+// clean prose in the body, the detail lives in Evidence and Next Checks.
+const CHECK_SECTION_NOTE =
+  "Some facts in this section couldn't be fully checked in time — see Evidence and next checks before you use it.";
 
 // The affectedOutputs vocabulary is pinned in the agent prompts (shared.ts
 // AFFECTED_OUTPUTS_GUIDE), but recorded runs predate that and models still
@@ -148,8 +138,11 @@ function unresolvedLoadBearing(claims: Claim[]): Claim[] {
  *    proposal is being decided) — claim flags describe CONTENT, so a document
  *    with nothing in it can never be "needs verification" (and therefore never
  *    exportable)
- *  - any needs_verification section OR unresolved load-bearing claim → "needs verification"
- *  - all sections accepted and no unresolved load-bearing claims → "ready"
+ *  - any load-bearing claim affecting it labelled "External information
+ *    unavailable" → "needs verification" (badge rule narrowed 15 Jul 2026,
+ *    user-confirmed: "Conflicting evidence" and "Verification incomplete" no
+ *    longer gate the badge — they still populate flags[] for the display layer)
+ *  - content-bearing sections and no external-unavailable claims → "ready"
  *  - some accepted / under review → "under review"
  */
 export function sectionDocStatus(
@@ -172,16 +165,20 @@ export function sectionDocStatus(
     };
   }
 
+  // flags[] still carries ALL unresolved load-bearing claims (the display
+  // layer needs them) — only the STATUS decision below is narrower.
   const relevant = claimsFor(claims, sectionKeys, docKey);
   const unresolved = unresolvedLoadBearing(relevant);
   for (const c of unresolved) flags.push(`Unresolved load-bearing claim: ${c.text}`);
 
   const hasNeedsVerification = statuses.some((s) => s === "needs_verification");
-  if (hasNeedsVerification || unresolved.length > 0) {
-    if (hasNeedsVerification) flags.push("A source section is flagged needs verification.");
+  if (hasNeedsVerification) flags.push("A source section is flagged needs verification.");
+
+  // Status gate: ONLY "External information unavailable" load-bearing claims.
+  if (unresolved.some((c) => c.status === "External information unavailable")) {
     return { status: "needs verification", flags };
   }
-  if (statuses.length > 0 && statuses.every((s) => s === "accepted")) {
+  if (statuses.length > 0 && statuses.every((s) => s === "accepted" || s === "needs_verification")) {
     return { status: "ready", flags };
   }
   return { status: "under review", flags };
@@ -195,17 +192,14 @@ function renderSectionForBrief(key: JourneyStepKey, sec: CampaignSectionState | 
   if (status === "accepted" || status === "needs_verification") {
     const body = SECTION_RENDERERS[key](sec?.content);
     if (body.length) blocks.push(...body);
-    else blocks.push({ t: "note", text: "Accepted, but no structured content was recorded." });
+    else blocks.push({ t: "note", text: "Accepted, but no written content was recorded." });
     if (status === "needs_verification") {
-      blocks.push({
-        t: "note",
-        text: "This section is flagged needs verification — confirm before use.",
-      });
+      blocks.push({ t: "note", text: CHECK_SECTION_NOTE });
     }
   } else {
     blocks.push({
       t: "note",
-      text: `Not yet reviewer-accepted (currently ${humanSectionStatus(status)}). Nothing has been invented to fill this section.`,
+      text: `This section isn't finished yet (currently ${sectionStatusPhrase(status)}). Nothing has been invented to fill it.`,
     });
   }
   return blocks;
@@ -234,25 +228,22 @@ function renderDocumentsSection(
   if (status === "accepted" || status === "needs_verification") {
     blocks.push(...SECTION_RENDERERS.documents(sec?.content));
     if (status === "needs_verification") {
-      blocks.push({
-        t: "note",
-        text: "This section is flagged needs verification — confirm before use.",
-      });
+      blocks.push({ t: "note", text: CHECK_SECTION_NOTE });
     }
   }
   blocks.push({
     t: "p",
-    text: "Nine campaign documents compile from the reviewer-accepted sections above. Their status when this brief was compiled:",
+    text: "Nine campaign documents are built from the finished sections above. Where each one stood when this brief was put together:",
   });
   blocks.push({
     t: "kv",
-    rows: docSummaries.map((d): [string, string] => [`${d.num}. ${d.name}`, d.status]),
+    rows: docSummaries.map((d): [string, string] => [`${d.num}. ${d.name}`, plainDocStatus(d.status)]),
   });
   const notReady = docSummaries.filter((d) => d.status !== "ready").length;
   if (notReady > 0) {
     blocks.push({
       t: "note",
-      text: `${notReady} of ${docSummaries.length} documents are not yet ready. Nothing has been invented to fill them.`,
+      text: `${notReady} of ${docSummaries.length} documents aren't ready to use yet. Nothing has been invented to fill them.`,
     });
   }
   return blocks;
@@ -315,17 +306,17 @@ function compileSubDoc(
         renderedAny = true;
       }
       if (status === "needs_verification") {
-        blocks.push({ t: "note", text: "Flagged needs verification — confirm before use." });
+        blocks.push({ t: "note", text: CHECK_SECTION_NOTE });
       }
     } else {
       blocks.push({
         t: "note",
-        text: `The ${STEP_TITLE.get(sk) ?? sk} section is not yet reviewer-accepted (currently ${humanSectionStatus(status)}). Nothing invented to fill it.`,
+        text: `The ${STEP_TITLE.get(sk) ?? sk} section isn't finished yet (currently ${sectionStatusPhrase(status)}). Nothing has been invented to fill it.`,
       });
     }
   }
   if (!renderedAny) {
-    blocks.push({ t: "note", text: "No accepted content yet — this document assembles as its brief sections are accepted." });
+    blocks.push({ t: "note", text: "Nothing here yet — this document fills in as its brief sections are finished." });
   }
   return { html: blocksToHtml(blocks), plainText: blocksToText(blocks) };
 }
@@ -358,7 +349,14 @@ function packStatus(
   );
   for (const c of claimUnresolved) if (!unresolved.includes(c)) flags.push(`Unresolved load-bearing claim: ${c.text}`);
 
-  if (hasNotes || unresolved.length > 0 || claimUnresolved.length > 0) {
+  // Status gate (badge rule narrowed 15 Jul 2026, user-confirmed): ONLY
+  // load-bearing claims labelled "External information unavailable" make a
+  // content-bearing pack "needs verification". Other unresolved labels and
+  // verification placeholders stay in flags[] for the display layer.
+  const externalUnavailable = [...unresolved, ...claimUnresolved].some(
+    (c) => c.status === "External information unavailable",
+  );
+  if (externalUnavailable) {
     return { status: "needs verification", flags };
   }
   // otherwise respect a stored terminal status, defaulting to ready once content exists
@@ -375,7 +373,7 @@ function renderResource(r: PackResource): Block[] {
     }
   }
   if (r.verificationNotes?.length) {
-    blocks.push({ t: "h4", text: "Before sending, verify" });
+    blocks.push({ t: "h4", text: "Before you send this, check" });
     blocks.push({ t: "ul", items: r.verificationNotes });
   }
   return blocks;
@@ -385,12 +383,12 @@ function compilePack(name: string, docState: CampaignDocumentState | undefined):
   const resources = docState?.resources ?? [];
   const blocks: Block[] = [{ t: "h2", text: name }];
   if (!resources.length) {
-    blocks.push({ t: "note", text: "No resources produced yet — this pack assembles once its strategy, tactics, and organising dependencies are stable." });
+    blocks.push({ t: "note", text: "Nothing in this pack yet (no resources) — it fills in once the strategy, tactics and organising sections are ready." });
     return { html: blocksToHtml(blocks), plainText: blocksToText(blocks) };
   }
   blocks.push({
     t: "p",
-    text: "First drafts only. Nothing is sent without a person editing and approving it; highlighted [ … ] items are unresolved and must be resolved first.",
+    text: "First drafts only — please edit and approve everything before it goes anywhere. Fill in the highlighted [ … ] blanks first.",
   });
   const html: string[] = [blocksToHtml(blocks)];
   const text: string[] = [blocksToText(blocks)];
@@ -400,6 +398,16 @@ function compilePack(name: string, docState: CampaignDocumentState | undefined):
     text.push(blocksToText(rb));
   }
   return { html: html.join("\n"), plainText: text.join("\n\n").trim() };
+}
+
+// Footer disclaimer on EVERY compiled document (product decision, 15 Jul 2026).
+// Baked into html + plainText here so the on-page Document Library, the Copy
+// actions, and the Word export all carry it from the one renderer.
+function withDisclaimer(r: { html: string; plainText: string }): { html: string; plainText: string } {
+  return {
+    html: `${r.html}\n<footer class="fa-doc-footer">${escapeHtml(DOCUMENT_DISCLAIMER)}</footer>`,
+    plainText: `${r.plainText}\n\n${DOCUMENT_DISCLAIMER}`,
+  };
 }
 
 /**
@@ -438,7 +446,7 @@ export function compileDocuments(state: CampaignState, claims: Claim[]): Compile
     const isPack = PACK_KEYS.has(def.key);
     if (isPack) {
       const docState = docStateByKey.get(def.key);
-      const { html, plainText } = compilePack(def.name, docState);
+      const { html, plainText } = withDisclaimer(compilePack(def.name, docState));
       return {
         key: def.key,
         num: def.num,
@@ -458,10 +466,11 @@ export function compileDocuments(state: CampaignState, claims: Claim[]): Compile
       "lobbying_pack" | "media_pack" | "digital_pack"
     >;
     const sectionKeys = DOC_SECTIONS[subKey];
-    const { html, plainText } =
+    const { html, plainText } = withDisclaimer(
       def.key === "campaign_brief"
         ? compileBrief(state, claimList, docSummaries)
-        : compileSubDoc(subKey, def.name, state);
+        : compileSubDoc(subKey, def.name, state),
+    );
     return {
       key: def.key,
       num: def.num,

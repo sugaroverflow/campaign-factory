@@ -1,12 +1,13 @@
 "use client";
 
 // The nine Canonical Campaign Documents (step 10 footer). Statuses are folded
-// from document.status events; the exact product status strings (assembling /
-// under review / ready / needs verification) render verbatim. Compiled document
-// bodies are W6's surface — this is the library index and status only.
+// from document.status events; the canonical status strings stay on the data
+// and are translated to plain English at display only (language.ts). Compiled
+// document bodies are W6's surface — this is the library index and status only.
 
 import type { DocumentVM } from "@/lib/factory/client";
 import type { DocumentStatus } from "@/lib/factory/contracts";
+import { plainDocStatus } from "@/lib/factory/documents";
 
 const STATUS_CHIP: Record<DocumentStatus, string> = {
   assembling: "gen",
@@ -24,7 +25,9 @@ export function DocumentLibrary({ documents }: { documents: DocumentVM[] }) {
           <h3>{d.name}</h3>
           <div className="d-prev">
             {d.status ? (
-              <span className={`tag ${STATUS_CHIP[d.status] ?? "gen"}`}>{d.status}</span>
+              <span className={`tag ${STATUS_CHIP[d.status] ?? "gen"}`} title={d.status}>
+                {plainDocStatus(d.status)}
+              </span>
             ) : (
               <span className="fa-mono">not started</span>
             )}

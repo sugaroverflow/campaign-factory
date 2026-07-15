@@ -13,11 +13,32 @@ export {
 export {
   buildEvidenceAndNextChecks,
   evidenceSection,
+  claimDetailLines,
   type EvidenceAndNextChecks,
   type SourceLedgerGroup,
   type EvidenceClaimView,
   type EvidenceTotals,
+  type DraftNote,
 } from "./evidence";
+
+export {
+  PLAIN_LABEL,
+  plainLabel,
+  PLAIN_DOC_STATUS,
+  plainDocStatus,
+  PLAIN_SECTION_STATUS,
+  sectionStatusPhrase,
+  plainFlag,
+  plainOutputName,
+  DOCUMENT_DISCLAIMER,
+  TERMINAL_GAPS_TITLE,
+  TERMINAL_GAPS_NOTE,
+  JUDGEMENT_FRAME,
+  JUDGEMENT_DEFAULT_CHIP,
+  UNRESOLVED_EVIDENCE_GROUPS,
+  SETTLED_EVIDENCE_GROUP,
+  type EvidenceGroupCopy,
+} from "./language";
 
 export {
   buildCampaignReceipt,

@@ -137,7 +137,10 @@ const sections: Record<JourneyStepKey, CampaignSectionState> = {
       { name: "Consultation", when: "During the TRO window", focus: "Turn out support and rebut objections" },
     ],
     avoid: ["Framing it as anti-car", "Overstating unverified air-quality figures"],
-    escalation: "If the officer recommendation is negative, request a Cabinet deputation.",
+    // The [VERIFY: …] block exercises the clean-prose rule: stripped from the
+    // rendered document body, resurfaced under Evidence and Next Checks.
+    escalation:
+      "If the officer recommendation is negative, request a Cabinet deputation. [VERIFY: deputation request deadline for Cabinet meetings]",
     indicators: ["A supporter list of 100+", "Officer willingness to include the street"],
   }),
   tactics: sec("accepted", {

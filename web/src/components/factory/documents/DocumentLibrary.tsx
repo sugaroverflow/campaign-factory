@@ -1,9 +1,9 @@
 "use client";
 
 // The nine-document library (ADR 0007). Renders the canonical nine-document grid
-// with REAL per-document status chips (exact strings "assembling" / "under
-// review" / "ready" / "needs verification"), a ready-count derived from those
-// real statuses, and a per-document view with Copy, view HTML, and a Word .doc
+// with REAL per-document status chips (canonical statuses translated to plain
+// English at display only — language.ts), a ready-count derived from those real
+// statuses, and a per-document view with Copy, view HTML, and a Word .doc
 // download. Export is DISABLED until the relevant reviewer pass completes:
 //  - "ready"              → export enabled;
 //  - "needs verification" → export enabled only after explicit confirmation;
@@ -15,7 +15,7 @@
 
 import { useState } from "react";
 import type { CompiledDocument } from "@/lib/factory/documents";
-import { isExportable } from "@/lib/factory/documents";
+import { isExportable, plainDocStatus, plainFlag } from "@/lib/factory/documents";
 import type { DocumentStatus } from "@/lib/factory/contracts";
 import { downloadDocHtml, copyText } from "./wordExport";
 import "./documents.css";
@@ -28,7 +28,11 @@ const STATUS_CHIP: Record<DocumentStatus, string> = {
 };
 
 function StatusChip({ status }: { status: DocumentStatus }) {
-  return <span className={`tag ${STATUS_CHIP[status]}`}>{status}</span>;
+  return (
+    <span className={`tag ${STATUS_CHIP[status]}`} title={status}>
+      {plainDocStatus(status)}
+    </span>
+  );
 }
 
 export function DocumentLibrary({
@@ -49,7 +53,7 @@ export function DocumentLibrary({
       <div className="fa-doclib__head">
         <h3>{title}</h3>
         <span className="fa-doclib__count">
-          <b>{readyCount}</b> of {documents.length} ready
+          <b>{readyCount}</b> of {documents.length} ready to use
         </span>
       </div>
       {intro ? <p className="hint-sm">{intro}</p> : null}
@@ -111,19 +115,19 @@ function DocumentView({ doc, onClose }: { doc: CompiledDocument; onClose: () => 
 
       {!exportable ? (
         <p className="fa-doc-note">
-          Export is unavailable until the reviewer pass completes. This document is currently{" "}
-          <b>{doc.status}</b>.
+          You can copy or download this document once it&apos;s finished — right now it&apos;s{" "}
+          <b>{plainDocStatus(doc.status).toLowerCase()}</b>.
         </p>
       ) : null}
 
       {doc.flags.length ? (
         <div className="fa-docview__flags">
           <p className="fa-doc-note" style={{ marginBottom: ".4rem" }}>
-            Unresolved before this document is safe to use:
+            Worth checking before you use this document:
           </p>
           <ul className="fa-gaplist">
             {doc.flags.map((f, i) => (
-              <li key={i}>{f}</li>
+              <li key={i}>{plainFlag(f)}</li>
             ))}
           </ul>
         </div>
@@ -132,7 +136,7 @@ function DocumentView({ doc, onClose }: { doc: CompiledDocument; onClose: () => 
       {needsConfirm ? (
         <label className="fa-docview__confirm">
           <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />I
-          understand this document has unresolved items and will verify them before use.
+          understand some things here still need checking, and I&apos;ll check them before using this.
         </label>
       ) : null}
 

@@ -1,19 +1,32 @@
 "use client";
 
-// Evidence and Next Checks + Terminal Gaps (parameters §6, ADR 0006). Renders
+// Evidence and Next Checks + terminal gaps (parameters §6, ADR 0006). Renders
 // alongside the ten steps, near the end. Two data sources:
 //  - live run: evidence tallies + checks/gaps folded from events;
-//  - terminal run: W6's full EvidenceAndNextChecks ledger (claims grouped by
-//    the seven verification labels, conflicts, checks, gaps, totals) from W2's
-//    durable read route — passed in as `compiled` and preferred when present.
+//  - terminal run: W6's full EvidenceAndNextChecks ledger from W2's durable
+//    read route — passed in as `compiled` and preferred when present.
 // Honest by construction: unresolved conflicts and dead-lettered work show as
 // visible gaps rather than being hidden.
+//
+// Display redesign (product decision, 15 Jul 2026): the terminal ledger leads
+// with three COLLAPSED plain-English groups — "Sources disagree", "Not yet
+// double-checked", "Couldn't be checked from public sources" — then the settled
+// claims. Each claim collapses to one line and expands to full detail. Copy is
+// plain UK English (language.ts); the canonical labels stay on the data.
 
 import type { NextCheck, TerminalGap } from "@/lib/factory/contracts";
 import type { EvidenceTally } from "@/lib/factory/client";
-import { LABEL_TAG_CLASS, type EvidenceAndNextChecks } from "@/lib/factory/documents";
-import type { EvidenceClaimView } from "@/lib/factory/documents";
+import {
+  SETTLED_EVIDENCE_GROUP,
+  TERMINAL_GAPS_TITLE,
+  UNRESOLVED_EVIDENCE_GROUPS,
+  claimDetailLines,
+  plainOutputName,
+  type EvidenceAndNextChecks,
+  type EvidenceClaimView,
+} from "@/lib/factory/documents";
 import { fmtClock } from "./format";
+import "@/components/factory/documents/documents.css";
 
 export function EvidencePanel({
   evidence,
@@ -31,8 +44,9 @@ export function EvidencePanel({
 }) {
   const checks = compiled ? compiled.nextChecks : nextChecks;
   const gaps = compiled ? compiled.terminalGaps : terminalGaps;
+  const draftNotes = compiled?.draftNotes ?? [];
   const hasAny = compiled
-    ? compiled.totals.claims > 0 || checks.length > 0 || gaps.length > 0
+    ? compiled.totals.claims > 0 || checks.length > 0 || gaps.length > 0 || draftNotes.length > 0
     : evidence.found + evidence.conflicted + evidence.gaps > 0 || checks.length > 0 || gaps.length > 0;
 
   return (
@@ -42,11 +56,11 @@ export function EvidencePanel({
           <h2>
             Evidence &amp; next <span className="serif">checks</span>
           </h2>
-          <p className="whatsnew">What the campaign rests on, and what still needs a human to verify.</p>
+          <p className="whatsnew">What the campaign rests on, and what still needs a human to check.</p>
         </aside>
         <div className="rc">
           {!hasAny ? (
-            <p className="fa-skeleton__hint">Evidence and open checks will appear here as agents research and adjudicate.</p>
+            <p className="fa-skeleton__hint">Evidence and open checks will appear here as the research comes in.</p>
           ) : null}
 
           {compiled ? (
@@ -55,20 +69,20 @@ export function EvidencePanel({
             <div className="tiles3">
               <div className="ptile b">
                 <div className="big">{evidence.found}</div>
-                <div className="s">evidence items found &amp; labelled</div>
+                <div className="s">pieces of evidence found and labelled</div>
               </div>
               <div className="ptile y">
                 <div className="big">{evidence.conflicted}</div>
-                <div className="s">conflicts left visible, not hidden</div>
+                <div className="s">points where sources disagree — kept visible, not hidden</div>
               </div>
               <div className="ptile p">
                 <div className="big">{evidence.gaps}</div>
-                <div className="s">gaps raised for verification</div>
+                <div className="s">gaps flagged for a human to check</div>
               </div>
             </div>
           ) : null}
 
-          {checks.length ? (
+          {checks.length || draftNotes.length ? (
             <>
               <h3>Next checks</h3>
               {checks.map((c) => (
@@ -76,8 +90,13 @@ export function EvidencePanel({
                   <b>{c.description}</b>
                   {c.reason ? <> — {c.reason}</> : null}
                   {c.affectedSections?.length ? (
-                    <span className="fa-mono"> · {c.affectedSections.join(", ")}</span>
+                    <span className="fa-mono"> · {c.affectedSections.map(plainOutputName).join(", ")}</span>
                   ) : null}
+                </p>
+              ))}
+              {draftNotes.map((n, i) => (
+                <p className="fa-nextcheck" key={`dn-${i}`}>
+                  <b>{n.text}</b> — flagged while drafting {n.section}
                 </p>
               ))}
             </>
@@ -85,7 +104,7 @@ export function EvidencePanel({
 
           {gaps.length ? (
             <>
-              <h3>Terminal gaps</h3>
+              <h3>{TERMINAL_GAPS_TITLE}</h3>
               <ul className="fa-gaplist">
                 {gaps.map((g) => (
                   <li key={g.id} className="fa-gap--terminal">
@@ -105,66 +124,81 @@ export function EvidencePanel({
   );
 }
 
-// ---- full source ledger (terminal runs) ----
+// ---- full ledger (terminal runs): collapsed plain-English groups ----
 
-function claimMeta(c: EvidenceClaimView): string {
-  const parts: string[] = [];
-  if (c.loadBearing) parts.push("load-bearing");
-  if (c.sourceCount) parts.push(`${c.sourceCount} source${c.sourceCount === 1 ? "" : "s"}`);
-  if (c.confidence) parts.push(`confidence ${c.confidence}`);
-  return parts.join(" · ");
+function ClaimRow({ claim }: { claim: EvidenceClaimView }) {
+  return (
+    <details className="fa-evclaim">
+      <summary>{claim.text}</summary>
+      <ul className="fa-evclaim__meta">
+        {claimDetailLines(claim).map((line, i) => (
+          <li key={i}>{line}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function ClaimGroup({
+  title,
+  caption,
+  claims,
+}: {
+  title: string;
+  caption: string;
+  claims: EvidenceClaimView[];
+}) {
+  if (!claims.length) return null;
+  return (
+    <details className="fa-evgroup">
+      <summary>
+        {title} ({claims.length})
+      </summary>
+      <p className="fa-evgroup__cap">{caption}</p>
+      {claims.map((c) => (
+        <ClaimRow key={c.id} claim={c} />
+      ))}
+    </details>
+  );
 }
 
 function Ledger({ data }: { data: EvidenceAndNextChecks }) {
   const t = data.totals;
+  const byLabel = new Map(data.groups.map((g) => [g.label, g.claims]));
+  const unresolvedLabels = new Set(UNRESOLVED_EVIDENCE_GROUPS.map((g) => g.label));
+  const settled = data.groups.filter((g) => !unresolvedLabels.has(g.label)).flatMap((g) => g.claims);
+
   return (
     <>
       <div className="tiles3">
         <div className="ptile b">
           <div className="big">{t.claims}</div>
-          <div className="s">claims, each carrying one of the seven verification labels</div>
+          <div className="s">facts recorded during the research</div>
         </div>
         <div className="ptile y">
           <div className="big">{t.verifiedLoadBearing}</div>
-          <div className="s">load-bearing claims settled</div>
+          <div className="s">key facts settled</div>
         </div>
         <div className="ptile p">
           <div className="big">{t.unresolvedLoadBearing}</div>
-          <div className="s">load-bearing claims still unresolved — shown, not filled in</div>
+          <div className="s">key facts still to check — shown, not filled in</div>
         </div>
       </div>
 
-      <h3>Source ledger</h3>
-      {data.groups.map((g) => (
-        <div key={g.label} style={{ marginBottom: "0.9rem" }}>
-          <p style={{ margin: "0 0 0.35rem" }}>
-            <span className={`tag ${LABEL_TAG_CLASS[g.label]}`}>{g.label}</span>{" "}
-            <span className="fa-mono">{g.count}</span>
-          </p>
-          <ul className="fa-gaplist">
-            {g.claims.map((c) => (
-              <li key={c.id}>
-                {c.text}
-                {claimMeta(c) ? <span className="hint-sm"> ({claimMeta(c)})</span> : null}
-                {c.excerpt ? <span className="src-ev"> &ldquo;{c.excerpt}&rdquo;</span> : null}
-              </li>
-            ))}
-          </ul>
-        </div>
+      {UNRESOLVED_EVIDENCE_GROUPS.map((spec) => (
+        <ClaimGroup
+          key={spec.label}
+          title={spec.title}
+          caption={spec.caption}
+          claims={byLabel.get(spec.label) ?? []}
+        />
       ))}
 
-      {data.conflicts.length ? (
-        <>
-          <h3>Unresolved conflicts</h3>
-          <ul className="fa-gaplist">
-            {data.conflicts.map((c) => (
-              <li key={c.id}>
-                {c.text} <span className="tag verify">Conflicting evidence</span>
-              </li>
-            ))}
-          </ul>
-        </>
-      ) : null}
+      <ClaimGroup
+        title={SETTLED_EVIDENCE_GROUP.title}
+        caption={SETTLED_EVIDENCE_GROUP.caption}
+        claims={settled}
+      />
     </>
   );
 }

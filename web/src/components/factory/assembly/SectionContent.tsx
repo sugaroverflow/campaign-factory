@@ -18,6 +18,7 @@
 import { useState, type ReactNode } from "react";
 import type { JourneyStepKey } from "@/lib/factory/contracts";
 import { isJourneyStepKey, validateSectionContent } from "@/lib/factory/state/sections";
+import "@/components/factory/documents/documents.css";
 
 /* ---- local field types mirroring sections.ts (schemas are type-erased) ---- */
 
@@ -94,13 +95,31 @@ const TAG_CLS: Record<string, string> = {
   "External information unavailable": "ext",
 };
 
+// Clean prose (product decision, 15 Jul 2026): the seven verification labels
+// never render inline in section content. The ONE exception: a fact labelled
+// "Conflicting evidence" gets the power-map question-mark visual, linking to
+// the Evidence & next checks panel. Everything stripped here stays visible in
+// that panel — nothing is deleted from data.
+function ConflictMark() {
+  return (
+    <a
+      className="pm-inf pm-inf--inline"
+      href="#fa-evidence-checks"
+      title="Sources disagree on this — see Evidence & next checks"
+    >
+      ?
+    </a>
+  );
+}
+
 function Tag({ label }: { label?: string }) {
   if (!label) return null;
-  const cls = TAG_CLS[label];
+  if (TAG_CLS[label]) {
+    return label === "Conflicting evidence" ? <ConflictMark /> : null;
+  }
   // Off-enum statuses render as plain text — never coerced into a chip that
   // visually claims one of the seven verification labels (W1 guidance).
-  if (!cls) return <span className="hint-sm">{label}</span>;
-  return <span className={`tag ${cls}`}>{label}</span>;
+  return <span className="hint-sm">{label}</span>;
 }
 
 const List = ({ items, max }: { items?: string[]; max?: number }) =>
@@ -240,9 +259,7 @@ function ProblemContent(c: Record<string, unknown>) {
       <blockquote className="userquote">{str(c.statement)}</blockquote>
       {str(c.interpretation) ? (
         <>
-          <h3>
-            How the factory read it <Tag label="Generated campaign recommendation" />
-          </h3>
+          <h3>How the factory read it</h3>
           <p className="callout warm">{str(c.interpretation)}</p>
         </>
       ) : null}
@@ -404,9 +421,7 @@ function DecisionRouteContent(c: Record<string, unknown>) {
         <div>
           {str(c.practical) ? (
             <>
-              <h3>
-                How it works in practice <Tag label="Supported inference" />
-              </h3>
+              <h3>How it works in practice</h3>
               <p className="callout">{str(c.practical)}</p>
             </>
           ) : null}

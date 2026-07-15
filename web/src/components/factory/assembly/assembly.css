@@ -206,7 +206,8 @@
 .fa-judge__opt:disabled { opacity: 0.55; cursor: default; }
 .fa-judge__opt[data-default="1"] { border-color: var(--brand); }
 .fa-judge__opt[data-default="1"]::after {
-  content: "provisional default";
+  /* plain-language framing: a defaulted choice is ours to own and theirs to change */
+  content: "chosen for now";
   font-size: 0.66rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;

@@ -88,18 +88,18 @@ export function CampaignCompletionReceipt({
         {receipt.documents.needsVerification > 0 ? (
           <span className="fa-rcpt__flag">
             {receipt.documents.needsVerification} doc
-            {receipt.documents.needsVerification === 1 ? "" : "s"} need verification
+            {receipt.documents.needsVerification === 1 ? "" : "s"} to check before use
           </span>
         ) : null}
         {receipt.terminalGaps > 0 ? (
           <span className="fa-rcpt__flag fa-rcpt__flag--gap">
-            {receipt.terminalGaps} terminal gap{receipt.terminalGaps === 1 ? "" : "s"}
+            {receipt.terminalGaps} item{receipt.terminalGaps === 1 ? "" : "s"} not completed in this run
           </span>
         ) : null}
         {receipt.judgements.requested > 0 ? (
           <span className="fa-rcpt__meta-item fa-mono">
             {receipt.judgements.resolved + receipt.judgements.defaulted}/{receipt.judgements.requested}{" "}
-            judgements settled
+            choices settled
           </span>
         ) : null}
         {elapsed ? <span className="fa-rcpt__meta-item fa-mono">{elapsed} elapsed</span> : null}

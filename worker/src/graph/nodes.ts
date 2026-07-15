@@ -544,15 +544,37 @@ export function reviewerNode(pass: ReviewPass, journeySteps: number[]) {
       pendingProposals: "clear",
       terminalGaps: proposalTargets(pending).map((t) => `${t} not accepted (${reason})`),
     });
-    if (state.halted) return dropPending(state.haltReason ?? "run halted");
+    // Hard-time-limit EXCEPTION (batch 7 fix): finished work never goes
+    // unreviewed. Past hardCampaignLimitMs, model-call waves stay guarded (the
+    // shared guard() halts them), but a review pass over already-SUBMITTED
+    // proposals always runs — batch 7 binned five finished deliverables when
+    // the final review was blocked at the cap. Cancellation and cost halts are
+    // NOT excepted; only the time limit is.
+    const haltedByTime = state.halted && (state.haltReason ?? "").startsWith("Hard execution limit reached");
+    if (state.halted && !(haltedByTime && pending.length > 0)) {
+      return dropPending(state.haltReason ?? "run halted");
+    }
     const run = await store.getRun(ctx.sql, state.campaignId);
     if (ctx.signal.aborted || run?.status === "cancelled") {
       return { halted: true, haltReason: "run cancelled", ...dropPending("run cancelled") };
     }
     const limits = runtimeLimitsFor(ctx.profile);
-    const timeUp = hardTimeLimit(run?.startedAt, limits); // the reviewer is a model node too
+    const timeUp = hardTimeLimit(run?.startedAt, limits) ?? (haltedByTime ? state.haltReason ?? null : null);
     if (timeUp) {
-      return { halted: true, haltReason: timeUp, ...dropPending(timeUp) };
+      if (pending.length === 0) {
+        return { halted: true, haltReason: timeUp, ...dropPending(timeUp) };
+      }
+      await ctx.emitter.emit({
+        type: "work.update",
+        agentRunId: state.reviewerAgentRunId,
+        journeyStep: journeySteps[0],
+        payload: {
+          summary: "Past the time limit — reviewing finished work before closing",
+          verb: "reviewing",
+          agentKey: "synthesis_reviewer",
+        },
+      });
+      // fall through: the review pass runs; the returned patch marks the run halted.
     }
     if (pending.length === 0) return { pendingProposals: "clear" };
 
@@ -857,6 +879,12 @@ export function reviewerNode(pass: ReviewPass, journeySteps: number[]) {
     }
 
     const patch: Patch = { pendingProposals: "clear", stateVersion: version, acceptedSteps };
+    if (timeUp) {
+      // The exception reviewed finished work; the run still closes halted so
+      // no further model-call waves start.
+      patch.halted = true;
+      patch.haltReason = timeUp;
+    }
     if (needsStrategyRevision) {
       patch.needsStrategyRevision = true;
       patch.strategyRevisions = state.strategyRevisions + 1;

@@ -5,9 +5,16 @@
 //
 // A tiny block AST is rendered to BOTH html and plainText from one source, so
 // the on-page view, the Copy action, and the Word .doc download all stay in
-// sync. Verification labels render inline as `.tag` spans (the seven-label
-// vocabulary from the pipeline integrity spine); `[VERIFY: …]` / `[ … ]`
-// placeholders are highlighted, never silently dropped.
+// sync.
+//
+// Clean-prose rule (product decision, 15 Jul 2026): body text carries NO inline
+// warning markup — no `[VERIFY: …]` blocks, no inline verification-label tags.
+// The ONE exception is a fact labelled "Conflicting evidence", which gets a
+// small question-mark icon (the power-map `.pm-inf` visual) anchor-linking to
+// the Evidence and Next Checks section. Nothing is deleted from data: labels
+// stay on the claims, and every stripped `[VERIFY: …]` note resurfaces in
+// Evidence and Next Checks (see evidence.ts collectDraftNotes). Fill-in blanks
+// like `[OFFICER NAME]` are content, not warnings — they keep their highlight.
 
 import type { JourneyStepKey } from "../contracts/journey";
 import { isVerificationLabel, type VerificationLabel } from "../../pipeline/labels";
@@ -42,22 +49,69 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-/** Wrap every `[ … ]` placeholder in a <mark> (VERIFY items + fill-in blanks
- *  alike) so nothing unresolved slips through unmarked — mirrors Journey. */
-export function withVerifyHtml(text: string): string {
+// ---- `[VERIFY: …]` handling (stripped from prose, resurfaced in Evidence and
+//      Next Checks) ----
+
+const VERIFY_BLOCK_RE = /\[\s*verify\b[:\s]?([^\]\n]*)\]/gi;
+
+/** Remove `[VERIFY: …]` blocks from prose and tidy the leftover spacing. */
+export function stripVerifyText(text: string): string {
   return text
+    .replace(VERIFY_BLOCK_RE, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ +([.,;:!?)])/g, "$1")
+    .replace(/\( +/g, "(")
+    .trim();
+}
+
+/** The notes inside a string's `[VERIFY: …]` blocks ("[VERIFY: x]" → "x"). */
+export function verifyNotesIn(text: string): string[] {
+  const notes: string[] = [];
+  for (const m of text.matchAll(VERIFY_BLOCK_RE)) {
+    const note = (m[1] ?? "").trim();
+    if (note) notes.push(note);
+  }
+  return notes;
+}
+
+/** Every `[VERIFY: …]` note in an arbitrarily nested content value. */
+export function collectVerifyNotes(value: unknown, depth = 0): string[] {
+  if (depth > 6 || value == null) return [];
+  if (typeof value === "string") return verifyNotesIn(value);
+  if (Array.isArray(value)) return value.flatMap((v) => collectVerifyNotes(v, depth + 1));
+  if (typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).flatMap((v) => collectVerifyNotes(v, depth + 1));
+  }
+  return [];
+}
+
+/** Clean prose: VERIFY blocks are stripped (they resurface in Evidence and Next
+ *  Checks); remaining `[ … ]` fill-in blanks keep their <mark> highlight. */
+export function withVerifyHtml(text: string): string {
+  return stripVerifyText(text)
     .split(/(\[[^\]\n]+\])/g)
-    .map((p) =>
-      /^\[[^\]\n]+\]$/.test(p)
-        ? `<mark${/^\[verify\b/i.test(p) ? ' class="ph-verify"' : ""}>${escapeHtml(p)}</mark>`
-        : escapeHtml(p),
-    )
+    .map((p) => (/^\[[^\]\n]+\]$/.test(p) ? `<mark>${escapeHtml(p)}</mark>` : escapeHtml(p)))
     .join("");
 }
 
-export function tagHtml(label: string): string {
-  const cls = isVerificationLabel(label) ? LABEL_TAG_CLASS[label] : "gen";
-  return `<span class="tag ${cls}">${escapeHtml(label)}</span>`;
+// ---- the one allowed inline marker: "sources disagree" question-mark ----
+
+/** Anchor id of the Evidence and Next Checks section inside compiled html. */
+export const EVIDENCE_ANCHOR_ID = "evidence-next-checks";
+
+/** The small question-mark after a conflicting fact — same `.pm-inf` visual as
+ *  the power-map nodes — linking to Evidence and Next Checks. */
+export function conflictMarkHtml(anchorId: string = EVIDENCE_ANCHOR_ID): string {
+  return (
+    ` <a class="pm-inf pm-inf--inline" href="#${anchorId}"` +
+    ` title="Sources disagree on this — see Evidence and next checks">?</a>`
+  );
+}
+
+const CONFLICT_TEXT_MARK = " (sources disagree — see Evidence and next checks)";
+
+function isConflictLabel(label: string | undefined): boolean {
+  return label === "Conflicting evidence";
 }
 
 // ---- block AST ----
@@ -83,14 +137,16 @@ export function blocksToHtml(blocks: Block[]): string {
       case "h2":
       case "h3":
       case "h4": {
-        const label = b.label ? ` ${tagHtml(b.label)}` : "";
-        out.push(`<${b.t}>${escapeHtml(b.text)}${label}</${b.t}>`);
+        // Clean prose: labels never render inline; a conflicting fact gets the
+        // question-mark link to Evidence and Next Checks, nothing else.
+        const mark = isConflictLabel(b.label) ? conflictMarkHtml() : "";
+        out.push(`<${b.t}>${escapeHtml(b.text)}${mark}</${b.t}>`);
         break;
       }
       case "p": {
         const cls = b.callout ? ` class="${CALLOUT_CLASS[b.callout]}"` : "";
-        const label = b.label ? ` ${tagHtml(b.label)}` : "";
-        out.push(`<p${cls}>${withVerifyHtml(b.text)}${label}</p>`);
+        const mark = isConflictLabel(b.label) ? conflictMarkHtml() : "";
+        out.push(`<p${cls}>${withVerifyHtml(b.text)}${mark}</p>`);
         break;
       }
       case "quote":
@@ -123,31 +179,31 @@ export function blocksToHtml(blocks: Block[]): string {
 
 export function blocksToText(blocks: Block[]): string {
   const parts: string[] = [];
+  // Clean prose in the text export too: VERIFY blocks are stripped (they live
+  // in Evidence and Next Checks), labels never render inline, and a conflicting
+  // fact gets a short plain-text marker instead of the icon.
+  const mark = (label?: string) => (isConflictLabel(label) ? CONFLICT_TEXT_MARK : "");
   for (const b of blocks) {
     switch (b.t) {
       case "h2":
-        parts.push(`\n${b.text.toUpperCase()}${b.label ? ` [${b.label}]` : ""}`);
+        parts.push(`\n${stripVerifyText(b.text).toUpperCase()}${mark(b.label)}`);
         break;
       case "h3":
-        parts.push(`${b.text}${b.label ? ` [${b.label}]` : ""}`);
-        break;
       case "h4":
-        parts.push(`${b.text}${b.label ? ` [${b.label}]` : ""}`);
-        break;
       case "p":
-        parts.push(`${b.text}${b.label ? ` [${b.label}]` : ""}`);
+        parts.push(`${stripVerifyText(b.text)}${mark(b.label)}`);
         break;
       case "quote":
-        parts.push(b.text);
+        parts.push(stripVerifyText(b.text));
         break;
       case "ul":
-        for (const i of b.items) parts.push(`- ${i}`);
+        for (const i of b.items) parts.push(`- ${stripVerifyText(i)}`);
         break;
       case "ol":
-        b.items.forEach((i, n) => parts.push(`${n + 1}. ${i}`));
+        b.items.forEach((i, n) => parts.push(`${n + 1}. ${stripVerifyText(i)}`));
         break;
       case "kv":
-        for (const [k, v] of b.rows) parts.push(`${k}: ${v}`);
+        for (const [k, v] of b.rows) parts.push(`${k}: ${stripVerifyText(v)}`);
         break;
       case "note":
         parts.push(`(${b.text})`);
@@ -560,15 +616,24 @@ function isEmptyValue(v: unknown): boolean {
 }
 
 /** One list item for a flat object inside an array: its leading text field,
- *  then the remaining primitive fields, labelled. Parentheses (not square
- *  brackets) for the label so it is never mistaken for a verify placeholder. */
+ *  then the remaining primitive fields. Clean prose: a verification label is
+ *  never shown inline — a conflicting fact gets a short plain marker, all other
+ *  labels are stripped (they stay on the claims in Evidence and Next Checks).
+ *  Non-label annotations (tier etc.) keep their parenthetical. */
 function objectItemText(o: Record<string, unknown>): string | undefined {
   const textKey = LEAF_TEXT_KEYS.find((k) => typeof o[k] === "string" && (o[k] as string).trim());
   const labelKey = LEAF_LABEL_KEYS.find((k) => typeof o[k] === "string" && (o[k] as string).trim());
   const rest = Object.entries(o)
     .filter(([k, v]) => k !== textKey && k !== labelKey && isPrimitive(v) && String(v).trim())
     .map(([k, v]) => `${humanizeKey(k)}: ${String(v)}`);
-  const label = labelKey ? ` (${o[labelKey] as string})` : "";
+  const rawLabel = labelKey ? (o[labelKey] as string) : undefined;
+  const label = rawLabel
+    ? isVerificationLabel(rawLabel)
+      ? rawLabel === "Conflicting evidence"
+        ? " (sources disagree)"
+        : ""
+      : ` (${rawLabel})`
+    : "";
   if (textKey) {
     const head = `${o[textKey] as string}${label}`;
     return rest.length ? `${head} — ${rest.join(" · ")}` : head;

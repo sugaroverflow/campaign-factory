@@ -53,6 +53,69 @@
   margin: 0.4rem 0;
 }
 
+/* footer disclaimer on every compiled document — mirrors the app footer
+   (globals.css .footer): top rule, muted small text */
+.fa-doc-footer {
+  display: block;
+  border-top: 1px solid var(--border);
+  margin-top: 1.5rem;
+  padding-top: 0.9rem;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+
+/* the "sources disagree" question-mark inside prose — same .pm-inf visual as
+   the power-map nodes (journey.css), inline instead of absolutely positioned,
+   linking to Evidence and next checks */
+a.pm-inf--inline,
+.pm-inf--inline {
+  position: static;
+  display: inline-flex;
+  vertical-align: super;
+  margin-left: 0.15rem;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* Evidence & Next Checks — collapsed plain-English groups (also used by the
+   assembly EvidencePanel; <details>/<summary> so exported HTML degrades) */
+.fa-evgroup {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 0.6rem 0.85rem;
+  margin: 0 0 0.55rem;
+  background: linear-gradient(180deg, rgba(245, 245, 245, 0.45), transparent);
+}
+.fa-evgroup > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+.fa-evgroup__cap {
+  font-size: 0.82rem;
+  color: var(--muted-foreground);
+  margin: 0.35rem 0 0.5rem;
+}
+.fa-evclaim {
+  margin: 0.3rem 0;
+  padding-left: 0.2rem;
+}
+.fa-evclaim > summary {
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.fa-evclaim__meta {
+  list-style: none;
+  margin: 0.3rem 0 0.5rem;
+  padding: 0.45rem 0.7rem;
+  border-left: 3px solid var(--border);
+  font-size: 0.82rem;
+  color: var(--muted-foreground);
+}
+.fa-evclaim__meta li {
+  margin: 0.15rem 0;
+}
+
 /* per-document view panel */
 .fa-docview {
   margin-top: 1rem;

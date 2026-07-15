@@ -16,18 +16,15 @@ import { AgentIdentityPill, AgentWorkCard } from "@/components/factory/cards";
 import type { AgentCardVM as CardVM } from "@/components/factory/cards";
 import type { AgentCardVM as FoldAgentVM, JudgementVM, SectionVM } from "@/lib/factory/client";
 import type { JudgementAnswerRequest, SectionStatus } from "@/lib/factory/contracts";
+import { PLAIN_SECTION_STATUS } from "@/lib/factory/documents";
 import { StepWorkspace } from "./StepWorkspace";
 import { SectionContent } from "./SectionContent";
 import { YourJudgementCard } from "@/components/factory/judgement/YourJudgementCard";
 import { fmtClock } from "./format";
 
-const STATUS_LABEL: Record<SectionStatus, string> = {
-  empty: "Waiting",
-  assembling: "Assembling",
-  under_review: "In review",
-  accepted: "Accepted",
-  needs_verification: "Needs verification",
-};
+// Plain-English chips (language.ts); the canonical SectionStatus strings stay
+// on the data / events unchanged.
+const STATUS_LABEL: Record<SectionStatus, string> = PLAIN_SECTION_STATUS;
 
 function Receipt({
   section,
@@ -63,8 +60,10 @@ function Receipt({
               {" · "}
               <span className="fa-mono">{fmtClock(r.at)}</span>
               {r.agentCount ? <span className="fa-mono"> · {r.agentCount} agents</span> : null}
-              {r.sourceCount ? <span className="fa-mono"> · {r.sourceCount} src</span> : null}
-              {section.acceptedAtVersion ? <span className="fa-mono"> · v{section.acceptedAtVersion}</span> : null}
+              {r.sourceCount ? <span className="fa-mono"> · {r.sourceCount} sources</span> : null}
+              {section.acceptedAtVersion ? (
+                <span className="fa-mono"> · revision {section.acceptedAtVersion}</span>
+              ) : null}
             </>
           ) : null}
         </span>

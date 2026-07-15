@@ -28,6 +28,19 @@ export function downloadDocHtml(title: string, bodyHtml: string): void {
     `.tag{font-size:8pt;font-weight:bold;text-transform:uppercase;color:#4928fd;}` +
     `mark{background:#fdf1d3;}` +
     `.fa-doc-note{color:#a86a00;font-style:italic;}` +
+    // "sources disagree" question-mark after a conflicting fact
+    `a.pm-inf{text-decoration:none;font-weight:bold;font-size:8pt;color:#1b1d1e;background:#fdf1d3;` +
+    `border:1px solid #e8d59a;border-radius:8pt;padding:0 3pt;}` +
+    // Evidence & Next Checks groups: <details>/<summary> degrade to visible
+    // blocks in Word — nothing is hidden in the export.
+    `details{margin:0 0 8pt;}summary{font-weight:bold;margin:0 0 4pt;}` +
+    `.fa-evgroup{border:1px solid #ddd;border-radius:6pt;padding:6pt 8pt;}` +
+    `.fa-evgroup__cap{color:#6b6f72;font-size:9pt;margin:0 0 6pt;}` +
+    `.fa-evclaim{margin:0 0 6pt;}` +
+    `.fa-evclaim__meta{color:#494d50;font-size:9pt;margin:2pt 0 6pt 18pt;}` +
+    // footer disclaimer — mirrors the app footer (top rule, muted small text)
+    `footer.fa-doc-footer{border-top:1pt solid #ddd;margin-top:18pt;padding-top:8pt;` +
+    `color:#6b6f72;font-size:9pt;}` +
     `</style></head>` +
     `<body><h1>${escapeAttr(title)}</h1>${bodyHtml}</body></html>`;
   const blob = new Blob(["﻿", html], { type: "application/msword" });

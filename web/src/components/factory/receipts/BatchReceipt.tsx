@@ -24,7 +24,7 @@ export function BatchReceipt({ batch }: { batch: BatchReceiptData }) {
       <div className="fa-rcpt__head">
         <span className="fa-rcpt__title">Batch receipt</span>
         <span className="fa-mono">
-          {batch.substantiallyUsable}/{batch.campaignCount} substantially usable
+          {batch.substantiallyUsable}/{batch.campaignCount} produced something usable
         </span>
       </div>
 
@@ -35,7 +35,7 @@ export function BatchReceipt({ batch }: { batch: BatchReceiptData }) {
         </div>
         <div className="fa-rcpt__stat">
           <span className="fa-rcpt__big">{totals.agentsSpawned}</span>
-          <span className="fa-rcpt__lbl">agents spawned</span>
+          <span className="fa-rcpt__lbl">agents put to work</span>
         </div>
         <div className="fa-rcpt__stat">
           <span className="fa-rcpt__big">{totals.sourcesFetched}</span>
@@ -52,7 +52,9 @@ export function BatchReceipt({ batch }: { batch: BatchReceiptData }) {
           <span className="fa-rcpt__flag">{totals.agentsFailed} agents failed</span>
         ) : null}
         {totals.terminalGaps > 0 ? (
-          <span className="fa-rcpt__flag fa-rcpt__flag--gap">{totals.terminalGaps} terminal gaps</span>
+          <span className="fa-rcpt__flag fa-rcpt__flag--gap">
+            {totals.terminalGaps} item{totals.terminalGaps === 1 ? "" : "s"} not completed
+          </span>
         ) : null}
         <span className="fa-rcpt__meta-item">
           {totals.sectionsAccepted} brief sections accepted across the batch

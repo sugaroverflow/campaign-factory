@@ -309,9 +309,19 @@ export async function runModelTurn(spec: ModelTurnSpec, deps: ExecutorDeps): Pro
   let parsed = safeParseObject(finalText);
   const errors = spec.schema ? validateAgainst(spec.schema, parsed) : [];
   const emptyFirst = isEffectivelyEmpty(parsed);
-  if ((errors.length || emptyFirst) && remaining() > 0) {
-    spec.work.work(emptyFirst ? "Output was empty — regenerating" : "Correcting output format", "fixing");
-    const truncated = lastStop === "max_tokens";
+  // A max_tokens stop ALWAYS triggers the correction retry (batch 7 fix): a
+  // truncated-yet-parseable output would sail through here only to be rejected
+  // by the reviewer downstream ("Truncated mid-sentence") — burning the wave.
+  const truncated = lastStop === "max_tokens";
+  if ((errors.length || emptyFirst || truncated) && remaining() > 0) {
+    spec.work.work(
+      emptyFirst
+        ? "Output was empty — regenerating"
+        : errors.length
+          ? "Correcting output format"
+          : "Output was cut off — regenerating to fit",
+      "fixing",
+    );
     messages.push({ role: "assistant", content: finalText.trim() ? finalText : "(empty output)" });
     messages.push({
       role: "user",
