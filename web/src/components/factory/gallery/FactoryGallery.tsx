@@ -6,10 +6,11 @@
 // component so live and recorded runs look identically daunting: every agent
 // workspace open at full width, all the time (no presentation tiering).
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import type { JudgementAnswerRequest } from "@/lib/factory/contracts";
-import { FactoryLedger } from "./FactoryLedger";
+import { FactoryLedger, FactoryStatsStrip } from "./FactoryLedger";
 import { CampaignColumn } from "./CampaignColumn";
+import { useFloorFollow } from "./useFloorFollow";
 import {
   buildLedger,
   campaignCards,
@@ -44,8 +45,15 @@ export function FactoryGallery({ campaigns, now, connectionLabel, onCancel }: Fa
 
   const ledger = useMemo(() => buildLedger(campaigns), [campaigns]);
 
+  // Downward floor-follow: as the floor grows the page drifts down with it,
+  // hands control back on any manual scroll, re-engages at the bottom. Shared
+  // by live and replay because both render through this component.
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useFloorFollow(rootRef);
+
   return (
-    <div>
+    <div ref={rootRef} className={styles.floorRoot}>
+      <FactoryStatsStrip counts={ledger} />
       <div className={styles.field}>
         {perCampaign.map(({ campaign, cards, edges }) => (
           <CampaignColumn

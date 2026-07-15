@@ -13,14 +13,19 @@ export interface GalleryCampaign {
   shortName: string; // legible-from-the-back campaign label
 }
 
-// Live counts for the Factory Ledger — derived ONLY from events (via RunVM).
-// Spend bucket omitted; no token counts (parameters §6, task rules).
+// Live counts for the Agent Factory Ledger — derived ONLY from events (via
+// RunVM). Spend is the worker's cost-guard dollar total; never token counts
+// (parameters §6, task rules).
 export interface LedgerCounts {
   activeAgents: number;
   sourcesFetched: number;
   sectionsAccepted: number;
   campaignsActive: number;
   campaignsComplete: number;
+  /** Documents whose canonical status has reached "ready", across campaigns. */
+  docsReady: number;
+  /** Sum of per-campaign running spend in USD (cost.update events). */
+  spendUsd: number;
 }
 
 // A logical connector edge (parent → child). Endpoints are measured at layout
@@ -53,6 +58,8 @@ export function buildLedger(campaigns: GalleryCampaign[]): LedgerCounts {
   let sectionsAccepted = 0;
   let campaignsActive = 0;
   let campaignsComplete = 0;
+  let docsReady = 0;
+  let spendUsd = 0;
   for (const { run } of campaigns) {
     for (const a of run.agents) {
       if (ACTIVE.has(a.status)) activeAgents += 1;
@@ -61,10 +68,22 @@ export function buildLedger(campaigns: GalleryCampaign[]): LedgerCounts {
     for (const key of Object.keys(run.sections) as Array<keyof typeof run.sections>) {
       if (run.sections[key].status === "accepted") sectionsAccepted += 1;
     }
+    for (const d of run.documents) {
+      if (d.status === "ready") docsReady += 1;
+    }
+    spendUsd += run.spendUsd ?? 0;
     if (run.status === "running" || run.status === "queued") campaignsActive += 1;
     if (run.status === "completed" || run.status === "partial") campaignsComplete += 1;
   }
-  return { activeAgents, sourcesFetched, sectionsAccepted, campaignsActive, campaignsComplete };
+  return {
+    activeAgents,
+    sourcesFetched,
+    sectionsAccepted,
+    campaignsActive,
+    campaignsComplete,
+    docsReady,
+    spendUsd,
+  };
 }
 
 /** Map one campaign's fold agents onto W5 card VMs, resolving parent short names. */

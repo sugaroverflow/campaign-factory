@@ -1,16 +1,20 @@
 "use client";
 
-// Public Campaign Assembly View (W4) — presentational. Given a folded RunVM +
-// connection state, it renders the ten-step Campaign Brief immediately (all
-// sections skeletoned), lays the active Step Workspaces directly above the
-// sections they build, shows accepted content as it lands, and never
-// auto-jumps. Desktop = Journey rail/rung layout + dark overlay; below ~768px =
-// Mobile Compact Build View (no spatial overlay). Pure: no fetching here — the
-// live hook (AssemblyClient) or the fixture preview supplies `run`.
+// Public Campaign Brief (14 Jul 2026 redesign) — presentational. The page IS
+// the original Journey design: fixed number rail, hero, and a calm scrollable
+// flow of campaign materials as the spine, with exactly four factory grafts:
+//   1. the Agent Build Bar near the top carries ALL live theatre (live runs
+//      only; it disappears when the run is terminal) — sections below stay the
+//      clean original design with skeletons until content lands;
+//   2. Decision point cards render inline where they occur;
+//   3. Fact checks — the whole evidence/claims apparatus — as ONE section at
+//      the bottom;
+//   4. a graded receipt as a slim header line (campaignGrade, never red).
+// No inline agent workspaces, no contributor pills, no status chips on rungs.
+// Pure: no fetching here — the live hook (AssemblyClient) or the fixture
+// preview supplies `run`. The page never auto-jumps between sections.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { foldAgentToCardVM } from "@/components/factory/cards";
-import type { AgentCardVM as CardVM } from "@/components/factory/cards";
+import { useEffect, useMemo, useState } from "react";
 import {
   JOURNEY_STEPS,
   type JourneyStepKey,
@@ -18,38 +22,28 @@ import {
 } from "@/lib/factory/contracts";
 import {
   activeAgentCount,
-  activeAgentsForStep,
   isTerminal,
-  unassignedActiveAgents,
-  type AgentCardVM as FoldAgentVM,
   type CompiledCampaignBundle,
   type ConnectionState,
   type JudgementVM,
   type RunVM,
 } from "@/lib/factory/client";
+import { campaignGrade } from "@/lib/factory/documents";
 import { DocumentLibrary as CompiledDocumentLibrary } from "@/components/factory/documents/DocumentLibrary";
 import { BriefSection } from "./BriefSection";
 import { YourJudgementCard } from "@/components/factory/judgement/YourJudgementCard";
-import { StepWorkspace } from "./StepWorkspace";
+import { AgentBuildBar } from "./AgentBuildBar";
 import { EvidencePanel } from "./EvidencePanel";
 import { DocumentLibrary } from "./DocumentLibrary";
 import { MobileCompactView } from "./MobileCompactView";
 import { ConnectionBadge } from "./ConnectionBadge";
-import { campaignShortName } from "./format";
 import "./assembly.css";
 
 const JOURNEY_KEYS = new Set<string>(JOURNEY_STEPS.map((s) => s.key));
 
-// one shared ticking clock so W5 cards' elapsed / "Analysis in progress" advance
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    const iv = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(iv);
-  }, [active]);
-  return now;
-}
+// The nine acceptable sections (step 10 is compiled from document statuses,
+// never reviewer-accepted — same denominator as buildCampaignReceipt).
+const ACCEPTABLE_STEPS = JOURNEY_STEPS.filter((s) => s.key !== "documents");
 
 function useIsMobile(breakpoint = 768): boolean {
   const [mobile, setMobile] = useState(false);
@@ -86,8 +80,6 @@ function useScrollSpy(keys: string[]): string {
   return active;
 }
 
-const TERMINAL_STATUSES = new Set(["complete", "partial", "failed"]);
-
 export function AssemblyView({
   run,
   connection,
@@ -104,24 +96,10 @@ export function AssemblyView({
   compiled?: CompiledCampaignBundle | null;
   isFixture?: boolean;
 }) {
-  const now = useNow(!isTerminal(run.status));
   const isMobile = useIsMobile();
   const railKeys = useMemo(() => JOURNEY_STEPS.map((s) => s.key as string), []);
   const activeKey = useScrollSpy(railKeys);
-
-  const shortName = campaignShortName(run.place, run.problem);
-  const agentsById = useMemo(() => new Map(run.agents.map((a) => [a.agentRunId, a])), [run.agents]);
-
-  const toCardVm = useCallback(
-    (a: FoldAgentVM): CardVM =>
-      foldAgentToCardVM(a, {
-        campaignId: run.campaignId,
-        hue: 0, // single public campaign owns the brand hue
-        campaignShortName: shortName,
-        parentShortName: a.parentAgentRunId ? agentsById.get(a.parentAgentRunId)?.shortName : undefined,
-      }),
-    [run.campaignId, shortName, agentsById],
-  );
+  const terminal = isTerminal(run.status);
 
   // route each judgement to a home section by its first affected step key
   const { bySection, orphans } = useMemo(() => {
@@ -135,32 +113,40 @@ export function AssemblyView({
     return { bySection, orphans };
   }, [run.judgements]);
 
-  const completedForStep = useCallback(
-    (step: number) => run.agents.filter((a) => TERMINAL_STATUSES.has(a.status) && a.journeyStep === step),
-    [run.agents],
-  );
-
-  const unassigned = unassignedActiveAgents(run);
   const problem = run.problem || "Building your campaign";
-  const statusLine = terminalLine(run) || `${activeAgentCount(run)} agent${activeAgentCount(run) === 1 ? "" : "s"} at work`;
+  const agents = activeAgentCount(run);
+  const liveLine = `${agents} agent${agents === 1 ? "" : "s"} at work`;
+
+  // graded receipt (graft 4): a slim header line, never a card wall
+  const acceptedCount = ACCEPTABLE_STEPS.filter(
+    (s) => run.sections[s.key as JourneyStepKey].status === "accepted",
+  ).length;
+  const grade = campaignGrade(acceptedCount, ACCEPTABLE_STEPS.length);
 
   const hero = (
     <header className="jhero">
       <div className="eyebrow" style={{ display: "flex", gap: ".6rem", alignItems: "center", flexWrap: "wrap" }}>
-        Live campaign assembly · every output requires human review
+        Live campaign · built by the agent factory · every output requires human review
         <ConnectionBadge state={connection} />
         {isFixture ? <span className="tag mock">Dev preview · fixture events</span> : null}
       </div>
       <h1>{problem}</h1>
       <p className="obj">
-        {run.place ? (
-          <>
-            <b>{run.place}</b> · {statusLine}
-          </>
-        ) : (
-          statusLine
-        )}
+        {run.place ? <b>{run.place}</b> : null}
+        {run.place && !terminal ? " · " : null}
+        {!terminal ? liveLine : null}
       </p>
+      {terminal ? (
+        <p className="fa-grade" data-tone={grade.tone}>
+          <span className="fa-grade__dot" aria-hidden />
+          {grade.label}
+          {grade.tone !== "neutral" ? (
+            <span className="fa-grade__detail">
+              · {acceptedCount} of {ACCEPTABLE_STEPS.length} sections built
+            </span>
+          ) : null}
+        </p>
+      ) : null}
       {isFixture ? (
         <div className="jbanner" style={{ maxWidth: "72ch" }}>
           This is a labelled <b>dev preview</b>. The events are fixtures replayed through the real fold and UI — it
@@ -177,13 +163,24 @@ export function AssemblyView({
     </header>
   );
 
+  // the Agent Build Bar (graft 1): live runs only, gone once terminal
+  const buildBar = !terminal ? <AgentBuildBar run={run} /> : null;
+
   if (isMobile) {
     return (
       <div className="pb-24">
         {hero}
+        {buildBar}
         <div className="jcontainer">
-          <MobileCompactView run={run} now={now} onAnswer={onAnswer} compiled={compiled} />
+          <MobileCompactView run={run} onAnswer={onAnswer} compiled={compiled} />
         </div>
+        <EvidencePanel
+          id="fa-evidence-checks"
+          evidence={run.evidence}
+          nextChecks={run.nextChecks}
+          terminalGaps={run.terminalGaps}
+          compiled={compiled?.evidence}
+        />
       </div>
     );
   }
@@ -199,19 +196,13 @@ export function AssemblyView({
       </nav>
 
       {hero}
+      {buildBar}
 
-      {/* active agents not yet mapped to a step (e.g. queued before first step event) */}
-      {unassigned.length ? (
-        <div className="jcontainer" style={{ paddingTop: "1rem" }}>
-          <StepWorkspace title="Getting started" agents={unassigned} toCardVm={toCardVm} now={now} />
-        </div>
-      ) : null}
-
-      {/* orphan judgements (affect documents / whole campaign) shown up top */}
+      {/* orphan decision points (affect documents / whole campaign) shown up top */}
       {orphans.length ? (
         <div className="jcontainer" style={{ paddingTop: "0.5rem" }}>
           {orphans.map((j) => (
-            <JudgementInline key={j.id} judgement={j} onAnswer={onAnswer} />
+            <YourJudgementCard key={j.id} judgement={j} onAnswer={(action, answer) => onAnswer(j.id, action, answer)} />
           ))}
         </div>
       ) : null}
@@ -236,11 +227,7 @@ export function AssemblyView({
             key={s.key}
             id={`fa-${s.key}`}
             section={section}
-            activeAgents={activeAgentsForStep(run, s.step)}
-            completedAgents={completedForStep(s.step)}
             judgements={bySection[s.key] ?? []}
-            toCardVm={toCardVm}
-            now={now}
             onAnswer={onAnswer}
             footer={footer}
           />
@@ -256,33 +243,4 @@ export function AssemblyView({
       />
     </div>
   );
-}
-
-// small wrapper so orphan judgements reuse the same card without the
-// per-section indirection
-function JudgementInline({
-  judgement,
-  onAnswer,
-}: {
-  judgement: JudgementVM;
-  onAnswer: (jid: string, action: JudgementAnswerRequest["action"], answer?: string) => Promise<boolean>;
-}) {
-  return (
-    <YourJudgementCard judgement={judgement} onAnswer={(action, answer) => onAnswer(judgement.id, action, answer)} />
-  );
-}
-
-function terminalLine(run: RunVM): string | null {
-  switch (run.status) {
-    case "completed":
-      return "Campaign assembled";
-    case "partial":
-      return "Partly assembled";
-    case "failed":
-      return "Run failed";
-    case "cancelled":
-      return "Run cancelled";
-    default:
-      return null;
-  }
 }

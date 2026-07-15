@@ -9,3 +9,6 @@ app/.env
 app/local-key.js
 .codex-staging/
 .vercel
+
+# Local-only demo risk review (names exploitable routes; not for the public repo)
+DEMO-LIVE-RISKS.md

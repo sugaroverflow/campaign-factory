@@ -21,14 +21,28 @@ import {
 } from "@/lib/factory/client";
 import { AssemblyView } from "./AssemblyView";
 
-export function AssemblyClient({ campaignId }: { campaignId: string }) {
+export function AssemblyClient({
+  campaignId,
+  problem,
+  place,
+}: {
+  campaignId: string;
+  /** Server-fetched run header echo (page.tsx) so a SHARED link still gets an
+   *  honest hero — the recorded event log may not carry problem/place. */
+  problem?: string;
+  place?: string;
+}) {
   const stored = useMemo(() => getStoredFactoryRun(campaignId), [campaignId]);
+  const seed = useMemo(
+    () => stored?.intake ?? (problem || place ? { problem, place } : undefined),
+    [stored, problem, place],
+  );
 
   const { run, connection, answerJudgement } = useFactoryRun({
     campaignId,
     streamUrl: stored?.streamUrl,
     streamToken: stored?.streamToken,
-    seed: stored?.intake,
+    seed,
   });
 
   const [compiled, setCompiled] = useState<CompiledCampaignBundle | null>(null);

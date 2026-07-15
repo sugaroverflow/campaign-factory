@@ -45,6 +45,11 @@
   align-items: center;
 }
 
+/* contentless documents dim — no pill, no "waiting" copy (14 Jul 2026 redesign) */
+.fa-doccard--dim {
+  opacity: 0.45;
+}
+
 /* inline "needs verification" / gap marker inside compiled html + the view */
 .fa-doc-note {
   color: var(--warn);
@@ -116,6 +121,35 @@ a.pm-inf--inline,
   margin: 0.15rem 0;
 }
 
+/* Fact checks — bullets per claim inside each category dropdown (calm, no red) */
+.fa-factlist {
+  list-style: disc;
+  margin: 0.2rem 0 0.4rem;
+  padding-left: 1.3rem;
+}
+.fa-factlist li {
+  font-size: 0.88rem;
+  margin: 0.35rem 0;
+}
+.fa-factlist__meta {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted-foreground);
+  margin-top: 0.1rem;
+}
+
+/* the Fact checks block at the END of a compiled document view */
+.fa-docview__facts {
+  border-top: 1px solid var(--border);
+  margin-top: 1.2rem;
+  padding-top: 0.9rem;
+}
+.fa-docview__facts h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.15rem;
+}
+
 /* per-document view panel */
 .fa-docview {
   margin-top: 1rem;
@@ -147,17 +181,15 @@ a.pm-inf--inline,
   gap: 0.6rem;
   flex-wrap: wrap;
 }
-.fa-docview__flags {
-  margin: 0.5rem 0 0.2rem;
-}
 .fa-docview__confirm {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
   font-size: 0.85rem;
   color: var(--ink);
-  background: rgba(223, 34, 37, 0.06);
-  border: 1px solid rgba(223, 34, 37, 0.25);
+  /* calm amber, never red (14 Jul 2026 redesign) */
+  background: rgba(168, 106, 0, 0.07);
+  border: 1px solid rgba(168, 106, 0, 0.3);
   border-radius: var(--r-lg);
   padding: 0.55rem 0.75rem;
   margin: 0.3rem 0 0.2rem;

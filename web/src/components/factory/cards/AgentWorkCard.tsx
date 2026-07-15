@@ -21,9 +21,8 @@ import type { AgentCardProps, CardActivity, CardProposalState } from "./types";
 
 const MAX_ROWS = 100; // window the tail; VM may hold more (virtualised upstream)
 const PIN_THRESHOLD_PX = 28; // manual backscroll further than this unpins autoscroll
-// Fill-mode height: tall enough that the scrolling backscroll is the dominant
-// visual element (~15 rows visible) while five columns still fit a projector.
-const FILL_HEIGHT = 340;
+// Fill-mode height lives in factory.module.css (.fillCard) so it can scale up
+// at projector widths together with the identity typography.
 
 function activityIcon(kind: CardActivity["kind"]) {
   switch (kind) {
@@ -87,10 +86,11 @@ export function AgentWorkCard({ vm, now, fill = false }: AgentCardProps) {
       // Perf guardrail: fill mode can mean ~80 simultaneous full cards, so the
       // per-card backdrop blur is dropped there — the translucent background
       // alone lets the paper brief substrate show through (compositor-cheap).
-      className={fill ? styles.cardEnter : `${styles.cardEnter} ${styles.glass}`}
+      // .fillCard also carries the projector-scale typography vars + height.
+      className={fill ? `${styles.cardEnter} ${styles.fillCard}` : `${styles.cardEnter} ${styles.glass}`}
       style={{
         width: fill ? "100%" : EXPANDED.w,
-        height: fill ? FILL_HEIGHT : EXPANDED.h,
+        height: fill ? undefined : EXPANDED.h,
         boxSizing: "border-box",
         padding: 10,
         borderRadius: 12,
@@ -129,34 +129,21 @@ export function AgentWorkCard({ vm, now, fill = false }: AgentCardProps) {
           <AgentIcon agentKey={vm.agentKey} size={15} />
         </span>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 600,
-              lineHeight: 1.1,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {vm.shortName}
+          {/* Projector legibility: fill mode shows the full displayName, large
+              and bright; assembly cards keep the compact shortName. */}
+          <div className={styles.workTitle} title={vm.displayName}>
+            {fill ? vm.displayName : vm.shortName}
           </div>
-          <div
-            style={{
-              fontSize: 9.5,
-              color: INK.textMuted,
-              whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-            }}
-          >
-            {vm.parentShortName ? `↳ from ${vm.parentShortName}` : vm.kind === "specialist" ? "specialist" : vm.responsibility}
+          <div className={styles.workCaption} title={vm.responsibility || undefined}>
+            {vm.parentShortName
+              ? `↳ from ${vm.parentShortName}`
+              : vm.responsibility || (vm.kind === "specialist" ? "specialist" : "")}
           </div>
         </div>
         <span
           style={{
             ...mono,
-            fontSize: 9,
+            fontSize: "var(--cf-card-pill, 9px)",
             fontWeight: 600,
             color: hue.accent,
             background: hue.softBg,
@@ -176,16 +163,7 @@ export function AgentWorkCard({ vm, now, fill = false }: AgentCardProps) {
       </div>
 
       {/* 2 — bounded assignment */}
-      <div
-        style={{
-          fontSize: 11,
-          color: INK.textMuted,
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-        }}
-        title={vm.assignment}
-      >
+      <div className={styles.workAssignment} title={vm.assignment}>
         {vm.assignment}
       </div>
 
@@ -213,15 +191,17 @@ export function AgentWorkCard({ vm, now, fill = false }: AgentCardProps) {
               className={styles.backscrollRow}
               style={{ display: "flex", gap: 6, alignItems: "baseline", padding: "1.5px 0" }}
             >
-              <span style={{ ...mono, fontSize: 9, color: INK.textFaint, flexShrink: 0 }}>
+              <span style={{ ...mono, fontSize: "var(--cf-row-mono, 9px)", color: INK.textFaint, flexShrink: 0 }}>
                 {clockStamp(r.at)}
               </span>
               {r.verb ? (
-                <span style={{ ...mono, fontSize: 9, color: hue.accent, flexShrink: 0 }}>{r.verb}</span>
+                <span style={{ ...mono, fontSize: "var(--cf-row-mono, 9px)", color: hue.accent, flexShrink: 0 }}>
+                  {r.verb}
+                </span>
               ) : null}
               <span
                 style={{
-                  fontSize: 10.5,
+                  fontSize: "var(--cf-row-summary, 10.5px)",
                   lineHeight: 1.25,
                   color: INK.text,
                   overflow: "hidden",
@@ -237,7 +217,15 @@ export function AgentWorkCard({ vm, now, fill = false }: AgentCardProps) {
       </div>
 
       {/* 4 — current source / tool / handoff / analysis state */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, minHeight: 14 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          fontSize: "var(--cf-activity, 10.5px)",
+          minHeight: 14,
+        }}
+      >
         {activityGlyph}
         {analysing ? (
           <span style={{ ...mono, color: INK.textMuted }}>

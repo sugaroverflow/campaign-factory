@@ -82,9 +82,9 @@ const PACK_KEYS: ReadonlySet<CanonicalDocumentKey> = new Set([
 const STEP_TITLE = new Map<JourneyStepKey, string>(JOURNEY_STEPS.map((s) => [s.key, s.title]));
 
 // Plain-English note for a section that couldn't be fully checked in time —
-// clean prose in the body, the detail lives in Evidence and Next Checks.
+// clean prose in the body, the detail lives in the Fact checks section.
 const CHECK_SECTION_NOTE =
-  "Some facts in this section couldn't be fully checked in time — see Evidence and next checks before you use it.";
+  "Some facts in this section couldn't be fully checked in time — see Fact checks before you use it.";
 
 // The affectedOutputs vocabulary is pinned in the agent prompts (shared.ts
 // AFFECTED_OUTPUTS_GUIDE), but recorded runs predate that and models still

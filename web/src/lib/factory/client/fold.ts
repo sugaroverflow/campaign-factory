@@ -155,6 +155,10 @@ export interface RunVM {
   nextChecks: NextCheck[];
   evidence: EvidenceTally;
   receiptAt?: string; // campaign completion receipt timestamp
+  /** Latest reported campaign spend in USD (cost.update detail.campaignUSD).
+   *  A running total in dollars — never token counts. Absent until the worker
+   *  emits its first cost guard event. */
+  spendUsd?: number;
 }
 
 // ---- helpers ----
@@ -347,6 +351,13 @@ function applyEvent(ctx: FoldCtx, e: FactoryEvent): void {
   if (e.type === "evidence.found") run.evidence.found += 1;
   else if (e.type === "evidence.conflicted") run.evidence.conflicted += 1;
   else if (e.type === "evidence.gap") run.evidence.gaps += 1;
+
+  // ---- spend (cost.update carries the campaign's running USD total) ----
+  if (e.type === "cost.update") {
+    const usd = detailNum(detail, "campaignUSD");
+    // Monotonic max: the guard total only grows; ignores out-of-order resends.
+    if (typeof usd === "number") run.spendUsd = Math.max(run.spendUsd ?? 0, usd);
+  }
 
   // ---- next checks (defensive: only if the worker attaches them) ----
   const nc = detail?.["nextChecks"];

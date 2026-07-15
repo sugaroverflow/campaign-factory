@@ -27,6 +27,8 @@ import {
   stripVerifyText,
 } from "./render";
 import {
+  FACT_CHECKS_TITLE,
+  NEXT_CHECKS_GROUP,
   SETTLED_EVIDENCE_GROUP,
   TERMINAL_GAPS_NOTE,
   TERMINAL_GAPS_TITLE,
@@ -190,13 +192,16 @@ function groupText(title: string, caption: string, claims: EvidenceClaimView[]):
   return [`${title} (${claims.length}) — ${caption}`, ...claims.flatMap(claimText)];
 }
 
-/** The Campaign Brief's closing section, rendered as html + plain text. */
+/** The Campaign Brief's closing section, rendered as html + plain text.
+ *  Heading is "Fact checks" (14 Jul 2026 redesign) — one cohesive section:
+ *  plain-English category headers with a one-line caption, a dropdown per
+ *  category, bullets per claim. The anchor id is unchanged (existing links). */
 export function evidenceSection(data: EvidenceAndNextChecks): { html: string; plainText: string } {
   const html: string[] = [];
   const text: string[] = [];
 
-  html.push(`<h2 id="${EVIDENCE_ANCHOR_ID}">Evidence and next checks</h2>`);
-  text.push("\nEVIDENCE AND NEXT CHECKS");
+  html.push(`<h2 id="${EVIDENCE_ANCHOR_ID}">${escapeHtml(FACT_CHECKS_TITLE)}</h2>`);
+  text.push(`\n${FACT_CHECKS_TITLE.toUpperCase()}`);
 
   const t = data.totals;
   const intro =
@@ -231,11 +236,10 @@ export function evidenceSection(data: EvidenceAndNextChecks): { html: string; pl
     text.push("(No facts recorded yet.)");
   }
 
-  // ---- next checks (including notes stripped from the draft prose) ----
+  // ---- things to check next (same category style; includes notes stripped
+  //      from the draft prose) ----
   const draftNotes = data.draftNotes ?? [];
   if (data.nextChecks.length || draftNotes.length) {
-    html.push(`<h3>Next checks</h3>`);
-    text.push("Next checks");
     const rows = [
       ...data.nextChecks.map((n) => {
         const affects = n.affectedSections?.length
@@ -252,21 +256,28 @@ export function evidenceSection(data: EvidenceAndNextChecks): { html: string; pl
         text: `- ${n.text} — flagged while drafting ${n.section}`,
       })),
     ];
-    html.push(`<ul>${rows.map((r) => r.html).join("")}</ul>`);
+    html.push(
+      `<details class="fa-evgroup"><summary>${escapeHtml(NEXT_CHECKS_GROUP.title)} (${rows.length})</summary>` +
+        `<p class="fa-evgroup__cap">${escapeHtml(NEXT_CHECKS_GROUP.caption)}</p>` +
+        `<ul>${rows.map((r) => r.html).join("")}</ul></details>`,
+    );
+    text.push(`${NEXT_CHECKS_GROUP.title} (${rows.length}) — ${NEXT_CHECKS_GROUP.caption}`);
     for (const r of rows) text.push(r.text);
   }
 
-  // ---- work that did not complete ----
+  // ---- work that did not complete (same category style) ----
   if (data.terminalGaps.length) {
-    html.push(`<h3>${escapeHtml(TERMINAL_GAPS_TITLE)}</h3>`);
-    html.push(`<p class="fa-doc-note">${escapeHtml(TERMINAL_GAPS_NOTE)}</p>`);
-    text.push(`${TERMINAL_GAPS_TITLE} — ${TERMINAL_GAPS_NOTE}`);
+    const items = data.terminalGaps.map((gp) => ({
+      html: `<li>${escapeHtml(gp.description)}${gp.step ? ` <span class="hint-sm">(step ${gp.step})</span>` : ""}</li>`,
+      text: `- ${gp.description}${gp.step ? ` (step ${gp.step})` : ""}`,
+    }));
     html.push(
-      `<ul>${data.terminalGaps
-        .map((gp) => `<li>${escapeHtml(gp.description)}${gp.step ? ` <span class="hint-sm">(step ${gp.step})</span>` : ""}</li>`)
-        .join("")}</ul>`,
+      `<details class="fa-evgroup"><summary>${escapeHtml(TERMINAL_GAPS_TITLE)} (${items.length})</summary>` +
+        `<p class="fa-evgroup__cap">${escapeHtml(TERMINAL_GAPS_NOTE)}</p>` +
+        `<ul>${items.map((i) => i.html).join("")}</ul></details>`,
     );
-    for (const gp of data.terminalGaps) text.push(`- ${gp.description}${gp.step ? ` (step ${gp.step})` : ""}`);
+    text.push(`${TERMINAL_GAPS_TITLE} — ${TERMINAL_GAPS_NOTE}`);
+    for (const i of items) text.push(i.text);
   }
 
   return { html: html.join("\n"), plainText: text.join("\n\n").trim() };

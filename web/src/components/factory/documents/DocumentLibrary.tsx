@@ -1,13 +1,17 @@
 "use client";
 
-// The nine-document library (ADR 0007). Renders the canonical nine-document grid
-// with REAL per-document status chips (canonical statuses translated to plain
-// English at display only — language.ts), a ready-count derived from those real
-// statuses, and a per-document view with Copy, view HTML, and a Word .doc
-// download. Export is DISABLED until the relevant reviewer pass completes:
+// The nine-document library (ADR 0007). Renders the canonical nine-document
+// grid with pills in the campaignGrade vocabulary (language.ts documentPill):
+// "Complete" (green) for ready, "Nearly complete" (amber) for needs
+// verification or flagged, and contentless documents DIMMED with no pill.
+// Each document opens into a view with Copy, view HTML, and a Word .doc
+// download (the original design's separate-download affordance). Export is
+// DISABLED until the relevant reviewer pass completes:
 //  - "ready"              → export enabled;
 //  - "needs verification" → export enabled only after explicit confirmation;
 //  - "assembling"/"under review" → export disabled.
+// The document's "worth checking" flags render as a Fact checks block at the
+// END of the document (14 Jul 2026 redesign) — calm, no red.
 //
 // Resource fragments render INSIDE their pack's view (the compiler folds them
 // into the pack html), never as separate documents. This is presentational —
@@ -15,22 +19,19 @@
 
 import { useState } from "react";
 import type { CompiledDocument } from "@/lib/factory/documents";
-import { isExportable, plainDocStatus, plainFlag } from "@/lib/factory/documents";
+import { FACT_CHECKS_TITLE, documentPill, isExportable, plainDocStatus, plainFlag } from "@/lib/factory/documents";
 import type { DocumentStatus } from "@/lib/factory/contracts";
 import { downloadDocHtml, copyText } from "./wordExport";
 import "./documents.css";
 
-const STATUS_CHIP: Record<DocumentStatus, string> = {
-  assembling: "gen",
-  "under review": "mock",
-  ready: "real",
-  "needs verification": "verify",
-};
+const PILL_TAG: Record<"complete" | "nearly", string> = { complete: "real", nearly: "mock" };
 
-function StatusChip({ status }: { status: DocumentStatus }) {
+function Pill({ status, flagged }: { status: DocumentStatus; flagged: boolean }) {
+  const pill = documentPill(status, flagged);
+  if (!pill) return null;
   return (
-    <span className={`tag ${STATUS_CHIP[status]}`} title={status}>
-      {plainDocStatus(status)}
+    <span className={`tag ${PILL_TAG[pill.tone]}`} title={status}>
+      {pill.label}
     </span>
   );
 }
@@ -59,29 +60,32 @@ export function DocumentLibrary({
       {intro ? <p className="hint-sm">{intro}</p> : null}
 
       <div className="docgrid" style={{ marginTop: "0.75rem" }}>
-        {documents.map((d) => (
-          <button
-            key={d.key}
-            type="button"
-            className={`doccard fa-doccard${openKey === d.key ? " fa-doccard--open" : ""}`}
-            onClick={() => setOpenKey(openKey === d.key ? null : d.key)}
-            aria-expanded={openKey === d.key}
-          >
-            <span className="d-n">
-              Document {d.num} of {documents.length}
-              {d.isPack ? " · pack" : ""}
-            </span>
-            <h3>{d.name}</h3>
-            <div className="d-prev">
-              <StatusChip status={d.status} />
-              {d.isPack && d.resourceCount ? (
-                <span className="fa-mono" style={{ marginLeft: ".5rem" }}>
-                  {d.resourceCount} resource{d.resourceCount === 1 ? "" : "s"}
-                </span>
-              ) : null}
-            </div>
-          </button>
-        ))}
+        {documents.map((d) => {
+          const dim = documentPill(d.status, d.flags.length > 0) == null;
+          return (
+            <button
+              key={d.key}
+              type="button"
+              className={`doccard fa-doccard${openKey === d.key ? " fa-doccard--open" : ""}${dim ? " fa-doccard--dim" : ""}`}
+              onClick={() => setOpenKey(openKey === d.key ? null : d.key)}
+              aria-expanded={openKey === d.key}
+            >
+              <span className="d-n">
+                Document {d.num} of {documents.length}
+                {d.isPack ? " · pack" : ""}
+              </span>
+              <h3>{d.name}</h3>
+              <div className="d-prev">
+                <Pill status={d.status} flagged={d.flags.length > 0} />
+                {d.isPack && d.resourceCount ? (
+                  <span className="fa-mono" style={{ marginLeft: ".5rem" }}>
+                    {d.resourceCount} resource{d.resourceCount === 1 ? "" : "s"}
+                  </span>
+                ) : null}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
       {open ? <DocumentView doc={open} onClose={() => setOpenKey(null)} /> : null}
@@ -106,7 +110,7 @@ function DocumentView({ doc, onClose }: { doc: CompiledDocument; onClose: () => 
           <h3>{doc.name}</h3>
         </div>
         <div className="fa-docview__meta">
-          <StatusChip status={doc.status} />
+          <Pill status={doc.status} flagged={doc.flags.length > 0} />
           <button type="button" className="toolbtn" onClick={onClose}>
             ✕ Close
           </button>
@@ -118,19 +122,6 @@ function DocumentView({ doc, onClose }: { doc: CompiledDocument; onClose: () => 
           You can copy or download this document once it&apos;s finished — right now it&apos;s{" "}
           <b>{plainDocStatus(doc.status).toLowerCase()}</b>.
         </p>
-      ) : null}
-
-      {doc.flags.length ? (
-        <div className="fa-docview__flags">
-          <p className="fa-doc-note" style={{ marginBottom: ".4rem" }}>
-            Worth checking before you use this document:
-          </p>
-          <ul className="fa-gaplist">
-            {doc.flags.map((f, i) => (
-              <li key={i}>{plainFlag(f)}</li>
-            ))}
-          </ul>
-        </div>
       ) : null}
 
       {needsConfirm ? (
@@ -171,6 +162,21 @@ function DocumentView({ doc, onClose }: { doc: CompiledDocument; onClose: () => 
       </div>
 
       <article className="rc fa-content fa-docview__body" dangerouslySetInnerHTML={{ __html: doc.html }} />
+
+      {/* Fact checks live at the END of every compiled document (graft 3). The
+          brief bakes its own into the compiled html; the per-document flags
+          render here in the same calm style. */}
+      {doc.flags.length ? (
+        <div className="fa-docview__facts">
+          <h4>{FACT_CHECKS_TITLE}</h4>
+          <p className="fa-evgroup__cap">Worth checking before you use this document</p>
+          <ul className="fa-factlist">
+            {doc.flags.map((f, i) => (
+              <li key={i}>{plainFlag(f)}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
   );
 }

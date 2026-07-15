@@ -6,6 +6,7 @@ import type { RunReadModel } from "../contracts/api";
 import type { Db, JsonInput, Row } from "./types";
 import { newId, numOrUndef, strOrUndef, toIso, toIsoOrUndef } from "./types";
 import { readEvents } from "./events";
+import { JOURNEY_STEPS } from "../contracts/journey";
 
 export interface RunRecord {
   campaignId: CampaignId;
@@ -176,6 +177,9 @@ export async function listRunsByBatch(sql: Db, batchId: BatchId): Promise<RunRec
 // Finished presenter-batch campaigns for this environment, newest first —
 // surfaces the on-stage demo runs as individual cards in the public /gallery.
 // Presenter runs only: public self-serve runs stay private by default.
+// cost_usd > 0.5 excludes mock/test batches (zero model spend): the shared dev
+// DB carries Playwright fixture runs whose sections all "accept", and showing
+// synthetic campaigns as real would break the no-synthetic-data principle.
 export async function listFinishedPresenterRuns(
   sql: Db,
   environmentId: string,
@@ -185,9 +189,55 @@ export async function listFinishedPresenterRuns(
     select * from factory.factory_runs
      where mode = 'presenter' and environment_id = ${environmentId}
        and status in ('completed', 'partial')
+       and cost_usd > 0.5
      order by completed_at desc nulls last
      limit ${limit}`;
   return rows.map(mapRun);
+}
+
+// Accepted-section counts for a set of finished campaigns, in ONE batched
+// query. Source: the latest accepted CampaignState per campaign
+// (factory.campaign_state_versions) — the same authoritative derivation the
+// Campaign Completion Receipt uses (documents/receipts.ts): sections with
+// status "accepted" over the nine acceptable journey steps, never counting the
+// compiled "documents" step. Stored receipt.campaign events are deliberately
+// NOT used here: receipts written before the denominator fix recorded N/10
+// (documents step included), so grading them raw would misreport finished
+// campaigns. The count stays in SQL because section content is large.
+// Campaigns without a saved state version are absent from the result.
+export interface RunSectionCounts {
+  acceptedSections: number;
+  totalSections: number;
+}
+
+const ACCEPTABLE_SECTION_TOTAL = JOURNEY_STEPS.filter((s) => s.key !== "documents").length;
+
+export async function getRunSectionCounts(
+  sql: Db,
+  campaignIds: CampaignId[],
+): Promise<Map<CampaignId, RunSectionCounts>> {
+  const counts = new Map<CampaignId, RunSectionCounts>();
+  if (campaignIds.length === 0) return counts;
+  const rows = await sql<Row[]>`
+    select distinct on (v.campaign_id)
+           v.campaign_id,
+           (select count(*)::int
+              from jsonb_each(v.state -> 'sections') as s
+             where s.key <> 'documents'
+               and s.value ->> 'status' = 'accepted') as accepted
+      from factory.campaign_state_versions v
+     where v.campaign_id::text = any(${campaignIds})
+     order by v.campaign_id, v.version desc`;
+  for (const r of rows) {
+    const accepted = Number(r.accepted);
+    if (Number.isFinite(accepted)) {
+      counts.set(String(r.campaign_id), {
+        acceptedSections: accepted,
+        totalSections: ACCEPTABLE_SECTION_TOTAL,
+      });
+    }
+  }
+  return counts;
 }
 
 export interface SetRunStatusOpts {

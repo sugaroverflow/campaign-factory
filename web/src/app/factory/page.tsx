@@ -139,7 +139,7 @@ export default function FactoryIntakePage() {
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              The factory researches a real decision route, so it needs to know exactly where.
+              The agent factory researches a real decision route, so it needs to know exactly where.
             </p>
           )}
         </div>
@@ -174,9 +174,9 @@ export default function FactoryIntakePage() {
 
       <p className="mx-auto mt-4 text-center text-sm">
         <a href="/factory/replay/conference" className="underline underline-offset-4 hover:text-foreground">
-          Or watch the 15-minute factory session
+          Or watch the 15-minute agent factory session
         </a>
-        <span className="text-muted-foreground"> — five real campaigns built in parallel, replayed from the event log.</span>
+        <span className="text-muted-foreground"> — real campaigns built in parallel, replayed from the event log.</span>
       </p>
     </div>
   );

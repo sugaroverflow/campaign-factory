@@ -98,14 +98,14 @@ const TAG_CLS: Record<string, string> = {
 // Clean prose (product decision, 15 Jul 2026): the seven verification labels
 // never render inline in section content. The ONE exception: a fact labelled
 // "Conflicting evidence" gets the power-map question-mark visual, linking to
-// the Evidence & next checks panel. Everything stripped here stays visible in
-// that panel — nothing is deleted from data.
+// the Fact checks section at the bottom of the brief. Everything stripped here
+// stays visible there — nothing is deleted from data.
 function ConflictMark() {
   return (
     <a
       className="pm-inf pm-inf--inline"
       href="#fa-evidence-checks"
-      title="Sources disagree on this — see Evidence & next checks"
+      title="Sources disagree on this — see Fact checks"
     >
       ?
     </a>
@@ -259,7 +259,7 @@ function ProblemContent(c: Record<string, unknown>) {
       <blockquote className="userquote">{str(c.statement)}</blockquote>
       {str(c.interpretation) ? (
         <>
-          <h3>How the factory read it</h3>
+          <h3>How the agent factory read it</h3>
           <p className="callout warm">{str(c.interpretation)}</p>
         </>
       ) : null}

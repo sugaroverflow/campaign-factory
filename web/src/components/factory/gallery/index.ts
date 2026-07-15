@@ -5,7 +5,8 @@
 export { FactoryGallery } from "./FactoryGallery";
 export type { FactoryGalleryProps } from "./FactoryGallery";
 export { GalleryLive } from "./GalleryLive";
-export { FactoryLedger } from "./FactoryLedger";
+export { FactoryLedger, FactoryStatsStrip } from "./FactoryLedger";
+export { useFloorFollow } from "./useFloorFollow";
 export { CampaignAnchor } from "./CampaignAnchor";
 export { CampaignColumn } from "./CampaignColumn";
 export { PublishedBriefStack } from "./PublishedBriefStack";

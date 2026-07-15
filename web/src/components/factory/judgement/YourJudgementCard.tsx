@@ -1,8 +1,10 @@
 "use client";
 
-// Your Judgement Card (ADR 0005). A calm, light PRODUCT surface (not a dark
-// overlay card) that renders a conditional, non-blocking Judgement Request and
-// visibly distinguishes three states, so silence is NEVER shown as approval:
+// Decision Point card (ADR 0005; renamed from "Your judgement", 14 Jul 2026
+// redesign — the "a choice we made — you can change it" framing stays). A calm,
+// light PRODUCT surface (not a dark overlay card) that renders a conditional,
+// non-blocking Judgement Request and visibly distinguishes three states, so
+// silence is NEVER shown as approval:
 //   • unanswered  — awaiting the campaigner; provisional default is only a
 //                   recommendation, nothing is decided yet;
 //   • provisional default in effect — the run proceeded on the recommendation
@@ -28,6 +30,7 @@ import type {
   JudgementKind,
   JudgementStatus,
 } from "@/lib/factory/contracts";
+import { JUDGEMENT_FRAME } from "@/lib/factory/documents";
 import "./judgement.css";
 
 /** Structural view accepted by the card — both the frozen JudgementRequest
@@ -115,7 +118,7 @@ export function YourJudgementCard({
 
   const eyebrow = (
     <div className="yj-eyebrow">
-      <span className="yj-eyebrow__label">Your judgement</span>
+      <span className="yj-eyebrow__label">Decision point</span>
       {kindLabel ? <span className="yj-eyebrow__kind">{kindLabel}</span> : null}
     </div>
   );
@@ -162,7 +165,7 @@ export function YourJudgementCard({
     return (
       <div className="yj-card yj-card--defaulted">
         {eyebrow}
-        <div className="yj-state yj-state--defaulted">Provisional default in effect</div>
+        <div className="yj-state yj-state--defaulted">{JUDGEMENT_FRAME}</div>
         <p className="yj-q">{judgement.question}</p>
         {inEffect ? (
           <p className="yj-answer">

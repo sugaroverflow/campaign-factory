@@ -8,7 +8,7 @@ import type { Claim } from "../contracts/evidence";
 import { compileDocuments, isExportable } from "./compile";
 import { buildEvidenceAndNextChecks } from "./evidence";
 import { buildCampaignReceipt, buildBatchReceipt } from "./receipts";
-import { DOCUMENT_DISCLAIMER } from "./language";
+import { DOCUMENT_DISCLAIMER, campaignGrade, documentPill } from "./language";
 import { FIXTURE_CAMPAIGN_ID, FIXTURE_STATE, FIXTURE_CLAIMS, FIXTURE_EVENTS } from "./fixtures";
 
 let failures = 0;
@@ -132,18 +132,30 @@ assert(
   byKey.get("lobbying_pack")!.html.includes("<mark>[OFFICER NAME]</mark>"),
   "pack fill-in blanks keep their highlight",
 );
-// stripped [VERIFY: …] notes resurface in Evidence and Next Checks — nothing deleted
+// stripped [VERIFY: …] notes resurface in Fact checks — nothing deleted
 assert(
   !byKey.get("campaign_strategy")!.plainText.includes("deputation request deadline"),
   "strategy doc prose no longer carries the [VERIFY: …] note",
 );
 assert(
   briefText.includes("deputation request deadline for Cabinet meetings"),
-  "the stripped [VERIFY: …] note resurfaces in the brief's Evidence and next checks",
+  "the stripped [VERIFY: …] note resurfaces in the brief's Fact checks",
 );
 assert(
   briefHtml.includes("flagged while drafting"),
   "draft notes say which section they were flagged in",
+);
+// the closing section is headed "Fact checks" (14 Jul 2026 redesign), with the
+// checks + gaps rendered in the same collapsed category style as the claims
+assert(briefHtml.includes(">Fact checks</h2>"), "brief closes with the 'Fact checks' section heading");
+assert(briefText.includes("FACT CHECKS"), "brief plainText carries the FACT CHECKS heading");
+assert(
+  briefHtml.includes("<summary>Things to check next (3)</summary>"),
+  "next checks render as a 'Things to check next' category (2 checks + 1 draft note)",
+);
+assert(
+  briefHtml.includes("<summary>Not completed in this run (1)</summary>"),
+  "terminal gaps render as a 'Not completed in this run' category",
 );
 // the three plain-English check groups render collapsed with captions
 assert(briefHtml.includes("<summary>Sources disagree (1)</summary>"), "'Sources disagree' group renders with its count");
@@ -284,6 +296,35 @@ assert(batch.campaignCount === 2, "2 campaigns in batch");
 assert(batch.totals.documentsReady === 12, "batch totals ready docs across campaigns (6+6)");
 assert(batch.substantiallyUsable === 2, "both campaigns substantially usable (≥1 ready doc)");
 assert(batch.statuses.partial === 2, "both campaigns partial in batch status roll-up");
+
+console.log("\n=== campaignGrade (grading ladder, 14 Jul 2026 redesign) ===");
+const g99 = campaignGrade(9, 9);
+assert(g99.label === "Complete" && g99.tone === "complete", "9/9 → Complete (green)");
+const g89 = campaignGrade(8, 9);
+assert(g89.label === "Nearly complete" && g89.tone === "nearly", "8/9 → Nearly complete (amber)");
+const g59 = campaignGrade(5, 9);
+assert(
+  g59.label === "5 of 9 sections built" && g59.tone === "neutral",
+  "5/9 → '5 of 9 sections built' (grey)",
+);
+assert(campaignGrade(3, 3).tone === "complete", "all-of-total is Complete for any denominator");
+
+console.log("\n=== documentPill (document card vocabulary) ===");
+const pReady = documentPill("ready");
+assert(pReady?.label === "Complete" && pReady?.tone === "complete", "ready → Complete (green)");
+const pFlagged = documentPill("ready", true);
+assert(
+  pFlagged?.label === "Complete" && pFlagged?.tone === "complete",
+  "ready stays Complete even with advisory flags (status drives the pill; caveats live in Fact checks)",
+);
+const pNeeds = documentPill("needs verification");
+assert(
+  pNeeds?.label === "Nearly complete" && pNeeds?.tone === "nearly",
+  "needs verification → Nearly complete (amber)",
+);
+assert(documentPill("assembling") === null, "assembling → no pill (card dims)");
+assert(documentPill("under review") === null, "under review → no pill (card dims)");
+assert(documentPill(undefined) === null, "not started → no pill (card dims)");
 
 console.log(`\n${failures === 0 ? "ALL CHECKS PASSED" : `${failures} CHECK(S) FAILED`}`);
 if (failures > 0) process.exit(1);

@@ -1,23 +1,24 @@
 "use client";
 
-// Evidence and Next Checks + terminal gaps (parameters §6, ADR 0006). Renders
-// alongside the ten steps, near the end. Two data sources:
+// Fact checks (14 Jul 2026 redesign, graft 3). The whole evidence/claims
+// apparatus as ONE cohesive section at the bottom of the brief, in one visual
+// style: a plain-English category header, a one-line caption under it saying
+// what the category means for the campaigner, a dropdown per category, and
+// bullets per claim. Calm, not alarming — no red anywhere. Two data sources:
 //  - live run: evidence tallies + checks/gaps folded from events;
 //  - terminal run: W6's full EvidenceAndNextChecks ledger from W2's durable
 //    read route — passed in as `compiled` and preferred when present.
-// Honest by construction: unresolved conflicts and dead-lettered work show as
-// visible gaps rather than being hidden.
-//
-// Display redesign (product decision, 15 Jul 2026): the terminal ledger leads
-// with three COLLAPSED plain-English groups — "Sources disagree", "Not yet
-// double-checked", "Couldn't be checked from public sources" — then the settled
-// claims. Each claim collapses to one line and expands to full detail. Copy is
-// plain UK English (language.ts); the canonical labels stay on the data.
+// Honest by construction: unresolved conflicts and unfinished work show as
+// visible entries rather than being hidden. Canonical labels stay on the data;
+// only the display copy is plain English (language.ts).
 
+import type { ReactNode } from "react";
 import type { NextCheck, TerminalGap } from "@/lib/factory/contracts";
 import type { EvidenceTally } from "@/lib/factory/client";
 import {
+  NEXT_CHECKS_GROUP,
   SETTLED_EVIDENCE_GROUP,
+  TERMINAL_GAPS_NOTE,
   TERMINAL_GAPS_TITLE,
   UNRESOLVED_EVIDENCE_GROUPS,
   claimDetailLines,
@@ -25,8 +26,44 @@ import {
   type EvidenceAndNextChecks,
   type EvidenceClaimView,
 } from "@/lib/factory/documents";
-import { fmtClock } from "./format";
 import "@/components/factory/documents/documents.css";
+
+/** One category: plain-English header + count, caption, dropdown, bullets. */
+function Category({
+  title,
+  caption,
+  count,
+  children,
+}: {
+  title: string;
+  caption: string;
+  count: number;
+  children: ReactNode;
+}) {
+  if (count === 0) return null;
+  return (
+    <details className="fa-evgroup">
+      <summary>
+        {title} ({count})
+      </summary>
+      <p className="fa-evgroup__cap">{caption}</p>
+      {children}
+    </details>
+  );
+}
+
+function ClaimBullets({ claims }: { claims: EvidenceClaimView[] }) {
+  return (
+    <ul className="fa-factlist">
+      {claims.map((c) => (
+        <li key={c.id}>
+          {c.text}
+          <span className="fa-factlist__meta">{claimDetailLines(c).join(" · ")}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export function EvidencePanel({
   evidence,
@@ -45,122 +82,75 @@ export function EvidencePanel({
   const checks = compiled ? compiled.nextChecks : nextChecks;
   const gaps = compiled ? compiled.terminalGaps : terminalGaps;
   const draftNotes = compiled?.draftNotes ?? [];
+  const liveTally = evidence.found + evidence.conflicted + evidence.gaps;
   const hasAny = compiled
     ? compiled.totals.claims > 0 || checks.length > 0 || gaps.length > 0 || draftNotes.length > 0
-    : evidence.found + evidence.conflicted + evidence.gaps > 0 || checks.length > 0 || gaps.length > 0;
+    : liveTally > 0 || checks.length > 0 || gaps.length > 0;
 
   return (
-    <section className="rung fa-evidence" id={id} data-stage="evidence-checks">
+    <section className="rung fa-evidence" id={id} data-stage="fact-checks">
       <div className="jcontainer rung-grid">
         <aside>
           <h2>
-            Evidence &amp; next <span className="serif">checks</span>
+            Fact <span className="serif">checks</span>
           </h2>
-          <p className="whatsnew">What the campaign rests on, and what still needs a human to check.</p>
+          <p className="whatsnew">What the research found — and what to double-check before you rely on it.</p>
         </aside>
         <div className="rc">
           {!hasAny ? (
-            <p className="fa-skeleton__hint">Evidence and open checks will appear here as the research comes in.</p>
+            <p className="fa-skeleton__hint">Fact checks will appear here as the research comes in.</p>
           ) : null}
 
           {compiled ? (
             <Ledger data={compiled} />
-          ) : evidence.found + evidence.conflicted + evidence.gaps > 0 ? (
-            <div className="tiles3">
-              <div className="ptile b">
-                <div className="big">{evidence.found}</div>
-                <div className="s">pieces of evidence found and labelled</div>
-              </div>
-              <div className="ptile y">
-                <div className="big">{evidence.conflicted}</div>
-                <div className="s">points where sources disagree — kept visible, not hidden</div>
-              </div>
-              <div className="ptile p">
-                <div className="big">{evidence.gaps}</div>
-                <div className="s">gaps flagged for a human to check</div>
-              </div>
-            </div>
+          ) : liveTally > 0 ? (
+            <p className="hint-sm">
+              {evidence.found} fact{evidence.found === 1 ? "" : "s"} recorded so far ·{" "}
+              {evidence.conflicted} where sources disagree · {evidence.gaps} flagged for a human to
+              check. The full fact-check list appears here when the run finishes.
+            </p>
           ) : null}
 
-          {checks.length || draftNotes.length ? (
-            <>
-              <h3>Next checks</h3>
+          <Category
+            title={NEXT_CHECKS_GROUP.title}
+            caption={NEXT_CHECKS_GROUP.caption}
+            count={checks.length + draftNotes.length}
+          >
+            <ul className="fa-factlist">
               {checks.map((c) => (
-                <p className="fa-nextcheck" key={c.id}>
-                  <b>{c.description}</b>
+                <li key={c.id}>
+                  {c.description}
                   {c.reason ? <> — {c.reason}</> : null}
                   {c.affectedSections?.length ? (
-                    <span className="fa-mono"> · {c.affectedSections.map(plainOutputName).join(", ")}</span>
+                    <span className="fa-factlist__meta">
+                      Affects: {c.affectedSections.map(plainOutputName).join(", ")}
+                    </span>
                   ) : null}
-                </p>
+                </li>
               ))}
               {draftNotes.map((n, i) => (
-                <p className="fa-nextcheck" key={`dn-${i}`}>
-                  <b>{n.text}</b> — flagged while drafting {n.section}
-                </p>
+                <li key={`dn-${i}`}>
+                  {n.text}
+                  <span className="fa-factlist__meta">Flagged while drafting {n.section}</span>
+                </li>
               ))}
-            </>
-          ) : null}
+            </ul>
+          </Category>
 
-          {gaps.length ? (
-            <>
-              <h3>{TERMINAL_GAPS_TITLE}</h3>
-              <ul className="fa-gaplist">
-                {gaps.map((g) => (
-                  <li key={g.id} className="fa-gap--terminal">
-                    {g.description}
-                    <span className="fa-mono"> · {fmtClock(g.at)}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="fa-skeleton__hint">
-                These didn&apos;t finish. What did complete is kept and shown — nothing was invented to fill the gaps.
-              </p>
-            </>
-          ) : null}
+          <Category title={TERMINAL_GAPS_TITLE} caption={TERMINAL_GAPS_NOTE} count={gaps.length}>
+            <ul className="fa-factlist">
+              {gaps.map((g) => (
+                <li key={g.id}>{g.description}</li>
+              ))}
+            </ul>
+          </Category>
         </div>
       </div>
     </section>
   );
 }
 
-// ---- full ledger (terminal runs): collapsed plain-English groups ----
-
-function ClaimRow({ claim }: { claim: EvidenceClaimView }) {
-  return (
-    <details className="fa-evclaim">
-      <summary>{claim.text}</summary>
-      <ul className="fa-evclaim__meta">
-        {claimDetailLines(claim).map((line, i) => (
-          <li key={i}>{line}</li>
-        ))}
-      </ul>
-    </details>
-  );
-}
-
-function ClaimGroup({
-  title,
-  caption,
-  claims,
-}: {
-  title: string;
-  caption: string;
-  claims: EvidenceClaimView[];
-}) {
-  if (!claims.length) return null;
-  return (
-    <details className="fa-evgroup">
-      <summary>
-        {title} ({claims.length})
-      </summary>
-      <p className="fa-evgroup__cap">{caption}</p>
-      {claims.map((c) => (
-        <ClaimRow key={c.id} claim={c} />
-      ))}
-    </details>
-  );
-}
+// ---- full ledger (terminal runs): the claim categories ----
 
 function Ledger({ data }: { data: EvidenceAndNextChecks }) {
   const t = data.totals;
@@ -170,35 +160,29 @@ function Ledger({ data }: { data: EvidenceAndNextChecks }) {
 
   return (
     <>
-      <div className="tiles3">
-        <div className="ptile b">
-          <div className="big">{t.claims}</div>
-          <div className="s">facts recorded during the research</div>
-        </div>
-        <div className="ptile y">
-          <div className="big">{t.verifiedLoadBearing}</div>
-          <div className="s">key facts settled</div>
-        </div>
-        <div className="ptile p">
-          <div className="big">{t.unresolvedLoadBearing}</div>
-          <div className="s">key facts still to check — shown, not filled in</div>
-        </div>
-      </div>
+      <p className="hint-sm">
+        {t.claims} fact{t.claims === 1 ? "" : "s"} recorded during research · {t.loadBearing} key fact
+        {t.loadBearing === 1 ? "" : "s"} the campaign leans on ({t.verifiedLoadBearing} settled,{" "}
+        {t.unresolvedLoadBearing} still to check). Anything unresolved is listed here — shown, never
+        quietly filled in.
+      </p>
 
-      {UNRESOLVED_EVIDENCE_GROUPS.map((spec) => (
-        <ClaimGroup
-          key={spec.label}
-          title={spec.title}
-          caption={spec.caption}
-          claims={byLabel.get(spec.label) ?? []}
-        />
-      ))}
+      {UNRESOLVED_EVIDENCE_GROUPS.map((spec) => {
+        const claims = byLabel.get(spec.label) ?? [];
+        return (
+          <Category key={spec.label} title={spec.title} caption={spec.caption} count={claims.length}>
+            <ClaimBullets claims={claims} />
+          </Category>
+        );
+      })}
 
-      <ClaimGroup
+      <Category
         title={SETTLED_EVIDENCE_GROUP.title}
         caption={SETTLED_EVIDENCE_GROUP.caption}
-        claims={settled}
-      />
+        count={settled.length}
+      >
+        <ClaimBullets claims={settled} />
+      </Category>
     </>
   );
 }

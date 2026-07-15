@@ -357,6 +357,10 @@ const EXPRESS_OVERRIDES: Partial<Record<AgentKey, Partial<Omit<AgentDef, "key" |
   // 12k gives the object room; search depth is unchanged.
   research_director: { searchBudget: 1, effort: "medium", maxOutputTokens: 12000 },
   evidence_adjudicator: { searchBudget: 1, effort: "medium", maxOutputTokens: 12000 },
+  // Largest structured output in the graph (nine fully-specified tactics):
+  // truncated at 8k in live batch 8 (Barnet) even with the doubled retry, and
+  // the reviewer rightly rejected the cut-off plan. Same cure as above.
+  tactics_planner: { maxOutputTokens: 12000 },
   // The four sequential review passes measured ~8 of the 20-minute budget at
   // high effort (batch 5, 15 Jul). Medium + 6k reclaims ~4 min of slack.
   synthesis_reviewer: { effort: "medium", maxOutputTokens: 6000 },

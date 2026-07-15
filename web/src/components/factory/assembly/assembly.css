@@ -1,11 +1,10 @@
-/* Campaign Assembly View overlay (W4). The dark translucent Agent Work Cards
-   are W5 components (self-styled, inline). This sheet styles only the surfaces
-   W4 owns: the Step Workspace shell, section status chips, Step Build Receipts,
-   accepted-content typography, judgement cards, the evidence/gaps panel, the
-   connection badge, and the mobile Compact Build View. It reuses the awake
-   tokens (globals.css) and the Journey rail/rung layout (journey.css). All
-   classes are `fa-` prefixed. Motion is transform/opacity only and honours
-   reduced-motion (parameters §6). */
+/* Campaign Brief page (14 Jul 2026 redesign). The page IS the original Journey
+   rail/rung design (journey.css) with awake tokens (globals.css); this sheet
+   styles only the four factory grafts W4 owns: the Agent Build Bar (all live
+   theatre in one slim bar), the graded-receipt header line, the Fact checks
+   section chrome, plus skeletons, the connection badge, and the mobile compact
+   column. All classes are `fa-` prefixed. Motion is transform/opacity only and
+   honours reduced-motion (parameters §6). */
 
 :root {
   --fa-ink: 24 24 27; /* zinc-900-ish, rgb channels for translucency */
@@ -13,7 +12,7 @@
   --fa-ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* light-page monospace: timestamps / counts / state versions ONLY */
+/* light-page monospace: timestamps / counts ONLY */
 .fa-mono {
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -22,65 +21,36 @@
   white-space: nowrap;
 }
 
-/* ---- section status chip (light page) ---- */
-.fa-chip {
-  display: inline-flex;
-  align-items: center;
+/* ---- the Agent Build Bar (graft 1: all live theatre, one slim dark bar) ---- */
+.fa-buildbar {
+  display: flex;
+  flex-direction: column;
   gap: 0.35rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-radius: 999px;
-  padding: 0.16rem 0.6rem;
-  border: 1px solid transparent;
-  white-space: nowrap;
-}
-.fa-chip::before {
-  content: "";
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 999px;
-  background: currentColor;
-}
-.fa-chip[data-status="empty"] { background: var(--secondary); color: var(--muted-foreground); }
-.fa-chip[data-status="assembling"] { background: rgba(73, 40, 253, 0.08); color: var(--brand); }
-.fa-chip[data-status="under_review"] { background: rgba(168, 106, 0, 0.1); color: var(--warn); }
-.fa-chip[data-status="accepted"] { background: rgba(23, 138, 58, 0.12); color: var(--good); }
-.fa-chip[data-status="needs_verification"] { background: rgba(223, 34, 37, 0.1); color: var(--bad); }
-.fa-chip[data-status="assembling"]::before,
-.fa-chip[data-status="under_review"]::before { animation: fa-pulse 1.6s ease-in-out infinite; }
-
-/* ---- the Step Workspace (dark overlay shell above the section) ---- */
-.fa-workspace {
-  margin: 0 0 1.25rem;
   border-radius: var(--r-2xl);
   background: rgb(var(--fa-ink) / 0.93);
   color: #ededf0;
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 12px 32px rgba(20, 18, 40, 0.18);
-  overflow: hidden;
+  padding: 0.6rem 0.95rem;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
-.fa-workspace__bar {
+.fa-buildbar__row {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.55rem 0.9rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 0.6rem;
+  flex-wrap: wrap;
   font-size: 0.78rem;
-  color: rgba(255, 255, 255, 0.72);
 }
-.fa-workspace__bar b { color: #fff; font-weight: 600; }
-.fa-workspace__live {
+.fa-buildbar__live {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  margin-left: auto;
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.6);
+  gap: 0.4rem;
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
 }
-.fa-workspace__live::before {
+.fa-buildbar__live::before {
   content: "";
   width: 0.5rem;
   height: 0.5rem;
@@ -88,73 +58,100 @@
   background: #8fe08a;
   animation: fa-pulse 1.4s ease-in-out infinite;
 }
-.fa-workspace__cards {
+.fa-buildbar__chips {
   display: flex;
+  gap: 0.35rem;
   flex-wrap: wrap;
-  gap: 0.7rem;
-  padding: 0.7rem;
-  align-items: flex-start;
+  align-items: center;
 }
-.fa-workspace__compacts {
+.fa-buildbar__chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  padding: 0.14rem 0.6rem;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+}
+.fa-buildbar__chip--more {
+  color: rgba(255, 255, 255, 0.6);
+  border-style: dashed;
+}
+.fa-buildbar__verb {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: #8fe08a;
+  animation: fa-append 240ms var(--fa-ease-out-quart) both;
+}
+.fa-buildbar__now {
   display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.75);
+  min-width: 0;
+  animation: fa-append 240ms var(--fa-ease-out-quart) both;
+}
+.fa-buildbar__now b {
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fa-buildbar__now span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fa-buildbar__hint {
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+  margin: 0.6rem 0 0;
 }
 
-/* small overlay chip for overflow / collapsed clusters */
-.fa-pill {
+/* ---- graded receipt (graft 4: a slim header line, never a card wall) ---- */
+.fa-grade {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.72rem;
-  border-radius: 999px;
-  padding: 0.3rem 0.7rem;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-/* ---- Step Build Receipt (collapsed, light page) ---- */
-.fa-receipt {
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+  font-size: 0.9rem;
+  font-weight: 600;
   border: 1px solid var(--border);
-  border-radius: var(--r-xl);
-  padding: 0.7rem 1rem;
-  margin: 0 0 1rem;
-  background: linear-gradient(180deg, rgba(245, 245, 245, 0.5), transparent);
-}
-.fa-receipt__line {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  font-size: 0.84rem;
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem;
+  background: var(--secondary);
   color: var(--muted-foreground);
 }
-.fa-receipt__ok { color: var(--good); font-weight: 700; }
-.fa-receipt__warn { color: var(--warn); font-weight: 700; }
-.fa-receipt__toggle {
-  margin-left: auto;
-  border: 1px solid var(--border);
-  background: #fff;
+.fa-grade__dot {
+  width: 0.55rem;
+  height: 0.55rem;
   border-radius: 999px;
-  padding: 0.25rem 0.75rem;
-  font-size: 0.76rem;
-  color: var(--ink);
-  cursor: pointer;
+  background: var(--muted-foreground);
 }
-.fa-receipt__toggle:hover { border-color: var(--ink); }
-.fa-receipt__report {
-  margin-top: 0.7rem;
-  padding-top: 0.7rem;
-  border-top: 1px dashed var(--border);
-  font-size: 0.9rem;
-  color: #333;
-  animation: fa-append 180ms var(--fa-ease-out-quart) both;
+.fa-grade[data-tone="complete"] {
+  color: var(--good);
+  border-color: rgba(23, 138, 58, 0.3);
+  background: rgba(23, 138, 58, 0.08);
 }
-.fa-receipt__contrib { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.7rem; }
-.fa-receipt__agentToggle { background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
-.fa-receipt__agentToggle[aria-expanded="true"] { flex-basis: 100%; }
-.fa-receipt__agentToggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 999px; }
+.fa-grade[data-tone="complete"] .fa-grade__dot {
+  background: var(--good);
+}
+.fa-grade[data-tone="nearly"] {
+  color: var(--warn);
+  border-color: rgba(168, 106, 0, 0.3);
+  background: rgba(168, 106, 0, 0.08);
+}
+.fa-grade[data-tone="nearly"] .fa-grade__dot {
+  background: var(--warn);
+}
+.fa-grade__detail {
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
 
 /* ---- accepted section content (matches .rc typography) ---- */
 .fa-content h4 { font-size: 0.95rem; margin: 1.1rem 0 0.4rem; font-weight: 600; }
@@ -174,65 +171,8 @@
 .fa-skeleton span:nth-child(3) { width: 60%; }
 .fa-skeleton__hint { font-size: 0.85rem; color: var(--muted-foreground); }
 
-/* ---- Your Judgement Card (light, above cards) ---- */
-.fa-judge {
-  border: 1.5px solid var(--brand);
-  border-radius: var(--r-2xl);
-  padding: 1rem 1.2rem;
-  margin: 0 0 1.2rem;
-  background: rgba(73, 40, 253, 0.04);
-}
-.fa-judge__eyebrow {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
-  color: var(--brand);
-}
-.fa-judge__q { font-size: 1.02rem; font-weight: 500; margin: 0.35rem 0 0.2rem; line-height: 1.35; }
-.fa-judge__why { font-size: 0.86rem; color: var(--muted-foreground); margin: 0 0 0.7rem; }
-.fa-judge__opts { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.4rem 0 0.7rem; }
-.fa-judge__opt {
-  text-align: left;
-  border: 1px solid var(--border);
-  background: #fff;
-  border-radius: var(--r-lg);
-  padding: 0.55rem 0.8rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-  color: var(--ink);
-}
-.fa-judge__opt:hover { border-color: var(--ink); }
-.fa-judge__opt:disabled { opacity: 0.55; cursor: default; }
-.fa-judge__opt[data-default="1"] { border-color: var(--brand); }
-.fa-judge__opt[data-default="1"]::after {
-  /* plain-language framing: a defaulted choice is ours to own and theirs to change */
-  content: "chosen for now";
-  font-size: 0.66rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--brand);
-  margin-left: 0.5rem;
-}
-.fa-judge__actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-.fa-judge__meta { font-size: 0.78rem; color: var(--muted-foreground); }
-.fa-judge--resolved { border-color: var(--good); background: rgba(23, 138, 58, 0.06); }
-.fa-judge--defaulted { border-color: var(--warn); background: rgba(168, 106, 0, 0.06); }
-
-/* ---- Evidence & Next Checks / terminal gaps ---- */
+/* ---- Fact checks section chrome (categories live in documents.css) ---- */
 .fa-evidence { padding: 2.5rem 0; border-top: 1px solid rgba(27, 29, 30, 0.1); }
-.fa-gaplist { list-style: none; padding: 0; margin: 0.4rem 0 0; }
-.fa-gaplist li {
-  padding: 0.55rem 0.8rem;
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--warn);
-  border-radius: var(--r-lg);
-  margin-bottom: 0.5rem;
-  font-size: 0.88rem;
-}
-.fa-gaplist li.fa-gap--terminal { border-left-color: var(--bad); }
-.fa-nextcheck { font-size: 0.9rem; margin: 0.35rem 0; }
-.fa-nextcheck b { font-weight: 600; }
 
 /* ---- connection badge ---- */
 .fa-conn {
@@ -252,26 +192,8 @@
 .fa-conn[data-state="connecting"] .fa-conn__dot { background: var(--pastel-blue); animation: fa-pulse 1s ease-in-out infinite; }
 .fa-conn[data-state="error"] .fa-conn__dot { background: var(--bad); }
 
-/* ---- mobile Compact Build View (no spatial overlay) ---- */
+/* ---- mobile Compact Build View (single calm column) ---- */
 .fa-mobile { display: flex; flex-direction: column; gap: 1rem; }
-.fa-mobile__stat {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  background: rgb(var(--fa-ink) / 0.94);
-  color: #fff;
-  border-radius: var(--r-xl);
-  padding: 0.85rem 1.05rem;
-}
-.fa-mobile__stat b { font-size: 1.6rem; font-weight: 600; line-height: 1; }
-.fa-mobile__stat small { color: rgba(255, 255, 255, 0.7); font-size: 0.85rem; }
-.fa-mobile__assign {
-  border: 1px solid var(--border);
-  border-radius: var(--r-lg);
-  padding: 0.55rem 0.8rem;
-  font-size: 0.88rem;
-}
-.fa-mobile__assign .fa-mono { display: inline-block; margin-right: 0.4rem; }
 .fa-mobile__h { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-foreground); margin: 0.4rem 0; }
 
 /* ---- motion ---- */
@@ -283,10 +205,10 @@
 
 @media (prefers-reduced-motion: reduce) {
   .fa-enter,
-  .fa-receipt__report,
   .fa-skeleton span,
-  .fa-chip::before,
-  .fa-workspace__live::before,
+  .fa-buildbar__verb,
+  .fa-buildbar__now,
+  .fa-buildbar__live::before,
   .fa-conn__dot {
     animation: none !important;
   }

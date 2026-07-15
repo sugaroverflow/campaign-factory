@@ -31,6 +31,75 @@
   -webkit-backdrop-filter: blur(9px) saturate(1.15);
 }
 
+/* --- Fill mode (the gallery wall / projector surface) ---
+   Carries the identity-typography variables so the agent's name and its
+   task/responsibility caption read from the back of the room, and scales the
+   whole card up at projector widths (≥1600px — fullscreen 1080p, 2–3 m away).
+   Non-fill cards (assembly inline workspaces) keep the var fallbacks, i.e.
+   their legacy sizes. The backscroll stays the dominant region: the card grows
+   with its type so the extra header height never eats the work stream. */
+.fillCard {
+  --cf-card-title: 15.5px;
+  --cf-card-caption: 11.5px;
+  --cf-card-caption-ink: rgba(242, 243, 245, 0.82);
+  --cf-card-assign: 11.5px;
+  --cf-card-assign-ink: rgba(242, 243, 245, 0.72);
+  --cf-card-pill: 10px;
+  /* Tall enough that the scrolling backscroll dominates (~15 rows visible). */
+  height: 340px;
+}
+@media (min-width: 1600px) {
+  .fillCard {
+    --cf-card-title: 19px;
+    --cf-card-caption: 13.5px;
+    --cf-card-assign: 13.5px;
+    --cf-card-pill: 12px;
+    --cf-row-mono: 10.5px;
+    --cf-row-summary: 12.5px;
+    --cf-activity: 12.5px;
+    height: 420px;
+  }
+}
+
+/* Agent identity: the displayName is the loudest text on the card. Single-line
+   in the fixed-footprint assembly cards; fill mode lets long roster names wrap
+   to two lines rather than truncate at distance. */
+.workTitle {
+  font-size: var(--cf-card-title, 13px);
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fillCard .workTitle {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* The task/responsibility caption under the name — higher contrast in fill. */
+.workCaption {
+  font-size: var(--cf-card-caption, 9.5px);
+  line-height: 1.3;
+  color: var(--cf-card-caption-ink, rgba(242, 243, 245, 0.62));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Region 2: the bounded one-line assignment. */
+.workAssignment {
+  font-size: var(--cf-card-assign, 11px);
+  color: var(--cf-card-assign-ink, rgba(242, 243, 245, 0.62));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Running-state pulse on the status dot: the swarm reads as alive from the
    back of the room. Opacity-only (compositor), disabled with reduced motion. */
 .livePulse {

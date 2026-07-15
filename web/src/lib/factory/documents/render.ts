@@ -104,11 +104,11 @@ export const EVIDENCE_ANCHOR_ID = "evidence-next-checks";
 export function conflictMarkHtml(anchorId: string = EVIDENCE_ANCHOR_ID): string {
   return (
     ` <a class="pm-inf pm-inf--inline" href="#${anchorId}"` +
-    ` title="Sources disagree on this — see Evidence and next checks">?</a>`
+    ` title="Sources disagree on this — see Fact checks">?</a>`
   );
 }
 
-const CONFLICT_TEXT_MARK = " (sources disagree — see Evidence and next checks)";
+const CONFLICT_TEXT_MARK = " (sources disagree — see Fact checks)";
 
 function isConflictLabel(label: string | undefined): boolean {
   return label === "Conflicting evidence";

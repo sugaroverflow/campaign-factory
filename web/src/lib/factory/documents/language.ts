@@ -47,6 +47,24 @@ export function plainDocStatus(status: DocumentStatus): string {
   return PLAIN_DOC_STATUS[status] ?? status;
 }
 
+/* ---- document card pills (14 Jul 2026 redesign) ----
+   The Document Library speaks the campaignGrade vocabulary: "Complete" (green)
+   for ready, "Nearly complete" (amber) for needs-verification or flagged, and
+   NO pill for a contentless document — the card simply dims. Never red. */
+
+export function documentPill(
+  status: DocumentStatus | undefined,
+  // Advisory flags (e.g. not-yet-double-checked claims) do NOT demote a ready
+  // document: STATUS drives the pill; caveats live in Fact checks. Every real
+  // research run carries some advisory flags — flag-demotion would make
+  // "Complete" unreachable, contradicting the ready count in the header.
+  _flagged = false,
+): { label: string; tone: "complete" | "nearly" } | null {
+  if (status === "ready") return { label: "Complete", tone: "complete" };
+  if (status === "needs verification") return { label: "Nearly complete", tone: "nearly" };
+  return null; // assembling / under review / not started — dimmed card, no pill
+}
+
 /* ---- brief-section status chips ---- */
 
 export const PLAIN_SECTION_STATUS: Record<SectionStatus, string> = {
@@ -104,9 +122,37 @@ export const TERMINAL_GAPS_TITLE = "Not completed in this run";
 export const TERMINAL_GAPS_NOTE =
   "This work didn't finish in the time available. Nothing was invented to cover it.";
 
+/** The evidence/claims apparatus renders as ONE cohesive section under this
+ *  heading, at the bottom of the brief and of every compiled document. */
+export const FACT_CHECKS_TITLE = "Fact checks";
+
+/** Next-checks rendered as a fact-check category (same style as the others). */
+export const NEXT_CHECKS_GROUP = {
+  title: "Things to check next",
+  caption: "Specific checks to make before you rely on the campaign materials",
+};
+
 /** Judgement framing: a defaulted choice is ours to own and the user's to change. */
 export const JUDGEMENT_FRAME = "A choice we made — you can change it";
 export const JUDGEMENT_DEFAULT_CHIP = "chosen for now";
+
+/* ---- campaign grading ladder (product decision, 15 Jul 2026) ----
+   One shared vocabulary for "how finished is this campaign": the brief header
+   line, gallery cards, and receipts all read from here. Tones map to
+   green ("complete") / amber ("nearly") / grey ("neutral") — NEVER red. */
+
+export function campaignGrade(
+  acceptedSections: number,
+  totalSections: number,
+): { label: string; tone: "complete" | "nearly" | "neutral" } {
+  if (totalSections > 0 && acceptedSections >= totalSections) {
+    return { label: "Complete", tone: "complete" };
+  }
+  if (acceptedSections === totalSections - 1) {
+    return { label: "Nearly complete", tone: "nearly" };
+  }
+  return { label: `${acceptedSections} of ${totalSections} sections built`, tone: "neutral" };
+}
 
 /* ---- Evidence & Next Checks groups (three unresolved kinds, plain titles) ---- */
 

@@ -18,7 +18,7 @@ export default async function FactoryLivePage() {
   if (!batch) {
     return (
       <main className="mx-auto max-w-md px-6 py-20 text-center">
-        <h1 className="text-2xl font-medium tracking-tight">The factory floor is quiet</h1>
+        <h1 className="text-2xl font-medium tracking-tight">The agent factory floor is quiet</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           No presenter batch has run in this environment yet. You can watch the recorded real run
           instead.

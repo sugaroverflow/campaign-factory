@@ -1,6 +1,46 @@
 /* Factory Gallery layout. The five campaign anchors are a 5-column field that
-   collapses to 3+2 below 1500px (parameters §6). The dark overlay sits over the
-   light Awake page, so the field itself stays on the page background. */
+   collapses to 3+2 below 1500px (parameters §6), then stacks full-width on
+   phones. The dark overlay sits over the light Awake page, so the field itself
+   stays on the page background.
+
+   The floor root owns the responsive typography variables for its three
+   densities: phone (stacked, sticky campaign headers), desktop (unchanged),
+   and projector (≥1600px — fullscreen 1080p read from 2–3 m away). Inline
+   styles in the anchor/strip components read these vars with their desktop
+   values as fallbacks, so other surfaces are unaffected. */
+
+.floorRoot {
+  /* The fixed SiteNav renders ~65px tall (73px on phones, where the brand
+     wraps) — taller than the layout's pt-14 (56px). The strip must clear the
+     REAL nav, so the root pads the difference down and the strip sticks at
+     the nav's true bottom edge: no tuck, no jump when scrolling starts. */
+  --cf-nav-h: 66px;
+  --cf-strip-h: 38px;
+  --cf-strip-value: 15px;
+  --cf-strip-label: 10.5px;
+  --cf-anchor-title: 17px;
+  --cf-anchor-status: 10px;
+  --cf-anchor-sub: 12px;
+  --cf-anchor-meta: 11px;
+  padding-top: calc(var(--cf-nav-h) - 3.5rem);
+}
+@media (max-width: 640px) {
+  .floorRoot {
+    --cf-nav-h: 74px; /* wrapped brand line on narrow phones */
+    --cf-strip-h: 50px; /* the strip wraps to two rows on phones */
+  }
+}
+@media (min-width: 1600px) {
+  .floorRoot {
+    --cf-strip-h: 48px;
+    --cf-strip-value: 20px;
+    --cf-strip-label: 13px;
+    --cf-anchor-title: 22px;
+    --cf-anchor-status: 12px;
+    --cf-anchor-sub: 14.5px;
+    --cf-anchor-meta: 13px;
+  }
+}
 
 .field {
   display: grid;
@@ -21,9 +61,69 @@
   }
 }
 @media (max-width: 640px) {
+  /* Phones: columns stack full-width; each campaign anchor stays sticky so
+     you always know whose floor you're watching. */
   .field {
     grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+    padding: 12px 12px 56px;
   }
+}
+@media (min-width: 1600px) {
+  /* Projector: more air between the five columns. */
+  .field {
+    gap: 24px;
+    padding: 20px 28px 72px;
+  }
+}
+
+/* --- Sticky stats strip: slim, always visible, stuck under the fixed nav.
+   The four headline numbers (agents working · sections accepted · docs ready ·
+   spend); the full Agent Factory Ledger table stays at the bottom. --- */
+.statsStrip {
+  position: sticky;
+  top: var(--cf-nav-h, 3.5rem);
+  z-index: 5; /* above anchors (3) and the bottom ledger (4) */
+  height: var(--cf-strip-h, 38px);
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 0 20px;
+  background: rgba(22, 24, 27, 0.94);
+  color: #f2f3f5;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  /* Phones: wrap to two rows so all four stats stay visible — no horizontal
+     scroll hiding the spend. --cf-strip-h (used by the sticky anchors) is
+     raised to match the wrapped height. */
+  .statsStrip {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--cf-strip-h, 50px);
+    align-content: center;
+    gap: 3px 16px;
+    padding: 7px 12px;
+  }
+}
+.stripStat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-shrink: 0;
+}
+.stripValue {
+  font-size: var(--cf-strip-value, 15px);
+  font-weight: 650;
+  line-height: 1;
+}
+.stripLabel {
+  font-size: var(--cf-strip-label, 10.5px);
+  color: rgba(242, 243, 245, 0.62);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .column {
@@ -78,10 +178,12 @@
   gap: 8px;
 }
 
-/* Anchors always render above connectors and agent cards. */
+/* Anchors always render above connectors and agent cards. Sticky below the
+   fixed nav + the stats strip on every density — on phones this is what keeps
+   the campaign header on screen while you scroll its stacked floor. */
 .anchor {
   position: sticky;
-  top: 60px; /* below the fixed nav + ledger */
+  top: calc(var(--cf-nav-h, 3.5rem) + var(--cf-strip-h, 38px) + 6px);
   z-index: 3;
 }
 /* Legacy judgement stack (judgement cards no longer render in gallery columns;

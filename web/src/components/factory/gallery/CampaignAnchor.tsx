@@ -48,7 +48,8 @@ export function CampaignAnchor({
         <span style={{ width: 10, height: 10, borderRadius: 999, background: hue.accent, flexShrink: 0 }} />
         <span
           style={{
-            fontSize: 17,
+            // Scales with the floor density (phone / desktop / projector).
+            fontSize: "var(--cf-anchor-title, 17px)",
             fontWeight: 600,
             letterSpacing: "-0.01em",
             lineHeight: 1.1,
@@ -64,7 +65,7 @@ export function CampaignAnchor({
         </span>
         <span
           style={{
-            fontSize: 10,
+            fontSize: "var(--cf-anchor-status, 10px)",
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.04em",
@@ -103,7 +104,7 @@ export function CampaignAnchor({
         <p
           style={{
             margin: "6px 0 0",
-            fontSize: 12,
+            fontSize: "var(--cf-anchor-sub, 12px)",
             lineHeight: 1.35,
             color: "rgba(27,29,30,0.7)",
             display: "-webkit-box",
@@ -116,7 +117,15 @@ export function CampaignAnchor({
         </p>
       ) : null}
 
-      <div style={{ marginTop: 7, display: "flex", gap: 12, fontSize: 11, color: "rgba(27,29,30,0.6)" }}>
+      <div
+        style={{
+          marginTop: 7,
+          display: "flex",
+          gap: 12,
+          fontSize: "var(--cf-anchor-meta, 11px)",
+          color: "rgba(27,29,30,0.6)",
+        }}
+      >
         <span>{activeAgents} working</span>
         <span>{sectionsAccepted}/10 accepted</span>
       </div>

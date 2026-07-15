@@ -123,3 +123,63 @@ This setup demonstrates bounded build-time autonomy, not an autonomous campaigni
 ### Next Recommended Step
 
 Observe the next scheduled hourly heartbeat for its commit/push/PR-comment sequence, confirm the 14:00 London cadence transition, and review PR #12 plus its Vercel preview before any merge decision. After the conference, return the heartbeat to a low cadence or disable it explicitly.
+
+---
+
+## 2026-07-15T22:05:51Z - Campaign Operations workbench Phase 2
+
+### Goal
+
+Expand Pip's working but simple Campaign Operations page into a complete campaign workbench, and authorize Pip to implement the full scoped expansion without waiting for interim human approval.
+
+### Changes
+
+- Added a Phase 2 task contract covering a route-specific operations header/footer, grouped sidebar, twelve campaign-work destinations, responsive navigation, local state migration, and cross-view workflow verification.
+- Granted Pip standing authority to design, implement, refactor, test, document, commit, push, and update issue #11 / draft PR #12 until every Phase 2 criterion was met.
+- Built a dedicated Operations shell that replaces global site chrome only on `/operations`; other routes retain the Campaign Factory navigation/footer.
+- Added Overview, Campaign brief, Objective & targets, Power map, Strategy & tactics, Evidence & checks, Audiences, Contacts, Drafts, Reviews & approvals, Outbox & schedule, and Responses & results views.
+- Added a three-item fixture draft library, substantive Contacts filtering/readiness/consent states, a dedicated review/approval flow, local schedule intent, an honest local-only outbox, and explicit coming-soon provider/import/response boundaries.
+- Migrated browser-local state through `cf_operations_demo_v3` with safe fallback from the earlier v1/v2 demo state.
+- Expanded Operations Playwright coverage to four tests spanning all twelve destinations and the complete audience → draft → review → explicit human approval → schedule intent → local queue → reload → reset path.
+- Rebased onto the moving `factory/multi-agent-build` base, resolved its navigation conflict, reverified the rebased tree, and reconciled the owned feature branch with `--force-with-lease`.
+
+### Decisions
+
+- “Without human approval” applies to scoped implementation work, not external campaign actions. Pip still may not merge, mark the PR ready, deploy, change production data/secrets, connect real providers, import real contacts, or perform outreach.
+- Human approval remains a required product-state transition before a communication can enter the local demo outbox.
+- Campaign-planning views are operationally useful fixture-backed states; no interface implies that new research, real contact work, delivery, responses, or analytics occurred.
+- The workbench uses restrained product density, grouped navigation, rows/split panes, and campaign-first hierarchy rather than generic metric tiles or a decorative monitoring dashboard.
+
+### Tradeoffs
+
+- The expanded demo is browser-local and production-shaped but not production-integrated.
+- Supporter email is the fully editable draft; the decision-maker letter and press pitch are honest staged fixtures with outlines/checks rather than falsely complete delivery workflows.
+- Phase 2 favors a complete navigable conference workbench in the existing component architecture over introducing a new backend or a larger route/data-model rewrite.
+
+### Risks
+
+- The feature branch was rebased while its base branch was changing quickly. The guarded recovery was verified, but future base changes may require another conflict-aware rebase.
+- High-frequency heartbeats after the conference cadence switch can still consume substantial model budget even when only review work remains.
+- No live provider, contact import, response collection, production schedule, or database persistence exists; these states must remain visibly disabled.
+- The breadth of the single Operations surface may merit later component extraction after the demo.
+
+### Verification
+
+- Final local HEAD, `origin/openclaw/issue-11-campaign-operations`, and PR #12 head all match at `9699112ef44601dcaaab657e7c44a538c982303b`.
+- The remote worktree is clean with no rebase/sequencer state; PR #12 remains open, draft, and targeted at `factory/multi-agent-build`.
+- `git diff --check`, `npm run lint`, the `DATABASE_URL`-backed production build, and `npm run test:factory -- operations.spec.ts` all pass; Operations tests pass 4/4.
+- Browser checks pass at 1440×1000, 1024×768, and 390×844 with no horizontal overflow, accessible active navigation/focus, no double chrome, and a non-operations regression check.
+- Safety-copy checks find no claims that communications were sent, delivered, opened, or answered.
+- Pip's hourly heartbeat, signed PR updates, gateway service, and the timer switching to five minutes at 14:00 Europe/London remain active.
+
+### Demo Impact
+
+The Build Reveal now demonstrates a complete brief-to-operations story: campaign context becomes targets, evidence checks, audiences, contacts, multiple communications, human review, schedule intent, and a truthful local outbox inside a dedicated workbench.
+
+### Customer-Facing Context
+
+The workbench demonstrates bounded autonomy and explicit side-effect control. Pip autonomously built and verified the feature branch, while the product and build process both keep real political outreach, production integration, merge, and deployment outside the agent's authority.
+
+### Next Recommended Step
+
+Review the Vercel preview and draft PR #12 for demo narrative and visual preference; keep provider/import/response controls disabled, and disable or reduce Pip's heartbeat after the conference window.
