@@ -6,6 +6,8 @@
 
 **Applies to:** the public one-campaign experience, coded presenter batches, Factory Gallery, Campaign Assembly View, LangGraph runtime, Campaign Brief, nine documents, evidence, replay, and promotion
 
+**Execution:** the delivery structure for the compressed parallel build is in [`factory-12-hour-build-plan.md`](factory-12-hour-build-plan.md); it applies this document's §1 scope guard and adds 12-hour-specific deferrals.
+
 ## Executive decision
 
 Build the conference prototype as a real fifteen-agent campaign graph, not a simulation and not a general-purpose agent platform. Keep the existing light Awake-inspired Campaign Factory as the primary product. Lay a temporary, dense technical instrument over it while agents are working. The overlay may be visually intimidating; the campaign anchors, human decisions, evidence states, and finished brief must remain calm and legible.
