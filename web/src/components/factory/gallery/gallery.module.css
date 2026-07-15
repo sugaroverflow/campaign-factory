@@ -34,12 +34,29 @@
   gap: 10px;
 }
 
-/* The cards area is the positioning context for the connector overlay. */
+/* The cards area is the positioning context for the connector overlay AND a
+   single-cell grid that overlays its two layers: the paper brief substrate
+   (z 0) and the full-width agent card stack (z 1). Both occupy the same grid
+   cell, so the area is as tall as the taller layer and nothing gets clipped —
+   the translucent agent workspaces pop over the assembling brief. */
 .cardsArea {
   position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Agent layer: every workspace open, full column width, stacked. */
+.cardStack {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  align-content: start;
+  height: fit-content;
 }
 
 .connectorSvg {
@@ -52,6 +69,7 @@
   overflow: visible;
 }
 
+/* Legacy grouped-card layout (kept for compatibility with older callers). */
 .cardGroup {
   position: relative;
   z-index: 1;
@@ -60,20 +78,14 @@
   gap: 8px;
 }
 
-.pillGroup {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* Anchors + judgement cards always render above connectors and agent cards. */
+/* Anchors always render above connectors and agent cards. */
 .anchor {
   position: sticky;
   top: 60px; /* below the fixed nav + ledger */
   z-index: 3;
 }
+/* Legacy judgement stack (judgement cards no longer render in gallery columns;
+   class kept for compatibility). */
 .judgementStack {
   position: relative;
   z-index: 2;
@@ -122,17 +134,19 @@
   animation: cfBriefIn 260ms var(--cf-brief-ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
-/* While the run is live, the brief stack is a SUBSTRATE inside the cards area:
-   it slides beneath the agent swarm (z-index 0 vs the card groups' 1) so the
-   output physically accumulates under the agents working on it. Once the
-   receipt shows, the stack is rendered standalone (no overlap). */
+/* The brief stack is the SUBSTRATE layer of the cards area in BOTH running and
+   done states: it shares the agent stack's grid cell at z 0, so the paper sits
+   fully behind the translucent workspaces and shows through them, around their
+   edges, and below a shorter card stack. Slightly inset so paper edges peek
+   out from under the dark layer. */
 .briefSubstrate {
+  grid-column: 1;
+  grid-row: 1;
   position: relative;
   z-index: 0;
-  /* cardsArea has a 10px column gap; -20px nets a ~10px underlap so the top
-     paper edge visibly slides beneath the bottom row of agent cards while the
-     section titles stay clear of the overlap (readability floor). */
-  margin-top: -20px;
+  min-width: 0;
+  padding: 14px 0 0 6px;
+  height: fit-content;
 }
 @keyframes cfBriefIn {
   from {
@@ -144,19 +158,13 @@
     transform: none;
   }
 }
+/* Non-interactive document header: every published piece stays fully open. */
 .briefCardHead {
-  appearance: none;
   width: 100%;
   display: flex;
   align-items: baseline;
   gap: 7px;
-  background: none;
-  border: 0;
-  padding: 6px 9px;
-  cursor: pointer;
-  text-align: left;
-  color: inherit;
-  font: inherit;
+  padding: 6px 9px 2px;
 }
 .briefCardStep {
   font-family: var(--font-mono);
@@ -172,9 +180,7 @@
   line-height: 1.25;
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal; /* full title, no truncation */
 }
 .briefCardExcerpt {
   margin: 0;
@@ -182,29 +188,7 @@
   font-size: 11px;
   line-height: 1.45;
   color: rgba(27, 29, 30, 0.78);
-  display: -webkit-box;
-  -webkit-line-clamp: 6;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* Bare button wrapper so identity pills (and pill-expanded cards) toggle. */
-.pillToggle {
-  appearance: none;
-  background: none;
-  border: 0;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-  text-align: left;
-  display: inline-flex;
-  color: inherit;
-  font: inherit;
-}
-.pillToggle:focus-visible {
-  outline: 2px solid rgba(138, 208, 255, 0.6);
-  outline-offset: 2px;
-  border-radius: 12px;
+  /* full excerpt — no clamp: the brief renders uncollapsed */
 }
 
 @media (prefers-reduced-motion: reduce) {

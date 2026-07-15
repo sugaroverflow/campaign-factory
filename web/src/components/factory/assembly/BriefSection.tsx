@@ -12,7 +12,7 @@
 // The page NEVER auto-jumps between sections.
 
 import { useState, type ReactNode } from "react";
-import { AgentIdentityPill } from "@/components/factory/cards";
+import { AgentIdentityPill, AgentWorkCard } from "@/components/factory/cards";
 import type { AgentCardVM as CardVM } from "@/components/factory/cards";
 import type { AgentCardVM as FoldAgentVM, JudgementVM, SectionVM } from "@/lib/factory/client";
 import type { JudgementAnswerRequest, SectionStatus } from "@/lib/factory/contracts";
@@ -41,6 +41,15 @@ function Receipt({
   now: number;
 }) {
   const [open, setOpen] = useState(false);
+  // Contributor pills toggle open into full Agent Work Cards on click.
+  const [openAgents, setOpenAgents] = useState<Set<string>>(() => new Set());
+  const toggleAgent = (id: string) =>
+    setOpenAgents((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   const r = section.receipt;
   const verify = section.status === "needs_verification";
   return (
@@ -68,7 +77,20 @@ function Receipt({
       {contributors.length ? (
         <div className="fa-receipt__contrib">
           {contributors.map((a) => (
-            <AgentIdentityPill key={a.agentRunId} vm={toCardVm(a)} now={now} />
+            <button
+              key={a.agentRunId}
+              type="button"
+              className="fa-receipt__agentToggle"
+              onClick={() => toggleAgent(a.agentRunId)}
+              aria-expanded={openAgents.has(a.agentRunId)}
+              title={openAgents.has(a.agentRunId) ? `Collapse ${a.shortName}` : `Show ${a.shortName}'s work`}
+            >
+              {openAgents.has(a.agentRunId) ? (
+                <AgentWorkCard vm={toCardVm(a)} now={now} />
+              ) : (
+                <AgentIdentityPill vm={toCardVm(a)} now={now} />
+              )}
+            </button>
           ))}
         </div>
       ) : null}

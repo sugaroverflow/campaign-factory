@@ -23,12 +23,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createFold, foldEvents, foldInto, type FoldAccumulator } from "@/lib/factory/client";
 import type { FactoryEvent } from "@/lib/factory/contracts";
-import {
-  COMPLETION_READABLE_MS,
-  FactoryGallery,
-  deriveShortName,
-  type GalleryCampaign,
-} from "@/components/factory/gallery";
+import { FactoryGallery, deriveShortName, type GalleryCampaign } from "@/components/factory/gallery";
 import { hueIndexForPosition } from "@/components/factory/cards";
 import { useReplayPlayer } from "@/lib/factory/replay/useReplayPlayer";
 import type { ReplayManifestBody } from "@/lib/factory/replay";
@@ -134,14 +129,6 @@ export function ReplayClient({
   const liveMinutes = Math.max(1, Math.round(state.totalMs / 60000));
   const condensedChip = `Condensed · ${liveMinutes} min live run → ${clock(state.playbackTotalMs)}`;
 
-  // Completion choreography (readable-window before pill collapse) is defined
-  // in real wall time, but the gallery's `now` is the recorded-frame virtual
-  // clock. Scale the window by the effective virtual-per-real speed so grayed
-  // completed cards survive compression instead of blinking into pills.
-  const compression =
-    isCondensed && state.playbackTotalMs > 0 ? state.totalMs / state.playbackTotalMs : 1;
-  const completionReadableMs = COMPLETION_READABLE_MS * state.speed * compression;
-
   return (
     <div>
       {/* Persistent, non-dismissable label — fixed so it is present in every
@@ -182,12 +169,7 @@ export function ReplayClient({
 
       {/* The gallery renderer — identical to live. connectionLabel puts the same
           permanent label into the Factory Ledger area. No live handlers. */}
-      <FactoryGallery
-        campaigns={campaigns}
-        now={state.virtualNowMs}
-        connectionLabel={label}
-        completionReadableMs={completionReadableMs}
-      />
+      <FactoryGallery campaigns={campaigns} now={state.virtualNowMs} connectionLabel={label} />
 
       {/* Playback controls. Play/pause/jump/replay + condensed toggle for
           everyone; the speed multiplier is presenter-only (rehearsal aid). */}

@@ -101,4 +101,8 @@ export interface AgentCardVM {
 export interface AgentCardProps {
   vm: AgentCardVM;
   now: number; // Date.now() supplied by the live layer (or a fixed value in replay/fixtures)
+  /** Fill mode (gallery wall): stretch to the container's full width with a
+   *  taller backscroll so the work stream dominates. Default false keeps the
+   *  legacy fixed footprint (assembly inline workspaces). */
+  fill?: boolean;
 }

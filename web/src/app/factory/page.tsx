@@ -173,10 +173,10 @@ export default function FactoryIntakePage() {
       </p>
 
       <p className="mx-auto mt-4 text-center text-sm">
-        <a href="/factory/live" className="underline underline-offset-4 hover:text-foreground">
-          Or watch the factory floor live
+        <a href="/factory/replay/conference" className="underline underline-offset-4 hover:text-foreground">
+          Or watch the 15-minute factory session
         </a>
-        <span className="text-muted-foreground"> — five campaigns being built in parallel, as it happens.</span>
+        <span className="text-muted-foreground"> — five real campaigns built in parallel, replayed from the event log.</span>
       </p>
     </div>
   );

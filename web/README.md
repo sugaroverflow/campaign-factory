@@ -106,12 +106,14 @@ vercel deploy --prod                # build + deploy to production
 > Next.js app. The worker itself is documented in [`../worker/README.md`](../worker/README.md);
 > the whole-repo overview is in [`../README.md`](../README.md).
 
-**Surfaces (routes in this app)**
+**Surfaces (routes in this app)** — the four screens (see the root README for the product framing):
 
-- `/factory` — public single-campaign **Campaign Assembly View**.
-- `/factory/present` — presenter **code-gated** batch intake → **Factory Gallery** at `/factory/gallery/[batchId]`.
-- `/factory/admin/costs` — internal cost + latency ledger (gated by `CF_ADMIN_KEY`).
-- `/factory/replay/conference` — pinned immutable replay.
+1. `/` — **Campaign Builder**: the single-agent legacy demo (gated by `CF_ACCESS_CODE`).
+2. `/factory` — **Factory, single campaign**: public multi-agent audience path (express profile, 15-min cap) → **Campaign Assembly View** at `/factory/c/[campaignId]`.
+3. `/presenter` → `/factory/present` — **Presenter desk**: fire a 1–5 campaign batch on stage (no access code; sessions auto-issue) → **Factory Gallery** at `/factory/gallery/[batchId]`.
+4. `/live` → `/factory/replay/conference` — **Replay**: the pre-loaded 15-minute conference session (condensed playback of a pinned real recording). True real-time spectator mirror: `/factory/live`.
+
+Supporting routes: `/factory/admin/costs` — internal cost + latency ledger (gated by `CF_ADMIN_KEY`).
 
 ### Local run
 

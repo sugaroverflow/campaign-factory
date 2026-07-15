@@ -50,30 +50,26 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: unknown;
+  // Access-code lock removed for the conference (user decision, 15 Jul 2026):
+  // any visitor may open a presenter session and fire a batch. Spend remains
+  // bounded by the per-batch stop and the daily kill-switch. If a code IS
+  // configured and supplied, a wrong code still fails (so the old flow keeps
+  // working); an absent code simply proceeds.
+  let body: unknown = {};
   try {
     body = await req.json();
   } catch {
-    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+    // no body is fine — sessions no longer require a code
   }
   const code = typeof (body as { code?: unknown })?.code === "string" ? (body as { code: string }).code : "";
 
-  // Fail CLOSED when no presenter code is configured (ADR 0013: the code lives
-  // only in server config; an unset code must disable the route, not open it).
-  if (!presenterCodeRequired()) {
-    return NextResponse.json({ error: "Presenter access is not configured on this deployment." }, { status: 503 });
-  }
-  if (!code.trim()) {
-    return NextResponse.json({ error: "Enter the presenter code." }, { status: 400 });
-  }
-
-  if (!checkPresenterCode(code)) {
+  if (code.trim() && presenterCodeRequired() && !checkPresenterCode(code)) {
     recordFailure(ip);
     return NextResponse.json({ error: "That presenter code was not recognised." }, { status: 401 });
   }
 
   clearAttempts(ip);
-  const res = NextResponse.json({ ok: true, codeRequired: presenterCodeRequired() }, { status: 200 });
+  const res = NextResponse.json({ ok: true, codeRequired: false }, { status: 200 });
   res.cookies.set(PRESENTER_COOKIE, mintPresenterToken(), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

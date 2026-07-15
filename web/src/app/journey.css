@@ -62,7 +62,7 @@
 
 /* decision route / how-built viz */
 .routeviz, .howviz { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: 1rem 0 1.4rem; }
-.rnode { border: 1.5px solid var(--ink); border-radius: 999px; padding: .5rem 1.1rem; font-size: .9rem; font-weight: 500; background: #fff; text-align: center; }
+.rnode { border: 1.5px solid var(--ink); border-radius: 1.25rem; padding: .5rem 1.1rem; font-size: .9rem; font-weight: 500; background: #fff; text-align: center; max-width: 26ch; line-height: 1.35; overflow-wrap: break-word; }
 .rnode small { display: block; font-weight: 400; color: var(--muted-foreground); font-size: .72rem; }
 .rnode.dm { background: var(--ink); color: #fff; }
 .rnode.dm small { color: rgba(255, 255, 255, .7); }

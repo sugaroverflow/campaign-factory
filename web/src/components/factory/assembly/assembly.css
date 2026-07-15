@@ -152,6 +152,9 @@
   animation: fa-append 180ms var(--fa-ease-out-quart) both;
 }
 .fa-receipt__contrib { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.7rem; }
+.fa-receipt__agentToggle { background: none; border: none; padding: 0; cursor: pointer; text-align: left; }
+.fa-receipt__agentToggle[aria-expanded="true"] { flex-basis: 100%; }
+.fa-receipt__agentToggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 999px; }
 
 /* ---- accepted section content (matches .rc typography) ---- */
 .fa-content h4 { font-size: 0.95rem; margin: 1.1rem 0 0.4rem; font-weight: 600; }

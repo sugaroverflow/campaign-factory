@@ -19,8 +19,11 @@ import { clockStamp, elapsedClock } from "./format";
 import styles from "./factory.module.css";
 import type { AgentCardProps, CardActivity, CardProposalState } from "./types";
 
-const MAX_ROWS = 40; // window the tail; VM may hold more (virtualised upstream)
+const MAX_ROWS = 100; // window the tail; VM may hold more (virtualised upstream)
 const PIN_THRESHOLD_PX = 28; // manual backscroll further than this unpins autoscroll
+// Fill-mode height: tall enough that the scrolling backscroll is the dominant
+// visual element (~15 rows visible) while five columns still fit a projector.
+const FILL_HEIGHT = 340;
 
 function activityIcon(kind: CardActivity["kind"]) {
   switch (kind) {
@@ -46,7 +49,7 @@ const PROPOSAL_TONE: Record<CardProposalState["tone"], string> = {
   applied: "#8ad0ff",
 };
 
-export function AgentWorkCard({ vm, now }: AgentCardProps) {
+export function AgentWorkCard({ vm, now, fill = false }: AgentCardProps) {
   const hue = hueByIndex(vm.hue);
   const rows = vm.backscroll.slice(-MAX_ROWS);
   const activityLabel = vm.activity?.label;
@@ -81,14 +84,17 @@ export function AgentWorkCard({ vm, now }: AgentCardProps) {
 
   return (
     <div
-      className={`${styles.cardEnter} ${styles.glass}`}
+      // Perf guardrail: fill mode can mean ~80 simultaneous full cards, so the
+      // per-card backdrop blur is dropped there — the translucent background
+      // alone lets the paper brief substrate show through (compositor-cheap).
+      className={fill ? styles.cardEnter : `${styles.cardEnter} ${styles.glass}`}
       style={{
-        width: EXPANDED.w,
-        height: EXPANDED.h,
+        width: fill ? "100%" : EXPANDED.w,
+        height: fill ? FILL_HEIGHT : EXPANDED.h,
         boxSizing: "border-box",
         padding: 10,
         borderRadius: 12,
-        background: INK.surface,
+        background: fill ? "rgba(22, 24, 27, 0.86)" : INK.surface,
         border: `1px solid ${terminal ? "rgba(255,255,255,0.05)" : INK.border}`,
         borderLeft: `3px solid ${hue.edgeGlowless}`,
         color: INK.text,

@@ -1,7 +1,8 @@
-// Convenience alias: /live → the factory spectator view.
+// /live is the conference session surface: the pre-loaded 15-minute replay.
+// (The true real-time spectator view remains at /factory/live.)
 
 import { redirect } from "next/navigation";
 
 export default function LiveAlias() {
-  redirect("/factory/live");
+  redirect("/factory/replay/conference");
 }

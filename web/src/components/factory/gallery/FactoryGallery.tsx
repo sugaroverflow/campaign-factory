@@ -3,7 +3,8 @@
 // FactoryGallery — the pure renderer. It is a function of the event view model
 // (GalleryCampaign[] = W4-folded RunVMs + hue + short name) plus `now`, and does
 // NO fetching. The live gallery and W7 replay both render through this exact
-// component so live and recorded runs look identical.
+// component so live and recorded runs look identically daunting: every agent
+// workspace open at full width, all the time (no presentation tiering).
 
 import { useMemo } from "react";
 import type { JudgementAnswerRequest } from "@/lib/factory/contracts";
@@ -15,18 +16,18 @@ import {
   campaignEdges,
   type GalleryCampaign,
 } from "./viewModel";
-import { selectPresentation } from "./presentation";
 import styles from "./gallery.module.css";
 
 export interface FactoryGalleryProps {
   campaigns: GalleryCampaign[];
   now: number;
   connectionLabel?: string; // shown quietly in the ledger (e.g. "live", "recorded run")
-  /** Readable window (in `now`'s time frame) before terminal cards pill.
-   *  Condensed replay passes a value scaled by effective playback speed, since
-   *  its `now` is a compressed virtual clock. Live omits it (default). */
+  /** No-op since the always-open redesign (nothing collapses to pills any
+   *  more). Accepted for API compatibility with existing callers. */
   completionReadableMs?: number;
   onCancel?: (campaignId: string) => void; // presenter-only per-campaign cancel
+  /** No-op since judgement cards left the gallery columns (judgement UI lives
+   *  on the brief page). Accepted for API compatibility. */
   onAnswerJudgement?: (
     campaignId: string,
     judgementId: string,
@@ -35,24 +36,12 @@ export interface FactoryGalleryProps {
   ) => void;
 }
 
-export function FactoryGallery({
-  campaigns,
-  now,
-  connectionLabel,
-  completionReadableMs,
-  onCancel,
-  onAnswerJudgement,
-}: FactoryGalleryProps) {
+export function FactoryGallery({ campaigns, now, connectionLabel, onCancel }: FactoryGalleryProps) {
   const perCampaign = useMemo(
     () => campaigns.map((c) => ({ campaign: c, cards: campaignCards(c), edges: campaignEdges(c) })),
     [campaigns],
   );
 
-  const allCards = useMemo(() => perCampaign.flatMap((p) => p.cards), [perCampaign]);
-  const presentation = useMemo(
-    () => selectPresentation(allCards, { now, readableMs: completionReadableMs }),
-    [allCards, now, completionReadableMs],
-  );
   const ledger = useMemo(() => buildLedger(campaigns), [campaigns]);
 
   return (
@@ -63,11 +52,9 @@ export function FactoryGallery({
             key={campaign.run.campaignId}
             campaign={campaign}
             cards={cards}
-            presentation={presentation}
             edges={edges}
             now={now}
             onCancel={onCancel}
-            onAnswerJudgement={onAnswerJudgement}
           />
         ))}
       </div>

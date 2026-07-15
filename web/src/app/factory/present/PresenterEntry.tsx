@@ -8,7 +8,7 @@
 //     enterable. "Build campaigns" → POST /api/factory/batches (W2), stash the
 //     stream coordinates, redirect to the gallery.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RUNTIME_LIMITS, type StartBatchResponse } from "@/lib/factory/contracts";
 import { rememberBatch, type StoredBatchConnection } from "@/components/factory/gallery";
@@ -21,14 +21,37 @@ interface Idea {
 }
 
 export function PresenterEntry({ initiallyAuthed }: { initiallyAuthed: boolean }) {
+  // Access-code lock removed (15 Jul 2026): a session is issued automatically
+  // so anyone can fire an on-stage batch. Spend stays bounded server-side.
   const [authed, setAuthed] = useState(initiallyAuthed);
-  return authed ? <BatchIntake /> : <CodeGate onAuthed={() => setAuthed(true)} />;
+  return authed ? <BatchIntake /> : <AutoSession onAuthed={() => setAuthed(true)} />;
 }
 
-function CodeGate({ onAuthed }: { onAuthed: () => void }) {
-  const codeRef = useRef<HTMLInputElement | null>(null);
+function AutoSession({ onAuthed }: { onAuthed: () => void }) {
   const [error, setError] = useState<string | null>(null);
+  const codeRef = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/factory/present", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    })
+      .then((r) => {
+        if (cancelled) return;
+        if (r.ok) onAuthed();
+        else setError("Could not open a presenter session. Retry below.");
+      })
+      .catch(() => {
+        if (!cancelled) setError("Could not reach the server. Retry below.");
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,15 +62,15 @@ function CodeGate({ onAuthed }: { onAuthed: () => void }) {
       const r = await fetch("/api/factory/present", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify(code.trim() ? { code } : {}),
       });
-      if (codeRef.current) codeRef.current.value = ""; // never retain the code
+      if (codeRef.current) codeRef.current.value = "";
       if (r.ok) {
         onAuthed();
         return;
       }
       const data = (await r.json().catch(() => ({}))) as { error?: string };
-      setError(data.error || "That presenter code was not recognised.");
+      setError(data.error || "Could not open a presenter session.");
     } catch {
       setError("Could not reach the server. Try again.");
     } finally {
@@ -58,30 +81,26 @@ function CodeGate({ onAuthed }: { onAuthed: () => void }) {
   return (
     <div className="mx-auto max-w-md px-6 py-16">
       <p className="text-xs uppercase tracking-[0.08em] text-muted-foreground">Presenter</p>
-      <h1 className="mt-2 text-3xl font-medium tracking-tight">Enter the presenter code</h1>
+      <h1 className="mt-2 text-3xl font-medium tracking-tight">
+        {error ? "Open the presenter desk" : "Opening the presenter desk…"}
+      </h1>
       <p className="mt-2 text-sm text-muted-foreground">
         The presenter route runs batches of up to five campaigns. The public site runs one campaign
         at a time.
       </p>
-      <form onSubmit={submit} className="mt-6 flex flex-col gap-3">
-        <input
-          ref={codeRef}
-          type="password"
-          name="presenter-code"
-          autoComplete="off"
-          placeholder="Presenter code"
-          className="rounded-xl border border-border bg-white px-4 py-3 text-base outline-none focus:border-foreground"
-          aria-label="Presenter code"
-        />
-        {error ? <p className="text-sm text-[var(--bad)]">{error}</p> : null}
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded-full bg-foreground px-6 py-3 text-base font-medium text-background disabled:opacity-50"
-        >
-          {busy ? "Checking…" : "Continue"}
-        </button>
-      </form>
+      {error ? (
+        <form onSubmit={submit} className="mt-6 flex flex-col gap-3">
+          <input ref={codeRef} type="hidden" name="presenter-code" autoComplete="off" />
+          <p className="text-sm text-[var(--bad)]">{error}</p>
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-full bg-foreground px-6 py-3 text-base font-medium text-background disabled:opacity-50"
+          >
+            {busy ? "Retrying…" : "Retry"}
+          </button>
+        </form>
+      ) : null}
     </div>
   );
 }
