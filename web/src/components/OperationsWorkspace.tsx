@@ -698,7 +698,7 @@ export function OperationsWorkspace() {
                   key={item.id}
                   type="button"
                   onClick={() => setView(item.id)}
-                  className={`w-full rounded-[var(--r-xl)] border px-3 py-2.5 text-left motion-safe:transition-all motion-safe:duration-200 motion-safe:ease-out focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+                  className={`ops-nav-button w-full rounded-[var(--r-xl)] border px-3 text-left motion-safe:transition-all motion-safe:duration-200 motion-safe:ease-out ${ink ? "py-2" : "py-2.5"} ${
                     active
                       ? ink
                         ? "border-white/15 bg-ops-yellow text-ops-ink shadow-sm"
@@ -708,6 +708,7 @@ export function OperationsWorkspace() {
                         : "border-transparent text-foreground hover:border-border hover:bg-secondary"
                   }`}
                   aria-current={active ? "page" : undefined}
+                  aria-label={`${item.label}: ${active ? "Current view" : "Open view"}, ${item.note}${item.badge ? `, ${item.badge} item${item.badge === "1" ? "" : "s"}` : ""}`}
                 >
                   <span className="flex items-center justify-between gap-2 text-sm font-medium">
                     {item.label}
@@ -717,7 +718,9 @@ export function OperationsWorkspace() {
                       </span>
                     ) : null}
                   </span>
-                  <span className={`mt-0.5 block text-xs ${active ? (ink ? "text-ops-ink/75" : "text-background/75") : ink ? "text-white/50" : "text-muted-foreground"}`}>{item.note}</span>
+                  {ink ? null : (
+                    <span className={`mt-0.5 block text-xs ${active ? "text-background/75" : "text-muted-foreground"}`}>{item.note}</span>
+                  )}
                 </button>
               );
             })}
@@ -753,7 +756,7 @@ export function OperationsWorkspace() {
               key={segment.id}
               type="button"
               onClick={() => selectSegment(segment)}
-              className={`w-full rounded-[var(--r-2xl)] border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+              className={`w-full rounded-[var(--r-2xl)] border p-4 text-left motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ops-ink focus-visible:ring-0 ${
                 active ? "border-foreground bg-tint-blue" : "border-border bg-background hover:bg-secondary"
               }`}
               aria-pressed={active}
@@ -790,7 +793,7 @@ export function OperationsWorkspace() {
               key={draft.id}
               type="button"
               onClick={() => setActiveDraft(draft.id)}
-              className={`w-full rounded-[var(--r-xl)] border p-3 text-left motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ops-yellow/70 ${
+              className={`w-full rounded-[var(--r-xl)] border p-3 text-left motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ops-yellow focus-visible:ring-0 ${
                 state.activeDraft === draft.id ? "border-ops-yellow bg-ops-yellow text-ops-ink" : "border-white/15 bg-white/[0.07] text-white hover:bg-white/[0.12]"
               }`}
               aria-pressed={state.activeDraft === draft.id}
@@ -1484,7 +1487,7 @@ export function OperationsWorkspace() {
       </div>
 
       <footer className="border-t border-ops-line bg-ops-paper">
-        <div className="mx-auto flex max-w-[1500px] flex-col gap-3 px-4 py-4 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between lg:px-6">
+        <div className="mx-auto flex max-w-[1500px] flex-col gap-2 px-4 py-3 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between lg:px-6">
           <p>
             Local demo storage · Email provider not connected · Human approval required before local queueing.
           </p>

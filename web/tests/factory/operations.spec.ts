@@ -153,38 +153,94 @@ test("operations workbench: contacts, disabled boundaries, and legacy local stat
   await expect(page.getByText(/No result is claimed from this demo queue/)).toBeVisible();
 });
 
-test("operations workbench: desktop and narrow layouts avoid horizontal overflow", async ({ page }) => {
+test("operations workbench: all views avoid overflow across presentation sizes", async ({ page }) => {
+  const destinations = [
+    /Overview/,
+    /Campaign brief/,
+    /Objective & targets/,
+    /Power map/,
+    /Strategy & tactics/,
+    /Evidence & checks/,
+    /Audiences/,
+    /Contacts/,
+    /Drafts/,
+    /Reviews & approvals/,
+    /Outbox & schedule/,
+    /Responses & results/,
+  ];
+
   for (const viewport of [
-    { width: 1440, height: 1000 },
+    { width: 1440, height: 900 },
     { width: 1024, height: 768 },
     { width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
     await page.goto("/operations");
+
+    if (viewport.width < 1024) {
+      await page.getByText(/Operations navigation/).click();
+    }
+
+    await page.getByRole("button", { name: /Overview/ }).first().click();
     await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toBeVisible();
 
-    const metrics = await page.evaluate(() => {
-      const operationsNav = document.querySelector('nav[aria-label="Campaign operations views"]');
-      const header = document.querySelector("header");
-      const main = document.querySelector("main");
-      return {
-        bodyScrollWidth: document.body.scrollWidth,
-        viewportWidth: window.innerWidth,
-        navScrollWidth: operationsNav?.scrollWidth ?? 0,
-        navClientWidth: operationsNav?.clientWidth ?? 0,
-        headerBottom: header?.getBoundingClientRect().bottom ?? 0,
-        mainTop: main?.getBoundingClientRect().top ?? 0,
-      };
-    });
+    for (const destination of destinations) {
+      await page.getByRole("button", { name: destination }).first().click();
 
-    expect(metrics.bodyScrollWidth, `body should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(
-      metrics.viewportWidth,
-    );
-    expect(metrics.navScrollWidth, `operations nav should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(
-      metrics.navClientWidth,
-    );
-    expect(metrics.mainTop, `main should not be hidden under chrome at ${viewport.width}px`).toBeGreaterThanOrEqual(
-      metrics.headerBottom - 1,
-    );
+      const metrics = await page.evaluate(() => {
+        const operationsNav = document.querySelector('nav[aria-label="Campaign operations views"]');
+        const header = document.querySelector("header");
+        const main = document.querySelector("main");
+        return {
+          bodyScrollWidth: document.body.scrollWidth,
+          viewportWidth: window.innerWidth,
+          navScrollWidth: operationsNav?.scrollWidth ?? 0,
+          navClientWidth: operationsNav?.clientWidth ?? 0,
+          headerBottom: header?.getBoundingClientRect().bottom ?? 0,
+          mainTop: main?.getBoundingClientRect().top ?? 0,
+          activeNavCount: document.querySelectorAll('button[aria-current="page"]').length,
+        };
+      });
+
+      expect(metrics.bodyScrollWidth, `body should not overflow at ${viewport.width}px for ${destination}`).toBeLessThanOrEqual(
+        metrics.viewportWidth,
+      );
+      expect(metrics.navScrollWidth, `operations nav should not overflow at ${viewport.width}px for ${destination}`).toBeLessThanOrEqual(
+        metrics.navClientWidth,
+      );
+      expect(metrics.mainTop, `main should not be hidden under chrome at ${viewport.width}px for ${destination}`).toBeGreaterThanOrEqual(
+        metrics.headerBottom - 1,
+      );
+      expect(metrics.activeNavCount, `one active nav item should be exposed for ${destination}`).toBeGreaterThan(0);
+    }
   }
+});
+
+test("operations workbench: navigation focus and reduced motion remain accessible", async ({ page }) => {
+  await page.goto("/operations");
+
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  const focusStyle = await page.evaluate(() => {
+    const style = getComputedStyle(document.activeElement as Element);
+    return {
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      boxShadow: style.boxShadow,
+    };
+  });
+
+  expect(focusStyle.outlineStyle).not.toBe("none");
+  expect(Number.parseFloat(focusStyle.outlineWidth)).toBeGreaterThan(0);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  const reducedMotion = await page.locator(".ops-runway-stage").first().evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { transitionDuration: style.transitionDuration, transform: style.transform };
+  });
+
+  expect(reducedMotion.transitionDuration).toBe("0s");
+  expect(reducedMotion.transform).toBe("none");
 });

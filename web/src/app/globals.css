@@ -129,6 +129,12 @@
 }
 
 @layer components {
+  .ops-nav-button:focus-visible {
+    outline: 3px solid var(--ops-yellow);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 6px oklch(0.2 0.025 210 / 24%);
+  }
+
   .ops-runway {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -153,7 +159,7 @@
 
   .ops-runway-stage:last-child { border-right: 0; }
   .ops-runway-stage:hover { transform: translateY(-2px); }
-  .ops-runway-stage:focus-visible { outline: 3px solid oklch(0.74 0.13 88 / 70%); outline-offset: -3px; }
+  .ops-runway-stage:focus-visible { outline: 3px solid oklch(0.74 0.13 88 / 82%); outline-offset: -3px; }
   .ops-stage-complete { background: var(--ops-mint); }
   .ops-stage-current { background: var(--ops-yellow); }
   .ops-stage-blocked { background: var(--ops-coral); }
