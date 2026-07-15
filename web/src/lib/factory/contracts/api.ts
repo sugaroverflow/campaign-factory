@@ -84,6 +84,7 @@ export const STREAM_TOKEN_HEADER = "x-factory-stream-token";
 export interface StartBatchRequest {
   intakes: CampaignIntake[]; // length 1–5; a sixth is rejected, not queued
   environmentId: string;
+  profile?: RunProfile; // default "full"; "express" runs every campaign on the audience graph
 }
 
 export interface StartRunResponse {

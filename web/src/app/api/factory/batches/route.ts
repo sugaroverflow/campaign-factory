@@ -54,9 +54,13 @@ export async function POST(req: Request) {
     return { problem: it.problem.trim(), place: it.place.trim() };
   });
 
+  const profileRaw = (b as { profile?: unknown }).profile;
+  const profile = profileRaw === "express" ? "express" : "full";
+
   const forwarded = await forwardSigned("POST", "/batches", {
     intakes: cleaned,
     environmentId: factoryEnvId(),
+    profile,
   });
   return NextResponse.json(forwarded.body, { status: forwarded.status });
 }

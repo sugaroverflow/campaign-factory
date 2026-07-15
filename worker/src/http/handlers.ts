@@ -98,6 +98,10 @@ export async function handleStartBatch(body: unknown): Promise<HandlerResult> {
       return bad(400, `intake[${i}] requires non-empty problem and place`);
     }
   }
+  const profile = b.profile ?? "full";
+  if (profile !== "full" && profile !== "express") {
+    return bad(400, `unknown profile '${String(b.profile)}'`);
+  }
 
   const s = sql();
   const batchId = await store.createBatch(s, {
@@ -116,15 +120,16 @@ export async function handleStartBatch(body: unknown): Promise<HandlerResult> {
       problem: intake.problem.trim(),
       place: intake.place.trim(),
       status: "queued",
+      meta: { profile },
     });
     await store.appendEvent(s, {
       campaignId,
       batchId,
       type: "run.queued",
       visibility: "public",
-      payload: { summary: "Run queued (presenter batch)" },
+      payload: { summary: "Run queued (presenter batch)", detail: { profile } },
     });
-    await enqueueRun({ campaignId, batchId });
+    await enqueueRun({ campaignId, batchId, profile });
     const { streamToken, streamUrl } = streamUrlFor(campaignId);
     campaigns.push({ campaignId, streamToken, streamUrl });
   }
