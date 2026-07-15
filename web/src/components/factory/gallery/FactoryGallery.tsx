@@ -57,7 +57,6 @@ export function FactoryGallery({
 
   return (
     <div>
-      <FactoryLedger counts={ledger} connectionLabel={connectionLabel} />
       <div className={styles.field}>
         {perCampaign.map(({ campaign, cards, edges }) => (
           <CampaignColumn
@@ -72,6 +71,7 @@ export function FactoryGallery({
           />
         ))}
       </div>
+      <FactoryLedger counts={ledger} connectionLabel={connectionLabel} />
     </div>
   );
 }
