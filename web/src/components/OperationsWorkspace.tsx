@@ -41,6 +41,9 @@ type DemoState = {
   mode: Mode;
   activeDraft: DraftId;
   activeView: ViewId;
+  contactFilter: SegmentId | "all";
+  contactReadinessFilter: "all" | "ready" | "review" | "blocked";
+  scheduleIntent: "after_approval" | "tomorrow_morning" | "school_run";
   queuedAt: string | null;
   activity: Activity[];
 };
@@ -67,6 +70,19 @@ type DraftLibraryItem = {
   audience: string;
   requires: string;
   outline: string[];
+};
+
+type ContactFixture = {
+  id: string;
+  name: string;
+  segmentId: SegmentId;
+  segment: string;
+  role: string;
+  readiness: "Ready fixture" | "Review first" | "Blocked";
+  consent: string;
+  check: string;
+  nextAction: string;
+  owner: string;
 };
 
 const segments: Segment[] = [
@@ -102,11 +118,79 @@ const segments: Segment[] = [
   },
 ];
 
-const contacts = [
-  { name: "A. Patel", segment: "School-gate families", readiness: "Ready fixture", check: "Consent source needs real import", owner: "Campaigner" },
-  { name: "M. Davies", segment: "Nearby ward parents", readiness: "Ready fixture", check: "Postcode relevance is fixture-only", owner: "Campaigner" },
-  { name: "Clean Air Leicester", segment: "Local allies", readiness: "Review first", check: "Confirm named contact before real use", owner: "Local organiser" },
-  { name: "Ward casework watcher", segment: "Local allies", readiness: "Not ready", check: "Import and consent path coming soon", owner: "Campaigner" },
+const contacts: ContactFixture[] = [
+  {
+    id: "patel",
+    name: "A. Patel",
+    segmentId: "school_gates",
+    segment: "School-gate families",
+    role: "Parent supporter",
+    readiness: "Ready fixture",
+    consent: "Fixture opt-in noted; real consent record not imported",
+    check: "Confirm current school-street timing before real use",
+    nextAction: "Good for reviewed supporter email in this local demo",
+    owner: "Campaigner",
+  },
+  {
+    id: "johnson",
+    name: "R. Johnson",
+    segmentId: "school_gates",
+    segment: "School-gate families",
+    role: "Crossing volunteer",
+    readiness: "Review first",
+    consent: "Fixture relationship only",
+    check: "Ask whether they want a public quote before escalation",
+    nextAction: "Keep in review set; do not use for press outline yet",
+    owner: "Local organiser",
+  },
+  {
+    id: "davies",
+    name: "M. Davies",
+    segmentId: "ward_parents",
+    segment: "Nearby ward parents",
+    role: "Neighbourhood parent",
+    readiness: "Ready fixture",
+    consent: "Fixture postcode-level relevance; live import missing",
+    check: "Verify ward relevance before a real provider list exists",
+    nextAction: "Useful for broader supporter framing after review",
+    owner: "Campaigner",
+  },
+  {
+    id: "hussain",
+    name: "S. Hussain",
+    segmentId: "ward_parents",
+    segment: "Nearby ward parents",
+    role: "Resident supporter",
+    readiness: "Blocked",
+    consent: "No live consent source in this demo",
+    check: "Needs real import and deduplication before use",
+    nextAction: "Exclude from any provider list until import exists",
+    owner: "Campaigner",
+  },
+  {
+    id: "clean-air",
+    name: "Clean Air Leicester",
+    segmentId: "local_allies",
+    segment: "Local allies and councillor watchers",
+    role: "Ally organisation",
+    readiness: "Review first",
+    consent: "Organisation relationship is fixture-only",
+    check: "Confirm named contact and escalation appetite before real use",
+    nextAction: "Ask to review process risks before public escalation",
+    owner: "Local organiser",
+  },
+  {
+    id: "casework",
+    name: "Ward casework watcher",
+    segmentId: "local_allies",
+    segment: "Local allies and councillor watchers",
+    role: "Council-process watcher",
+    readiness: "Blocked",
+    consent: "Import and permission path coming soon",
+    check: "Find a named, permissioned contact before outreach",
+    nextAction: "Use as a reminder, not as a contact record",
+    owner: "Campaigner",
+  },
 ];
 
 const draftLibrary: DraftLibraryItem[] = [
@@ -296,6 +380,9 @@ const initialState: DemoState = {
   mode: "compose",
   activeDraft: "supporter_email",
   activeView: "overview",
+  contactFilter: "all",
+  contactReadinessFilter: "all",
+  scheduleIntent: "after_approval",
   queuedAt: null,
   activity: [{ id: "seed", label: "Demo workspace loaded with seeded campaign brief and local fixture contacts." }],
 };
@@ -333,6 +420,16 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
       ? (parsed.activeDraft as DraftId)
       : initialState.activeDraft,
     activeView: viewIds.includes(parsed.activeView as ViewId) ? (parsed.activeView as ViewId) : "overview",
+    contactFilter:
+      parsed.contactFilter === "all" || segments.some((segment) => segment.id === parsed.contactFilter)
+        ? (parsed.contactFilter as SegmentId | "all")
+        : initialState.contactFilter,
+    contactReadinessFilter: ["all", "ready", "review", "blocked"].includes(parsed.contactReadinessFilter || "")
+      ? (parsed.contactReadinessFilter as DemoState["contactReadinessFilter"])
+      : initialState.contactReadinessFilter,
+    scheduleIntent: ["after_approval", "tomorrow_morning", "school_run"].includes(parsed.scheduleIntent || "")
+      ? (parsed.scheduleIntent as DemoState["scheduleIntent"])
+      : initialState.scheduleIntent,
     activity: parsed.activity?.length ? parsed.activity : initialState.activity,
     mode: parsed.mode === "preview" ? "preview" : "compose",
   };
@@ -402,6 +499,24 @@ export function OperationsWorkspace() {
   const reviewBlocked = !canRequestReview;
   const queuedCount = state.status === "queued" ? "1" : undefined;
   const reviewBadge = state.status === "review" ? "1" : undefined;
+  const readinessMatches = (contact: ContactFixture) => {
+    if (state.contactReadinessFilter === "all") return true;
+    if (state.contactReadinessFilter === "ready") return contact.readiness === "Ready fixture";
+    if (state.contactReadinessFilter === "review") return contact.readiness === "Review first";
+    return contact.readiness === "Blocked";
+  };
+  const filteredContacts = contacts.filter(
+    (contact) => (state.contactFilter === "all" || contact.segmentId === state.contactFilter) && readinessMatches(contact),
+  );
+  const selectedSegmentContacts = contacts.filter((contact) => contact.segmentId === selected.id);
+  const readyContactCount = contacts.filter((contact) => contact.readiness === "Ready fixture").length;
+  const reviewContactCount = contacts.filter((contact) => contact.readiness === "Review first").length;
+  const blockedContactCount = contacts.filter((contact) => contact.readiness === "Blocked").length;
+  const scheduleCopy: Record<DemoState["scheduleIntent"], string> = {
+    after_approval: "Hold until a campaigner connects a provider after review",
+    tomorrow_morning: "Demo intent: next school-run morning after provider setup",
+    school_run: "Demo intent: school-run reminder window after consent import",
+  };
 
   const navGroups: { title: string; items: NavItem[] }[] = [
     {
@@ -465,6 +580,7 @@ export function OperationsWorkspace() {
     setState((current) => ({
       ...current,
       selectedSegment: segment.id,
+      contactFilter: segment.id,
       status: current.status === "approved" || current.status === "queued" ? "draft" : current.status,
       queuedAt: current.status === "queued" ? null : current.queuedAt,
       activity: [record(`Selected audience segment: ${segment.name}.`), ...current.activity].slice(0, 7),
@@ -797,7 +913,7 @@ export function OperationsWorkspace() {
               <div><span className="md:hidden font-medium">Communication: </span>{state.subject}</div>
               <div><span className="md:hidden font-medium">Audience: </span>{selected.name}</div>
               <div><span className="md:hidden font-medium">State: </span>Queued for demo</div>
-              <div><span className="md:hidden font-medium">Local timing: </span>{formatQueuedTime(state.queuedAt)}</div>
+              <div><span className="md:hidden font-medium">Local timing: </span>{formatQueuedTime(state.queuedAt)} · {scheduleCopy[state.scheduleIntent]}</div>
             </div>
           ) : (
             <div className="px-4 py-6 text-sm text-muted-foreground">
@@ -821,6 +937,23 @@ export function OperationsWorkspace() {
         <p className="mt-3 text-sm text-muted-foreground">
           Production scheduling is not connected. This workbench can show what a campaigner intends to prepare, but it cannot place work onto a live provider calendar.
         </p>
+        <div className="mt-5 space-y-2">
+          <Label htmlFor="operations-schedule-intent">Local schedule intent</Label>
+          <select
+            id="operations-schedule-intent"
+            value={state.scheduleIntent}
+            onChange={(event) => setState((current) => ({ ...current, scheduleIntent: event.target.value as DemoState["scheduleIntent"] }))}
+            className="h-11 w-full rounded-full border border-border bg-background px-4 text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <option value="after_approval">Hold after approval</option>
+            <option value="tomorrow_morning">Next school-run morning</option>
+            <option value="school_run">School-run reminder window</option>
+          </select>
+          <p className="text-sm text-muted-foreground">{scheduleCopy[state.scheduleIntent]}</p>
+        </div>
+        <Button type="button" variant="outline" disabled className="mt-4" title="Production scheduling is coming soon and is not connected in this demo.">
+          Production scheduler · Coming soon
+        </Button>
         <Button type="button" variant="ghost" className="mt-5" onClick={reset}>
           Reset demo state
         </Button>
@@ -932,41 +1065,147 @@ export function OperationsWorkspace() {
   );
 
   const renderContacts = () => (
-    <Panel>
-      <SmallLabel>Contacts</SmallLabel>
-      <h2 className="mt-2 text-3xl font-medium tracking-tight">Fixture-backed contact readiness</h2>
-      <p className="mt-3 text-muted-foreground">
-        This table is a designed local state for review. Real import, consent reconciliation, deduplication, and provider sync are Coming soon.
-      </p>
-      <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-border">
-        <div className="hidden grid-cols-[0.8fr_1fr_0.7fr_1fr_0.7fr] gap-3 border-b border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground md:grid">
-          <span>Name</span><span>Segment</span><span>Readiness</span><span>Check</span><span>Owner</span>
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <Panel>
+        <SmallLabel>Contacts</SmallLabel>
+        <h2 className="mt-2 text-3xl font-medium tracking-tight">Fixture-backed contact readiness</h2>
+        <p className="mt-3 max-w-3xl text-muted-foreground">
+          This work area helps a campaigner see which local fixture contacts are usable for the demo draft, which need a check, and which are blocked until real import exists.
+        </p>
+        <div className="mt-5 grid gap-3 md:grid-cols-3" aria-label="Contact readiness summary">
+          {[
+            { label: "Ready fixtures", count: readyContactCount, detail: "Can be used in reviewed local demo copy" },
+            { label: "Review first", count: reviewContactCount, detail: "Needs a human consent or claim check" },
+            { label: "Blocked", count: blockedContactCount, detail: "Requires real import before use" },
+          ].map((item) => (
+            <div key={item.label} className="rounded-[var(--r-xl)] border border-border bg-secondary/55 p-4">
+              <p className="text-2xl font-medium">{item.count}</p>
+              <p className="mt-1 text-sm font-semibold">{item.label}</p>
+              <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>
+            </div>
+          ))}
         </div>
-        {contacts.map((contact) => (
-          <div key={contact.name} className="grid gap-2 border-b border-border px-4 py-4 text-sm last:border-0 md:grid-cols-[0.8fr_1fr_0.7fr_1fr_0.7fr]">
-            <div><span className="md:hidden font-medium">Name: </span>{contact.name}</div>
-            <div><span className="md:hidden font-medium">Segment: </span>{contact.segment}</div>
-            <div><span className="md:hidden font-medium">Readiness: </span>{contact.readiness}</div>
-            <div><span className="md:hidden font-medium">Check: </span>{contact.check}</div>
-            <div><span className="md:hidden font-medium">Owner: </span>{contact.owner}</div>
+
+        <div className="mt-6 grid gap-3 rounded-[var(--r-2xl)] border border-border bg-secondary/45 p-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="operations-contact-segment">Segment filter</Label>
+            <select
+              id="operations-contact-segment"
+              value={state.contactFilter}
+              onChange={(event) => setState((current) => ({ ...current, contactFilter: event.target.value as DemoState["contactFilter"] }))}
+              className="h-11 w-full rounded-full border border-border bg-background px-4 text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="all">All fixture contacts</option>
+              {segments.map((segment) => (
+                <option key={segment.id} value={segment.id}>{segment.name}</option>
+              ))}
+            </select>
           </div>
-        ))}
-      </div>
-    </Panel>
+          <div className="space-y-2">
+            <Label htmlFor="operations-contact-readiness">Readiness filter</Label>
+            <select
+              id="operations-contact-readiness"
+              value={state.contactReadinessFilter}
+              onChange={(event) => setState((current) => ({ ...current, contactReadinessFilter: event.target.value as DemoState["contactReadinessFilter"] }))}
+              className="h-11 w-full rounded-full border border-border bg-background px-4 text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <option value="all">All readiness states</option>
+              <option value="ready">Ready fixtures</option>
+              <option value="review">Review first</option>
+              <option value="blocked">Blocked until import</option>
+            </select>
+          </div>
+          <p className="text-sm text-muted-foreground md:col-span-2">
+            Real contact import, deduplication, consent reconciliation, and provider sync are <span className="font-medium text-foreground">Coming soon</span>; these rows are local fixture records only.
+          </p>
+        </div>
+
+        <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-border">
+          <div className="hidden grid-cols-[0.8fr_0.8fr_0.75fr_1fr_1fr_0.65fr] gap-3 border-b border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground lg:grid">
+            <span>Name</span><span>Segment</span><span>Readiness</span><span>Consent boundary</span><span>Next check</span><span>Owner</span>
+          </div>
+          {filteredContacts.length ? filteredContacts.map((contact) => (
+            <div key={contact.id} className="grid gap-2 border-b border-border px-4 py-4 text-sm last:border-0 lg:grid-cols-[0.8fr_0.8fr_0.75fr_1fr_1fr_0.65fr]">
+              <div><span className="font-medium lg:hidden">Name: </span><span className="font-medium">{contact.name}</span><p className="text-xs text-muted-foreground">{contact.role}</p></div>
+              <div><span className="font-medium lg:hidden">Segment: </span>{contact.segment}</div>
+              <div><span className="font-medium lg:hidden">Readiness: </span>{contact.readiness}</div>
+              <div className="text-muted-foreground"><span className="font-medium text-foreground lg:hidden">Consent boundary: </span>{contact.consent}</div>
+              <div className="text-muted-foreground"><span className="font-medium text-foreground lg:hidden">Next check: </span>{contact.check}</div>
+              <div><span className="font-medium lg:hidden">Owner: </span>{contact.owner}</div>
+            </div>
+          )) : (
+            <div className="px-4 py-6 text-sm text-muted-foreground">
+              No fixture contacts match those filters. Clear a filter or use this as a reminder that real import is not connected.
+            </div>
+          )}
+        </div>
+      </Panel>
+      <Panel>
+        <SmallLabel>Selected audience check</SmallLabel>
+        <h3 className="mt-2 text-2xl font-medium">{selected.name}</h3>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {selectedSegmentContacts.filter((contact) => contact.readiness === "Ready fixture").length}/{selectedSegmentContacts.length} fixture contacts in this segment are ready enough for the local supporter email after review.
+        </p>
+        <div className="mt-5 space-y-3 text-sm">
+          {selectedSegmentContacts.map((contact) => (
+            <div key={contact.id} className="rounded-[var(--r-xl)] border border-border p-3">
+              <p className="font-medium">{contact.name} · {contact.readiness}</p>
+              <p className="mt-1 text-muted-foreground">{contact.nextAction}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-5 flex flex-col gap-3">
+          {goButton("audiences", "Change selected audience")}
+          {goButton("drafts", "Use in supporter draft")}
+          <Button type="button" variant="outline" disabled title="Real import is coming soon; this demo has no provider or consent database.">
+            Import contacts · Coming soon
+          </Button>
+        </div>
+      </Panel>
+    </div>
   );
 
   const renderResponses = () => (
-    <Panel>
-      <SmallLabel>Responses & results</SmallLabel>
-      <h2 className="mt-2 text-3xl font-medium tracking-tight">Coming soon: response handling after a real provider exists</h2>
-      <p className="mt-3 max-w-3xl text-muted-foreground">
-        There are no fabricated analytics here. A future connected version could show replies, bounce checks, and results after a provider integration and consent-safe import exist.
-      </p>
-      <div className="mt-6 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-secondary p-5">
-        <p className="font-medium">Not connected</p>
-        <p className="mt-2 text-sm text-muted-foreground">No live provider, no response stream, and no external measurement is used in this demo workspace.</p>
-      </div>
-    </Panel>
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <Panel>
+        <SmallLabel>Responses & results</SmallLabel>
+        <h2 className="mt-2 text-3xl font-medium tracking-tight">Coming soon: response handling after a real provider exists</h2>
+        <p className="mt-3 max-w-3xl text-muted-foreground">
+          There are no fabricated analytics here. This page records the boundary and the review questions that would matter once a provider, consent-safe import, and response stream exist.
+        </p>
+        <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-border">
+          <div className="hidden grid-cols-[0.8fr_1fr_0.9fr] gap-3 border-b border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground md:grid">
+            <span>Future signal</span><span>Why it matters</span><span>Current boundary</span>
+          </div>
+          {[
+            { signal: "Replies", why: "Would show supporter questions or local stories needing a human response.", boundary: "No provider or inbox stream is connected." },
+            { signal: "List health", why: "Would help spot bounce and consent issues after a real import.", boundary: "No live list, bounce, or suppression data exists." },
+            { signal: "Campaign outcome notes", why: "Would connect communications to the council decision route.", boundary: "No result is claimed from this demo queue." },
+          ].map((item) => (
+            <div key={item.signal} className="grid gap-2 border-b border-border px-4 py-4 text-sm last:border-0 md:grid-cols-[0.8fr_1fr_0.9fr]">
+              <div><span className="font-medium md:hidden">Future signal: </span><span className="font-medium">{item.signal}</span></div>
+              <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">Why it matters: </span>{item.why}</div>
+              <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">Current boundary: </span>{item.boundary}</div>
+            </div>
+          ))}
+        </div>
+      </Panel>
+      <Panel>
+        <SmallLabel>Empty state</SmallLabel>
+        <h3 className="mt-2 text-2xl font-medium">Not connected</h3>
+        <p className="mt-3 text-sm text-muted-foreground">
+          No live provider, response stream, external measurement, or production result tracking is used in this demo workspace.
+        </p>
+        <div className="mt-5 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-secondary p-5 text-sm">
+          <p className="font-medium">What campaigners can do now</p>
+          <p className="mt-2 text-muted-foreground">Use Reviews and Outbox to prepare a locally queued item, then stop before any real outreach.</p>
+        </div>
+        <div className="mt-5 flex flex-col gap-3">
+          {goButton("reviews", "Open approval gate")}
+          {goButton("outbox", "Inspect local queue")}
+        </div>
+      </Panel>
+    </div>
   );
 
   const viewContent: Record<ViewId, React.ReactNode> = {

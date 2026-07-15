@@ -52,9 +52,14 @@ test("operations workbench: cross-view local review and demo queue flow", async 
   await page.getByRole("button", { name: "Approve as human reviewer" }).click();
   await expect(page.getByRole("heading", { name: "Approved by human" })).toBeVisible();
 
+  await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
+  await page.getByLabel("Local schedule intent").selectOption("tomorrow_morning");
+  await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();
+
   await page.getByRole("button", { name: "Queue locally for demo" }).click();
   await expect(page.getByRole("heading", { name: "One local queue item" })).toBeVisible();
   await expect(page.getByText(/It is not connected to an email provider/)).toBeVisible();
+  await expect(page.getByText("Demo intent: next school-run morning after provider setup", { exact: true })).toBeVisible();
 
   const provider = page.getByRole("button", { name: /Email provider · Coming soon/ });
   await expect(provider).toBeDisabled();
@@ -63,6 +68,7 @@ test("operations workbench: cross-view local review and demo queue flow", async 
   await page.reload();
   await expect(page.getByRole("heading", { name: "One local queue item" })).toBeVisible();
   await expect(page.getByText("Back the permanent school street before the order lapses")).toBeVisible();
+  await expect(page.getByText("Demo intent: next school-run morning after provider setup", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: "Reset demo state" }).last().click();
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toBeVisible();
@@ -97,6 +103,40 @@ test("operations workbench: all sidebar destinations are navigable and designed"
   await page.getByRole("button", { name: /Campaign brief/ }).first().click();
   await expect(page.getByText("What the fixture says", { exact: true })).toBeVisible();
   await expect(page.getByText("Operational use", { exact: true })).toBeVisible();
+});
+
+test("operations workbench: contacts, disabled boundaries, and legacy local state migration", async ({ page }) => {
+  await page.goto("/operations");
+  await page.evaluate(() => {
+    localStorage.removeItem("cf_operations_demo_v3");
+    localStorage.setItem(
+      "cf_operations_demo_v1",
+      JSON.stringify({
+        selectedSegment: "local_allies",
+        subject: "Legacy supporter subject still migrates",
+        body: "This is a long enough legacy message body to prove the old local storage shape can still load into the expanded workbench without losing safe state.",
+        status: "review",
+        mode: "preview",
+        activeView: "contacts",
+        queuedAt: null,
+        activity: [{ id: "legacy", label: "Legacy local state loaded for migration check." }],
+      }),
+    );
+  });
+  await page.reload();
+
+  await expect(page.getByRole("heading", { name: "Fixture-backed contact readiness" })).toBeVisible();
+  await expect(page.getByText("Clean Air Leicester", { exact: true })).toBeVisible();
+  await page.getByLabel("Readiness filter").selectOption("blocked");
+  await expect(page.getByText("Ward casework watcher", { exact: true })).toBeVisible();
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+  await page.getByLabel("Segment filter").selectOption("all");
+  await expect(page.getByText("S. Hussain", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Import contacts · Coming soon/ })).toBeDisabled();
+
+  await page.getByRole("button", { name: /Responses & results/ }).first().click();
+  await expect(page.getByText(/No live provider, response stream, external measurement/)).toBeVisible();
+  await expect(page.getByText(/No result is claimed from this demo queue/)).toBeVisible();
 });
 
 test("operations workbench: desktop and narrow layouts avoid horizontal overflow", async ({ page }) => {
