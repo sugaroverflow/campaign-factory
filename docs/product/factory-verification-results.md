@@ -45,6 +45,10 @@ Playwright: presenter-batch spec **passed twice** against local mock (~3 min/run
 4. `source.search.started` ≫ `completed` asymmetry persists (41/11) with zero failures — likely an event-accounting artifact of code-execution-filtered searches, cosmetic but misleading in the ledger.
 5. Cost passed the $4 warning (~29 min); guard events fired correctly. $8 hard stop unexercised so far.
 
+## Preview infrastructure batch (mock, $0)
+
+Playwright presenter-batch spec **PASSED in 3.8 min against the Vercel preview** (`campaign-factory-git-factory-multi-agent-build-campaign-lab.vercel.app`) with the worker deployed on Railway: presenter code gate → five-campaign intake → gallery anchors + live Agent Work Cards over cross-origin SSE → five terminal receipts → brief with 11 sections + 9 document cards; all agent names roster-valid; no fabrication tells. Summary: `web/test-results/batch-summary-2026-07-15T12-28-49-700Z.json`. Also fixed en route: the presenter route failed OPEN when no code was configured on the public preview (now 503, fail-closed).
+
 ## Pending (appended as they complete)
 
 - Live run #2 after the tool-loop fix (clean gate measurement).
