@@ -14,6 +14,16 @@ test("operations workbench: cross-view local review and demo queue flow", async 
 
   await page.getByRole("button", { name: /Drafts/ }).first().click();
   await expect(page.getByRole("heading", { name: /Parent update for nearby ward parents/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Supporter email/ })).toBeVisible();
+  await page.getByRole("button", { name: /Decision-maker letter/ }).click();
+  await expect(page.getByRole("heading", { name: "Decision-maker letter" }).first()).toBeVisible();
+  await expect(page.getByText(/formal decision path is checked/i).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mark ready for review" })).toBeDisabled();
+  await page.getByRole("button", { name: /Press pitch/ }).click();
+  await expect(page.getByRole("heading", { name: "Press pitch", level: 2 })).toBeVisible();
+  await expect(page.getByText(/Media prompt for later escalation/i).nth(1)).toBeVisible();
+  await page.getByRole("button", { name: /Supporter email/ }).click();
+  await expect(page.getByLabel("Subject")).toBeVisible();
 
   const subject = page.getByLabel("Subject");
   const message = page.getByLabel("Message");
@@ -58,6 +68,35 @@ test("operations workbench: cross-view local review and demo queue flow", async 
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toBeVisible();
   await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
   await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+});
+
+test("operations workbench: all sidebar destinations are navigable and designed", async ({ page }) => {
+  await page.goto("/operations");
+
+  const destinations = [
+    { nav: /Overview/, heading: /Make the St John the Baptist school street/i },
+    { nav: /Campaign brief/, heading: "Campaign brief" },
+    { nav: /Objective & targets/, heading: "Objective & targets" },
+    { nav: /Power map/, heading: "Power map" },
+    { nav: /Strategy & tactics/, heading: "Strategy & tactics" },
+    { nav: /Evidence & checks/, heading: "Evidence & checks" },
+    { nav: /Audiences/, heading: "Choose the contact set" },
+    { nav: /Contacts/, heading: "Fixture-backed contact readiness" },
+    { nav: /Drafts/, heading: "Communications" },
+    { nav: /Reviews & approvals/, heading: "Human approval gate" },
+    { nav: /Outbox & schedule/, heading: /Nothing queued yet|One local queue item/ },
+    { nav: /Responses & results/, heading: /Coming soon: response handling/ },
+  ];
+
+  for (const destination of destinations) {
+    await page.getByRole("button", { name: destination.nav }).first().click();
+    await expect(page.getByRole("heading", { name: destination.heading }).first()).toBeVisible();
+    await expect(page.locator("main")).not.toContainText("Lorem");
+  }
+
+  await page.getByRole("button", { name: /Campaign brief/ }).first().click();
+  await expect(page.getByText("What the fixture says", { exact: true })).toBeVisible();
+  await expect(page.getByText("Operational use", { exact: true })).toBeVisible();
 });
 
 test("operations workbench: desktop and narrow layouts avoid horizontal overflow", async ({ page }) => {

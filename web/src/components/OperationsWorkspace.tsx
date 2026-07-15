@@ -7,10 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-const STORAGE_KEY = "cf_operations_demo_v2";
-const LEGACY_STORAGE_KEY = "cf_operations_demo_v1";
+const STORAGE_KEY = "cf_operations_demo_v3";
+const LEGACY_STORAGE_KEYS = ["cf_operations_demo_v2", "cf_operations_demo_v1"];
 
 type SegmentId = "school_gates" | "ward_parents" | "local_allies";
+type DraftId = "supporter_email" | "decision_maker_letter" | "press_pitch";
 type DraftStatus = "draft" | "review" | "approved" | "queued";
 type Mode = "compose" | "preview";
 type ViewId =
@@ -38,6 +39,7 @@ type DemoState = {
   body: string;
   status: DraftStatus;
   mode: Mode;
+  activeDraft: DraftId;
   activeView: ViewId;
   queuedAt: string | null;
   activity: Activity[];
@@ -55,6 +57,17 @@ type Segment = {
 };
 
 type NavItem = { id: ViewId; label: string; badge?: string; note: string };
+type CampaignContextRow = { label: string; detail: string; use: string; owner: string };
+type DraftLibraryItem = {
+  id: DraftId;
+  title: string;
+  channel: string;
+  state: string;
+  detail: string;
+  audience: string;
+  requires: string;
+  outline: string[];
+};
 
 const segments: Segment[] = [
   {
@@ -96,11 +109,168 @@ const contacts = [
   { name: "Ward casework watcher", segment: "Local allies", readiness: "Not ready", check: "Import and consent path coming soon", owner: "Campaigner" },
 ];
 
-const draftLibrary = [
-  { title: "Supporter email", state: "Editable", detail: "Working local draft for the selected audience." },
-  { title: "Decision-maker letter", state: "Staged fixture", detail: "Outline only until the formal decision-route claims are checked." },
-  { title: "Press pitch", state: "Staged fixture", detail: "Useful prompt for later media work; no newsroom contact is connected." },
+const draftLibrary: DraftLibraryItem[] = [
+  {
+    id: "supporter_email",
+    title: "Supporter email",
+    channel: "Email",
+    state: "Editable",
+    detail: "Working local draft for the selected audience, with compose and preview saved in this browser.",
+    audience: "Selected audience segment",
+    requires: "Human message review, evidence warnings understood, and explicit approval before local queueing.",
+    outline: ["Invite local supporters to back the permanent school street.", "Ask for one local reason families support the change.", "Keep council timing and consent checks visible before real use."],
+  },
+  {
+    id: "decision_maker_letter",
+    title: "Decision-maker letter",
+    channel: "Letter",
+    state: "Staged fixture",
+    detail: "Structured outline for the council route; not editable until the formal decision path is checked.",
+    audience: "Council decision route, exact recipient not verified",
+    requires: "Confirm order status, committee or officer ownership, legal wording, and sign-off route.",
+    outline: ["Name the narrow ask: permanent, enforceable school-street decision.", "Show parent support only after consent-safe evidence is ready.", "Request the documented next step without overstating authority."],
+  },
+  {
+    id: "press_pitch",
+    title: "Press pitch",
+    channel: "Media",
+    state: "Staged fixture",
+    detail: "Media prompt for later escalation; no newsroom contact list or provider is connected.",
+    audience: "Local media and community reporters, not imported",
+    requires: "Verify public claims, decide whether escalation helps the strategy, and confirm media contacts.",
+    outline: ["Lead with safer school-run streets and the pending decision moment.", "Offer a campaigner voice only after human consent.", "Avoid implying council failure until evidence is checked."],
+  },
 ];
+
+const campaignContext = {
+  brief: {
+    title: "Campaign brief",
+    intro:
+      "Seeded school-street campaign brief, shown as fixture context rather than verified current research. Each section points to the operational work it should influence.",
+    rows: [
+      {
+        label: "Outcome",
+        detail: "Make the school street outside St John the Baptist CofE Primary permanent and enforced.",
+        use: "Keep the ask narrow in supporter copy and the later decision-maker letter.",
+        owner: "Campaigner",
+      },
+      {
+        label: "Place",
+        detail: "Leicester; school-run streets around St John the Baptist CofE Primary.",
+        use: "Anchor audience selection to families and nearby ward parents before broader ally outreach.",
+        owner: "Local organiser",
+      },
+      {
+        label: "Narrative",
+        detail: "Safer routes, cleaner air, and a council decision route parents can understand before the order lapses.",
+        use: "Use this language in the editable supporter email, with the timing claim checked first.",
+        owner: "Reviewer",
+      },
+      {
+        label: "Provenance",
+        detail: "Local fixture state for the OpenClaw Build Reveal; campaigners must verify current council process before real use.",
+        use: "Keep demo/local truth labels visible across review and queue steps.",
+        owner: "Workbench",
+      },
+    ],
+  },
+  objectives: {
+    title: "Objective & targets",
+    intro: "The target map keeps political decisions human-readable before drafting or approval.",
+    rows: [
+      {
+        label: "Primary objective",
+        detail: "Secure a permanent, enforced school-street decision before the experimental order lapses.",
+        use: "Use as the subject-line spine and as the first review check.",
+        owner: "Campaigner",
+      },
+      {
+        label: "Decision-maker",
+        detail: "Leicester City Council transport decision route; exact committee/officer path needs verification.",
+        use: "Blocks the staged decision-maker letter until the formal route is checked.",
+        owner: "Reviewer",
+      },
+      {
+        label: "Influence targets",
+        detail: "School leadership, ward councillors, nearby parents, clean-air allies, and local media only after review.",
+        use: "Shapes the audience sequence and explains why supporter email comes before press work.",
+        owner: "Local organiser",
+      },
+    ],
+  },
+  power: {
+    title: "Power map",
+    intro: "A plain map of who can help, block, or be persuaded without pretending fixture contacts are live campaign intelligence.",
+    rows: [
+      {
+        label: "Allies",
+        detail: "School-gate families, clean-air supporters, and councillor watchers who can validate local concerns.",
+        use: "Start with the selected audience, then ask allies to check process risks before escalation.",
+        owner: "Campaigner",
+      },
+      {
+        label: "Persuadables",
+        detail: "Nearby parents and ward residents affected by traffic but not yet involved.",
+        use: "Use the ward-parents segment when copy needs broader neighbourhood framing.",
+        owner: "Local organiser",
+      },
+      {
+        label: "Potential blockers",
+        detail: "Implementation cost concerns, enforcement doubts, and objections from through-traffic users.",
+        use: "Keep the review gate focused on claims that could be challenged publicly.",
+        owner: "Reviewer",
+      },
+    ],
+  },
+  strategy: {
+    title: "Strategy & tactics",
+    intro: "The campaign sequence connects the brief to reviewable communications work and keeps owners visible.",
+    rows: [
+      {
+        label: "1. Verify route",
+        detail: "Confirm order status, lapse timing, and who can make the permanent decision.",
+        use: "Must happen before approving decision-maker or press materials.",
+        owner: "Reviewer",
+      },
+      {
+        label: "2. Build support",
+        detail: "Invite school-gate families and nearby parents to record support and local reasons.",
+        use: "This is the working supporter-email flow in Drafts and Reviews.",
+        owner: "Campaigner",
+      },
+      {
+        label: "3. Escalate carefully",
+        detail: "Brief allies and prepare decision-maker contact only after evidence and consent checks are clear.",
+        use: "Keeps staged draft types honest until they can be reviewed.",
+        owner: "Local organiser",
+      },
+    ],
+  },
+  evidence: {
+    title: "Evidence & checks",
+    intro: "Claims stay visible until a person is comfortable with them; approval is blocked by judgement, not automation.",
+    rows: [
+      {
+        label: "Council timing",
+        detail: "Verify current order status and the deadline before using the draft externally.",
+        use: "Mentioned in the review warning and should be checked before provider setup.",
+        owner: "Reviewer",
+      },
+      {
+        label: "Legal wording",
+        detail: "Confirm the exact school-street order language and enforcement route.",
+        use: "Prevents overclaiming in the supporter email and later formal letter.",
+        owner: "Reviewer",
+      },
+      {
+        label: "Contact consent",
+        detail: "Fixture contacts are not a live consent record; import and reconciliation are Coming soon.",
+        use: "Explains why outbox remains local and provider connection stays disabled.",
+        owner: "Local organiser",
+      },
+    ],
+  },
+} satisfies Record<"brief" | "objectives" | "power" | "strategy" | "evidence", { title: string; intro: string; rows: CampaignContextRow[] }>;
 
 const viewIds: ViewId[] = [
   "overview",
@@ -124,6 +294,7 @@ const initialState: DemoState = {
     "Hello,\n\nWe are asking Leicester City Council to make the school street outside St John the Baptist CofE Primary permanent, with clear enforcement before the experimental order lapses.\n\nThe campaign is focused on safer school-run streets, cleaner air at the gates, and a decision route parents can follow. If you support the permanent order, please add your name to the campaign update and share one local reason this matters to your family.\n\nBefore any provider connection is used, a campaigner should check the council timing, the wording of the order, and whether this message fits your contact consent records.\n\nThank you,\nCampaign Factory demo workspace",
   status: "draft",
   mode: "compose",
+  activeDraft: "supporter_email",
   activeView: "overview",
   queuedAt: null,
   activity: [{ id: "seed", label: "Demo workspace loaded with seeded campaign brief and local fixture contacts." }],
@@ -158,6 +329,9 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     status: ["draft", "review", "approved", "queued"].includes(parsed.status || "")
       ? (parsed.status as DraftStatus)
       : initialState.status,
+    activeDraft: draftLibrary.some((draft) => draft.id === parsed.activeDraft)
+      ? (parsed.activeDraft as DraftId)
+      : initialState.activeDraft,
     activeView: viewIds.includes(parsed.activeView as ViewId) ? (parsed.activeView as ViewId) : "overview",
     activity: parsed.activity?.length ? parsed.activity : initialState.activity,
     mode: parsed.mode === "preview" ? "preview" : "compose",
@@ -167,7 +341,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
 function loadState(): DemoState {
   if (typeof window === "undefined") return initialState;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) || LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
     if (!raw) return initialState;
     const parsed = JSON.parse(raw) as Partial<DemoState>;
     if (!parsed.subject || !parsed.body || !parsed.selectedSegment) return initialState;
@@ -213,7 +387,7 @@ export function OperationsWorkspace() {
   useEffect(() => {
     if (!hydrated) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
   }, [hydrated, state]);
 
   const selected = useMemo(
@@ -222,6 +396,8 @@ export function OperationsWorkspace() {
   );
 
   const status = statusCopy[state.status];
+  const activeDraft = draftLibrary.find((draft) => draft.id === state.activeDraft) ?? draftLibrary[0];
+  const activeDraftEditable = activeDraft.id === "supporter_email";
   const canRequestReview = state.subject.trim().length > 8 && state.body.trim().length > 80;
   const reviewBlocked = !canRequestReview;
   const queuedCount = state.status === "queued" ? "1" : undefined;
@@ -259,6 +435,17 @@ export function OperationsWorkspace() {
 
   const setView = (activeView: ViewId) => {
     setState((current) => ({ ...current, activeView }));
+  };
+
+  const setActiveDraft = (activeDraft: DraftId) => {
+    setState((current) => ({
+      ...current,
+      activeDraft,
+      activity:
+        current.activeDraft === activeDraft
+          ? current.activity
+          : [record(`Opened draft library item: ${draftLibrary.find((draft) => draft.id === activeDraft)?.title ?? "Draft"}.`), ...current.activity].slice(0, 7),
+    }));
   };
 
   const updateDraft = (patch: Partial<Pick<DemoState, "subject" | "body">>) => {
@@ -313,7 +500,7 @@ export function OperationsWorkspace() {
 
   const reset = () => {
     localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
     setState({
       ...initialState,
       activity: [record("Demo state reset to the seeded campaign workspace."), ...initialState.activity],
@@ -408,28 +595,44 @@ export function OperationsWorkspace() {
   );
 
   const renderDraftsView = () => (
-    <div className="grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="grid gap-5 xl:grid-cols-[300px_minmax(0,1fr)]">
       <Panel>
         <SmallLabel>Draft library</SmallLabel>
         <h2 className="mt-2 text-2xl font-medium tracking-tight">Communications</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Three draft types are visible so campaigners can see the outreach sequence. Only the supporter email is working/editable in this local demo.
+        </p>
         <div className="mt-5 space-y-3">
           {draftLibrary.map((draft) => (
-            <div key={draft.title} className="rounded-[var(--r-xl)] border border-border p-3">
+            <button
+              key={draft.id}
+              type="button"
+              onClick={() => setActiveDraft(draft.id)}
+              className={`w-full rounded-[var(--r-xl)] border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
+                state.activeDraft === draft.id ? "border-foreground bg-tint-blue" : "border-border hover:bg-secondary"
+              }`}
+              aria-pressed={state.activeDraft === draft.id}
+            >
               <div className="flex items-center justify-between gap-2">
                 <p className="font-medium">{draft.title}</p>
-                <span className="rounded-full bg-secondary px-2 py-0.5 text-xs">{draft.state}</span>
+                <span className="rounded-full bg-background px-2 py-0.5 text-xs">{draft.id === "supporter_email" ? status.label : draft.state}</span>
               </div>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">{draft.channel}</p>
               <p className="mt-1 text-sm text-muted-foreground">{draft.detail}</p>
-            </div>
+            </button>
           ))}
         </div>
       </Panel>
       <Panel className="shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <SmallLabel>Supporter email</SmallLabel>
-            <h2 className="mt-1 text-3xl font-medium tracking-tight">Parent update for {selected.name.toLowerCase()}</h2>
-            <p className="mt-2 max-w-2xl text-muted-foreground">{selected.ask}</p>
+            <SmallLabel>{activeDraft.channel} draft</SmallLabel>
+            <h2 className="mt-1 text-3xl font-medium tracking-tight">
+              {activeDraftEditable ? `Parent update for ${selected.name.toLowerCase()}` : activeDraft.title}
+            </h2>
+            <p className="mt-2 max-w-2xl text-muted-foreground">
+              {activeDraftEditable ? selected.ask : activeDraft.detail}
+            </p>
           </div>
           <div className="flex rounded-full bg-secondary p-1" aria-label="Draft mode">
             {(["compose", "preview"] as const).map((mode) => (
@@ -437,8 +640,9 @@ export function OperationsWorkspace() {
                 key={mode}
                 type="button"
                 onClick={() => setState((current) => ({ ...current, mode }))}
+                disabled={!activeDraftEditable}
                 className={`rounded-full px-4 py-1.5 text-sm capitalize transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${
-                  state.mode === mode ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                  state.mode === mode && activeDraftEditable ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 }`}
                 aria-pressed={state.mode === mode}
               >
@@ -449,10 +653,34 @@ export function OperationsWorkspace() {
         </div>
 
         <div className="mt-6 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-secondary/70 p-4 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Review warning:</span> Check the council timing, the exact legal order wording, and contact consent before any real outreach. {selected.caveat}
+          <span className="font-medium text-foreground">Review warning:</span> {activeDraft.requires} {activeDraftEditable ? selected.caveat : "This staged fixture is not available for approval or queueing."}
         </div>
 
-        {state.mode === "compose" ? (
+        {!activeDraftEditable ? (
+          <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="rounded-[var(--r-2xl)] border border-border bg-white p-5">
+              <SmallLabel>Staged outline</SmallLabel>
+              <h3 className="mt-2 text-2xl font-medium">{activeDraft.title}</h3>
+              <p className="mt-3 text-sm text-muted-foreground"><span className="font-medium text-foreground">Intended audience:</span> {activeDraft.audience}</p>
+              <ol className="mt-5 space-y-3 text-sm">
+                {activeDraft.outline.map((item, index) => (
+                  <li key={item} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-secondary text-xs font-semibold">{index + 1}</span>
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div className="rounded-[var(--r-2xl)] border border-border bg-secondary/60 p-4 text-sm">
+              <p className="font-medium">Why this is not editable yet</p>
+              <p className="mt-2 text-muted-foreground">Campaign Factory can show the operational placeholder, but real recipients, evidence, and escalation judgement must be resolved before this item becomes working copy.</p>
+              <div className="mt-4 flex flex-col gap-3">
+                {goButton("evidence", "Review checks")}
+                {goButton("contacts", "Inspect contacts")}
+              </div>
+            </div>
+          </div>
+        ) : state.mode === "compose" ? (
           <div className="mt-6 space-y-5">
             <div className="space-y-2">
               <Label htmlFor="operations-subject">Subject</Label>
@@ -486,7 +714,7 @@ export function OperationsWorkspace() {
         )}
 
         <div className="mt-6 flex flex-wrap gap-3 border-t border-border pt-5">
-          <Button type="button" size="lg" onClick={requestReview} disabled={!canRequestReview || state.status === "review" || state.status === "approved" || state.status === "queued"}>
+          <Button type="button" size="lg" onClick={requestReview} disabled={!activeDraftEditable || !canRequestReview || state.status === "review" || state.status === "approved" || state.status === "queued"}>
             Mark ready for review
           </Button>
           {goButton("reviews", "Open review gate")}
@@ -660,28 +888,45 @@ export function OperationsWorkspace() {
     </div>
   );
 
-  const renderLightCampaignView = (title: string, intro: string, rows: { label: string; detail: string }[]) => (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+  const renderCampaignContextView = (section: (typeof campaignContext)[keyof typeof campaignContext]) => (
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
       <Panel>
         <SmallLabel>Campaign context</SmallLabel>
-        <h2 className="mt-2 text-3xl font-medium tracking-tight">{title}</h2>
-        <p className="mt-3 text-muted-foreground">{intro}</p>
-        <div className="mt-6 divide-y divide-border rounded-[var(--r-2xl)] border border-border">
-          {rows.map((row) => (
-            <div key={row.label} className="grid gap-2 p-4 sm:grid-cols-[180px_minmax(0,1fr)]">
-              <p className="font-medium">{row.label}</p>
-              <p className="text-muted-foreground">{row.detail}</p>
+        <h2 className="mt-2 text-3xl font-medium tracking-tight">{section.title}</h2>
+        <p className="mt-3 max-w-3xl text-muted-foreground">{section.intro}</p>
+        <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-border">
+          <div className="hidden grid-cols-[0.75fr_minmax(0,1.15fr)_minmax(0,1fr)_0.55fr] gap-3 border-b border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground md:grid">
+            <span>Brief item</span>
+            <span>What the fixture says</span>
+            <span>Operational use</span>
+            <span>Owner</span>
+          </div>
+          {section.rows.map((row) => (
+            <div key={row.label} className="grid gap-2 border-b border-border px-4 py-4 text-sm last:border-0 md:grid-cols-[0.75fr_minmax(0,1.15fr)_minmax(0,1fr)_0.55fr]">
+              <div><span className="font-medium md:hidden">Brief item: </span><span className="font-medium">{row.label}</span></div>
+              <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">What the fixture says: </span>{row.detail}</div>
+              <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">Operational use: </span>{row.use}</div>
+              <div><span className="font-medium md:hidden">Owner: </span>{row.owner}</div>
             </div>
           ))}
         </div>
       </Panel>
       <Panel>
-        <SmallLabel>Operational link</SmallLabel>
-        <h3 className="mt-2 text-2xl font-medium">Feeds the email workflow</h3>
+        <SmallLabel>Use this context next</SmallLabel>
+        <h3 className="mt-2 text-2xl font-medium">Keep the brief tied to action</h3>
         <p className="mt-3 text-sm text-muted-foreground">
-          This context is fixture-backed and deliberately visible so campaigners know what still needs checking before using real tools.
+          These rows are intentionally operational: each one either shapes audience choice, copy, review, or the provider boundary.
         </p>
-        <div className="mt-5 flex flex-col gap-3">{goButton("drafts", "Open Drafts")}{goButton("reviews", "Open Reviews")}</div>
+        <div className="mt-5 space-y-3 rounded-[var(--r-xl)] border border-border p-3 text-sm">
+          <p><span className="font-medium">Selected audience:</span> {selected.name}</p>
+          <p><span className="font-medium">Draft status:</span> {status.label}</p>
+          <p><span className="font-medium">Provider:</span> Not connected</p>
+        </div>
+        <div className="mt-5 flex flex-col gap-3">
+          {goButton("audiences", "Choose Audiences")}
+          {goButton("drafts", "Open Drafts")}
+          {goButton("reviews", "Open Reviews")}
+        </div>
       </Panel>
     </div>
   );
@@ -726,32 +971,11 @@ export function OperationsWorkspace() {
 
   const viewContent: Record<ViewId, React.ReactNode> = {
     overview: renderOverview(),
-    brief: renderLightCampaignView("Campaign brief", "Seeded school-street campaign brief, shown as fixture context rather than verified current research.", [
-      { label: "Outcome", detail: "Make the school street outside St John the Baptist CofE Primary permanent and enforced." },
-      { label: "Place", detail: "Leicester; school-run streets around St John the Baptist CofE Primary." },
-      { label: "Narrative", detail: "Safer routes, cleaner air, and a council decision route parents can understand before the order lapses." },
-      { label: "Provenance", detail: "Local fixture state for the OpenClaw Build Reveal; campaigners must verify current council process before real use." },
-    ]),
-    objectives: renderLightCampaignView("Objective & targets", "The target map keeps political decisions human-readable before drafting.", [
-      { label: "Primary objective", detail: "Secure a permanent, enforced school-street decision before the experimental order lapses." },
-      { label: "Decision-maker", detail: "Leicester City Council transport decision route; exact committee/officer path needs verification." },
-      { label: "Influence targets", detail: "School leadership, ward councillors, nearby parents, clean-air allies, and local media only after review." },
-    ]),
-    power: renderLightCampaignView("Power map", "A plain map of who can help, block, or be persuaded without pretending fixture contacts are live campaign intelligence.", [
-      { label: "Allies", detail: "School-gate families, clean-air supporters, and councillor watchers who can validate local concerns." },
-      { label: "Persuadables", detail: "Nearby parents and ward residents affected by traffic but not yet involved." },
-      { label: "Potential blockers", detail: "Implementation cost concerns, enforcement doubts, and objections from through-traffic users." },
-    ]),
-    strategy: renderLightCampaignView("Strategy & tactics", "The campaign sequence connects the brief to reviewable communications work.", [
-      { label: "Sequence", detail: "Confirm decision timing, gather parent support, brief allies, then prepare careful decision-maker contact." },
-      { label: "Owners", detail: "Campaigner owns approval; local organiser owns contact readiness; future provider setup remains out of scope." },
-      { label: "Timing", detail: "Work is organised around the experimental order lapse, which requires a fresh verification check." },
-    ]),
-    evidence: renderLightCampaignView("Evidence & checks", "Claims stay visible until a person is comfortable with them.", [
-      { label: "Council timing", detail: "Verify current order status and the deadline before using the draft externally." },
-      { label: "Legal wording", detail: "Confirm the exact school-street order language and enforcement route." },
-      { label: "Contact consent", detail: "Fixture contacts are not a live consent record; import and reconciliation are Coming soon." },
-    ]),
+    brief: renderCampaignContextView(campaignContext.brief),
+    objectives: renderCampaignContextView(campaignContext.objectives),
+    power: renderCampaignContextView(campaignContext.power),
+    strategy: renderCampaignContextView(campaignContext.strategy),
+    evidence: renderCampaignContextView(campaignContext.evidence),
     audiences: renderAudienceView(),
     contacts: renderContacts(),
     drafts: renderDraftsView(),
