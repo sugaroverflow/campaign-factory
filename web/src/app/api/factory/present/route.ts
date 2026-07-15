@@ -58,7 +58,12 @@ export async function POST(req: Request) {
   }
   const code = typeof (body as { code?: unknown })?.code === "string" ? (body as { code: string }).code : "";
 
-  if (presenterCodeRequired() && !code.trim()) {
+  // Fail CLOSED when no presenter code is configured (ADR 0013: the code lives
+  // only in server config; an unset code must disable the route, not open it).
+  if (!presenterCodeRequired()) {
+    return NextResponse.json({ error: "Presenter access is not configured on this deployment." }, { status: 503 });
+  }
+  if (!code.trim()) {
     return NextResponse.json({ error: "Enter the presenter code." }, { status: 400 });
   }
 
