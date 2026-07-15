@@ -151,6 +151,12 @@ test("presenter batch: five campaigns from intake to receipts", async ({ page, c
       );
 
       snap.forEach((c, i) => {
+        // The live gallery can render more column-like nodes than the five
+        // intake campaigns (observed in live batch #1); grow the timing table
+        // rather than crash mid-observation.
+        if (!timings[i]) {
+          timings[i] = { shortName: "", firstCardMs: null, receiptMs: null, receiptTitle: "", receiptTag: "", terminalMs: null };
+        }
         const t = timings[i];
         t.shortName = c.shortName || t.shortName;
         const elapsed = Date.now() - batchStart;
