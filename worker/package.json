@@ -1,0 +1,31 @@
+{
+  "name": "campaign-factory-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "migrate": "tsx src/migrate.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
+    "@langchain/langgraph": "^1.1.0",
+    "@langchain/langgraph-checkpoint-postgres": "^1.0.0",
+    "dotenv": "^17.2.0",
+    "pg": "^8.16.0",
+    "pg-boss": "^11.0.0",
+    "postgres": "^3.4.9",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/pg": "^8.15.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5"
+  }
+}

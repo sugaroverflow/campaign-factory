@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "lib": ["ES2023"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": false,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "allowJs": false,
+    "baseUrl": ".",
+    "paths": {
+      "@web/*": ["../web/src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "../web/src/lib/**/*.ts"],
+  "exclude": ["node_modules"]
+}
