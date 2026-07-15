@@ -6,8 +6,14 @@
 // brief content — everything legible, nothing floating.
 
 import { JOURNEY_STEPS, type JudgementAnswerRequest } from "@/lib/factory/contracts";
-import { activeAgentCount, type AgentCardVM, type RunVM } from "@/lib/factory/client";
+import {
+  activeAgentCount,
+  type AgentCardVM,
+  type CompiledCampaignBundle,
+  type RunVM,
+} from "@/lib/factory/client";
 import { YourJudgementCard } from "@/components/factory/judgement/YourJudgementCard";
+import { DocumentLibrary as CompiledDocumentLibrary } from "@/components/factory/documents/DocumentLibrary";
 import { SectionContent } from "./SectionContent";
 import { fmtClock } from "./format";
 
@@ -29,10 +35,13 @@ function latestFinding(run: RunVM): AgentCardVM["lastFinding"] | undefined {
 export function MobileCompactView({
   run,
   onAnswer,
+  compiled = null,
 }: {
   run: RunVM;
   now: number;
   onAnswer: (jid: string, action: JudgementAnswerRequest["action"], answer?: string) => Promise<boolean>;
+  /** W6-compiled document bodies for a terminal run (see AssemblyView). */
+  compiled?: CompiledCampaignBundle | null;
 }) {
   const active = run.agents.filter((a) => a.status === "queued" || a.status === "running");
   const finding = latestFinding(run);
@@ -77,6 +86,13 @@ export function MobileCompactView({
           {openJudgements.map((j) => (
             <YourJudgementCard key={j.id} judgement={j} onAnswer={(action, answer) => onAnswer(j.id, action, answer)} />
           ))}
+        </div>
+      ) : null}
+
+      {compiled ? (
+        <div>
+          <p className="fa-mobile__h">Campaign documents</p>
+          <CompiledDocumentLibrary documents={compiled.documents} />
         </div>
       ) : null}
 

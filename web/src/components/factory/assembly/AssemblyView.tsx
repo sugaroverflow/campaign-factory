@@ -22,10 +22,12 @@ import {
   isTerminal,
   unassignedActiveAgents,
   type AgentCardVM as FoldAgentVM,
+  type CompiledCampaignBundle,
   type ConnectionState,
   type JudgementVM,
   type RunVM,
 } from "@/lib/factory/client";
+import { DocumentLibrary as CompiledDocumentLibrary } from "@/components/factory/documents/DocumentLibrary";
 import { BriefSection } from "./BriefSection";
 import { YourJudgementCard } from "@/components/factory/judgement/YourJudgementCard";
 import { StepWorkspace } from "./StepWorkspace";
@@ -90,11 +92,16 @@ export function AssemblyView({
   run,
   connection,
   onAnswer,
+  compiled = null,
   isFixture = false,
 }: {
   run: RunVM;
   connection: ConnectionState;
   onAnswer: (jid: string, action: JudgementAnswerRequest["action"], answer?: string) => Promise<boolean>;
+  /** W6-compiled document bodies + evidence ledger for a TERMINAL run (from
+   *  W2's durable read route). Null during a live run or until the route
+   *  responds — the view then keeps its status-only documents grid and tally. */
+  compiled?: CompiledCampaignBundle | null;
   isFixture?: boolean;
 }) {
   const now = useNow(!isTerminal(run.status));
@@ -175,7 +182,7 @@ export function AssemblyView({
       <div className="pb-24">
         {hero}
         <div className="jcontainer">
-          <MobileCompactView run={run} now={now} onAnswer={onAnswer} />
+          <MobileCompactView run={run} now={now} onAnswer={onAnswer} compiled={compiled} />
         </div>
       </div>
     );
@@ -211,7 +218,19 @@ export function AssemblyView({
 
       {JOURNEY_STEPS.map((s) => {
         const section = run.sections[s.key as JourneyStepKey];
-        const footer = s.step === 10 ? <DocumentLibrary documents={run.documents} /> : undefined;
+        // Step 10 footer: full compiled library (bodies + export) once the
+        // terminal-run read path responds; honest status-only grid until then.
+        const footer =
+          s.step === 10 ? (
+            compiled ? (
+              <CompiledDocumentLibrary
+                documents={compiled.documents}
+                intro="Compiled from the accepted brief. Export unlocks per document once its reviewer pass completes."
+              />
+            ) : (
+              <DocumentLibrary documents={run.documents} />
+            )
+          ) : undefined;
         return (
           <BriefSection
             key={s.key}
@@ -233,6 +252,7 @@ export function AssemblyView({
         evidence={run.evidence}
         nextChecks={run.nextChecks}
         terminalGaps={run.terminalGaps}
+        compiled={compiled?.evidence}
       />
     </div>
   );

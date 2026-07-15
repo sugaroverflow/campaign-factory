@@ -6,8 +6,10 @@
 // and makes no network calls — it never fabricates a real run.
 
 import { useEffect, useMemo, useState } from "react";
-import { foldEvents } from "@/lib/factory/client";
+import { foldEvents, isTerminal, type CompiledCampaignBundle } from "@/lib/factory/client";
 import type { FactoryEvent } from "@/lib/factory/contracts";
+import { buildEvidenceAndNextChecks, compileDocuments } from "@/lib/factory/documents";
+import { FIXTURE_CLAIMS, FIXTURE_STATE } from "@/lib/factory/documents/fixtures";
 import { AssemblyView } from "@/components/factory/assembly/AssemblyView";
 import { FIXTURE_CAMPAIGN_ID, FIXTURE_EVENTS, FIXTURE_SEED } from "@/lib/factory/client/fixtures";
 
@@ -42,6 +44,18 @@ export function FixturePreview() {
   const run = useMemo(
     () => foldEvents(FIXTURE_CAMPAIGN_ID, shifted.slice(0, count), FIXTURE_SEED),
     [shifted, count],
+  );
+
+  // Completed-brief surface, exercised WITHOUT the network: once the fixture
+  // run reaches its terminal event, feed W6's compiler over W6's Leicester
+  // documents fixture — the same shape W2's read route will return. Still a
+  // labelled fixture; no model calls, no fetch.
+  const fixtureCompiled = useMemo<CompiledCampaignBundle>(
+    () => ({
+      documents: compileDocuments(FIXTURE_STATE, FIXTURE_CLAIMS),
+      evidence: buildEvidenceAndNextChecks(FIXTURE_STATE, FIXTURE_CLAIMS),
+    }),
+    [],
   );
 
   const noop = async () => true;
@@ -85,7 +99,13 @@ export function FixturePreview() {
           Restart
         </button>
       </div>
-      <AssemblyView run={run} connection="live" onAnswer={noop} isFixture />
+      <AssemblyView
+        run={run}
+        connection="live"
+        onAnswer={noop}
+        compiled={isTerminal(run.status) ? fixtureCompiled : null}
+        isFixture
+      />
     </main>
   );
 }

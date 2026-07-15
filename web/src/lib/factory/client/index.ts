@@ -4,5 +4,6 @@
 
 export * from "./fold";
 export * from "./storage";
+export { fetchCompiledCampaign, type CompiledCampaignBundle } from "./compiled";
 export { useFactoryRun } from "./useFactoryRun";
 export type { ConnectionState, UseFactoryRunOptions, UseFactoryRunResult } from "./useFactoryRun";

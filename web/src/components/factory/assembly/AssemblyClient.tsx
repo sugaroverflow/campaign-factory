@@ -5,9 +5,20 @@
 // drops straight back into the running campaign with its problem/place hero,
 // then drives the pure AssemblyView via useFactoryRun. A shared link with no
 // stored run still works: the hook bootstraps + polls the public event log.
+//
+// Completed-brief upgrade: once the run is terminal we try W2's durable read
+// route (GET /runs/[id]/documents — coordinator ruling 15 Jul 2026) for W6's
+// compiled document bodies + evidence ledger. If it isn't available the view
+// simply keeps its honest status-only surfaces.
 
-import { useMemo } from "react";
-import { getStoredFactoryRun, useFactoryRun } from "@/lib/factory/client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  fetchCompiledCampaign,
+  getStoredFactoryRun,
+  isTerminal,
+  useFactoryRun,
+  type CompiledCampaignBundle,
+} from "@/lib/factory/client";
 import { AssemblyView } from "./AssemblyView";
 
 export function AssemblyClient({ campaignId }: { campaignId: string }) {
@@ -20,11 +31,26 @@ export function AssemblyClient({ campaignId }: { campaignId: string }) {
     seed: stored?.intake,
   });
 
+  const [compiled, setCompiled] = useState<CompiledCampaignBundle | null>(null);
+  const attempted = useRef(false);
+  useEffect(() => {
+    if (attempted.current || !isTerminal(run.status)) return;
+    attempted.current = true;
+    let cancelled = false;
+    void fetchCompiledCampaign(campaignId).then((bundle) => {
+      if (!cancelled && bundle) setCompiled(bundle);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [run.status, campaignId]);
+
   return (
     <main className="min-h-dvh">
       <AssemblyView
         run={run}
         connection={connection}
+        compiled={compiled}
         onAnswer={(jid, action, answer) => answerJudgement(jid, action, answer)}
       />
     </main>
