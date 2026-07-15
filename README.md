@@ -23,6 +23,7 @@ The run happens as a background job; the client polls for progress and the **jou
 | [`HOW_IT_WAS_BUILT.md`](HOW_IT_WAS_BUILT.md) | Architecture-and-story companion. |
 | [`EXECUTION_JOURNAL.md`](EXECUTION_JOURNAL.md) | Chronological build log. |
 | [`docs/research/`](docs/research/) | Deep-research notes (e.g. why this is a workflow, not a multi-agent system). |
+| [`docs/product/factory-implementation-parameters.md`](docs/product/factory-implementation-parameters.md) | Accepted implementation envelope for the multi-agent factory rewrite. |
 
 ## Quickstart
 
@@ -32,4 +33,4 @@ See **[`web/README.md`](web/README.md)** for prerequisites, local database setup
 
 Built end to end across milestones M1–M5 (pipeline → launch controls → journey UI → persistence → wall) and **deployed on Vercel + Neon Postgres**, GitHub-connected for auto-deploys from `main` (build root: `web/`).
 
-**Not yet publicly usable:** deployment protection is on, and the Hobby plan's 300s function cap can't fit a full run — durable step execution (Vercel Workflow) is the intended fix. See the [open issues](https://github.com/sugaroverflow/campaign-factory/issues) and [`web/README.md`](web/README.md#️-technical-requirements-before-going-live) for what's needed before go-live.
+**Current production remains unchanged while the factory rewrite is built.** The accepted next architecture uses a Vercel Pro `factory-dev` Custom Environment plus an isolated Railway LangGraph worker and Neon database branch. The existing `after()` pipeline and its function-duration limit remain current-production constraints until an explicit Factory Promotion. See the [open issues](https://github.com/CampaignLab/campaign-factory/issues) and [`docs/product/factory-implementation-parameters.md`](docs/product/factory-implementation-parameters.md).
