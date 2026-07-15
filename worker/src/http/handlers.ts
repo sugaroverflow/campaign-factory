@@ -12,7 +12,7 @@ import { RUNTIME_LIMITS } from "@web/lib/factory/contracts/limits.js";
 import { config } from "../config.js";
 import { sql } from "../db/pool.js";
 import { mintStreamToken } from "./signing.js";
-import { enqueueRun } from "../queue/boss.js";
+import { enqueueRun, cancelQueuedRun } from "../queue/boss.js";
 import { gate } from "../gate.js";
 import { transportMode } from "../events/hub.js";
 import { abortRun } from "../runtime/registry.js";
@@ -131,9 +131,11 @@ export async function handleCancel(campaignId: string): Promise<HandlerResult> {
     return { status: 200, json: { campaignId, status: run.status, note: "already terminal" } };
   }
   // Durable cancel signal (graph guard reads this) + in-flight abort. The graph
-  // finalise node is the single writer of run.cancelled.
+  // finalise node is the single writer of run.cancelled. Best-effort: also
+  // cancel a still-queued job so it is not pointlessly picked up.
   await store.setRunStatus(s, campaignId, "cancelled");
   abortRun(campaignId);
+  await cancelQueuedRun(campaignId);
   return { status: 202, json: { campaignId, status: "cancelled" } };
 }
 

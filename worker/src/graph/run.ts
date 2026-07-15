@@ -61,10 +61,21 @@ export function makeRunner(agents: RuntimeAgents): RunFn {
       // Systemic: the run row must be created before enqueue. Let pg-boss retry.
       throw new Error(`runCampaign: no factory_runs row for ${campaignId}`);
     }
-    if (await alreadyFinalised(s, campaignId)) return; // idempotent re-delivery
-
     const effectiveBatchId = batchId ?? run.batchId ?? undefined;
+    if (await alreadyFinalised(s, campaignId)) {
+      // Idempotent re-delivery. Still attempt the batch roll-up: a crash in the
+      // window between finalising the batch's last campaign and rolling the
+      // batch up would otherwise leave the batch un-receipted forever.
+      if (effectiveBatchId) await maybeCompleteBatch(s, effectiveBatchId);
+      return;
+    }
     const handle = registerRun(campaignId);
+    if (!handle) {
+      // Already executing in this process (duplicate delivery) — let the
+      // original execution keep driving the run; this job just completes.
+      console.warn(`[run] duplicate delivery for ${campaignId}; already in flight`);
+      return;
+    }
     const emitter = new Emitter(s, campaignId, effectiveBatchId);
 
     try {

@@ -9,7 +9,8 @@ import { sql, closeSql } from "./db/pool.js";
 import { runMigrations } from "./migrate.js";
 import { assertEnvironmentIdentity, seedEnvironmentIdentity } from "./store/index.js";
 import { setupCheckpointer, closeCheckpointer } from "./graph/checkpointer.js";
-import { startQueue, registerQueues, stopQueue } from "./queue/boss.js";
+import { startQueue, ensureQueues, startWorkers, stopQueue } from "./queue/boss.js";
+import { recoverOrphanedRuns } from "./runtime/recover.js";
 import { startEventTransport, stopEventTransport } from "./events/hub.js";
 import { loadRuntimeAgents } from "./graph/executor-loader.js";
 import { makeRunner, deadHandler } from "./graph/run.js";
@@ -34,11 +35,19 @@ async function main(): Promise<void> {
   // Checkpoint schema (lg) + durable queue (pgboss).
   await setupCheckpointer();
   await startQueue();
+  await ensureQueues();
+
+  // Crash recovery BEFORE any worker starts polling: pg-boss 11 leaves a
+  // crashed process's jobs `active` until lease expiry, so retire stale leases
+  // and re-enqueue every still-queued/running run (graph resumes from its
+  // checkpoint; singletonKey collapses duplicates).
+  const recovered = await recoverOrphanedRuns(db);
+  if (recovered > 0) console.log(`[worker] crash recovery: reclaimed ${recovered} orphaned run(s)`);
 
   // Delegate agent execution to w3 when present; local mock otherwise.
   const agents = await loadRuntimeAgents();
   console.log(`[worker] agent runtime: ${agents.source}`);
-  await registerQueues(makeRunner(agents), deadHandler);
+  await startWorkers(makeRunner(agents), deadHandler);
 
   // Wake SSE via Postgres LISTEN; 2s polling fallback.
   await startEventTransport(db);
@@ -55,7 +64,7 @@ async function main(): Promise<void> {
     // Stop accepting new HTTP work first.
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await stopEventTransport();
-    await stopQueue(); // graceful: in-flight jobs checkpoint; leases recover on restart
+    await stopQueue(); // in-flight runs checkpoint at node boundaries; the boot-time orphan scan reclaims them immediately on restart
     await closeCheckpointer();
     await closeSql();
     console.log("[worker] stopped");

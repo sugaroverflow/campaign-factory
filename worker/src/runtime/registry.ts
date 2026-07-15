@@ -10,9 +10,11 @@ export interface RunHandle {
 
 const active = new Map<string, RunHandle>();
 
-export function registerRun(campaignId: string): RunHandle {
-  const existing = active.get(campaignId);
-  if (existing) return existing;
+// Returns null if the campaign is ALREADY executing in this process — the
+// caller must treat that as "someone else is driving this run" and no-op, so a
+// duplicate queue delivery can never execute the same graph thread concurrently.
+export function registerRun(campaignId: string): RunHandle | null {
+  if (active.has(campaignId)) return null;
   const handle: RunHandle = { campaignId, controller: new AbortController() };
   active.set(campaignId, handle);
   return handle;

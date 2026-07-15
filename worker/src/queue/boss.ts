@@ -1,12 +1,17 @@
 // Durable run queue (ADR 0016): pg-boss in its own `pgboss` schema. One job per
-// campaign run. Retry lease + dead-letter configured; on worker restart pg-boss
-// re-delivers leased jobs and the graph resumes from its last checkpoint.
-// Dead-lettered work becomes a VISIBLE Terminal Gap event, never a hidden item.
+// campaign run. Retry lease + dead-letter configured. NOTE: pg-boss 11 does NOT
+// reclaim a crashed worker's `active` jobs on restart — an ungraceful kill
+// (SIGKILL/OOM) leaves the job leased until expireInSeconds passes. Immediate
+// recovery is therefore done explicitly at boot by runtime/recover.ts, which
+// retires stale active jobs and re-enqueues; the graph resumes from its
+// checkpoint. Dead-lettered work becomes a VISIBLE Terminal Gap event, never a
+// hidden item.
 
 import PgBoss from "pg-boss";
 import { QUEUE_SCHEMA } from "@web/lib/factory/contracts/tables.js";
 import { RUNTIME_LIMITS } from "@web/lib/factory/contracts/limits.js";
 import { config, needsSsl, requireDatabaseUrl } from "../config.js";
+import { sql } from "../db/pool.js";
 
 export const RUN_QUEUE = "campaign-run";
 export const RUN_DEAD_QUEUE = "campaign-run-dead";
@@ -44,19 +49,43 @@ export async function startQueue(): Promise<PgBoss> {
   return boss;
 }
 
-export async function registerQueues(run: RunFn, dead: DeadFn): Promise<void> {
+// Queue provisioning only — split from worker subscription so the boot-time
+// orphan-recovery scan can run in between (before anything starts polling).
+export async function ensureQueues(): Promise<void> {
   const b = getBoss();
-
   // The dead-letter queue must exist before it is referenced as a deadLetter.
   await b.createQueue(RUN_DEAD_QUEUE, { policy: "standard" });
+
+  // Policy "stately", NOT "standard": pg-boss only enforces singletonKey
+  // uniqueness via partial indexes scoped to non-standard policies (see
+  // plans.js job_i1/i3/i6) — on a standard queue singletonKey deduplicates
+  // NOTHING. Stately allows at most one created + one retry + one active job
+  // per singleton key, which is the "one live job per campaign" we need.
+  //
+  // createQueue is ON CONFLICT DO NOTHING and updateQueue forbids policy
+  // changes, so an existing queue with the old policy must be dropped and
+  // recreated. Safe here: this runs before any worker polls, job rows are
+  // transport (factory_runs is the durable truth), and the boot orphan scan
+  // immediately re-enqueues every still-live run.
+  const existing = await b.getQueue(RUN_QUEUE);
+  if (existing && existing.policy !== "stately") {
+    console.warn(
+      `[queue] migrating ${RUN_QUEUE} policy '${existing.policy}' -> 'stately' (drops transport job rows; orphan scan re-enqueues live runs)`,
+    );
+    await b.deleteQueue(RUN_QUEUE);
+  }
   await b.createQueue(RUN_QUEUE, {
-    policy: "standard",
+    policy: "stately",
     retryLimit: 3,
     retryDelay: 5,
     retryBackoff: true,
     expireInSeconds: JOB_EXPIRE_SECONDS,
     deadLetter: RUN_DEAD_QUEUE,
   });
+}
+
+export async function startWorkers(run: RunFn, dead: DeadFn): Promise<void> {
+  const b = getBoss();
 
   // Main worker: up to 5 campaigns concurrently (a presenter batch). Each job is
   // isolated — the runner always drives its run to a terminal state and only
@@ -90,10 +119,29 @@ export async function registerQueues(run: RunFn, dead: DeadFn): Promise<void> {
 
 export async function enqueueRun(data: RunJobData): Promise<string | null> {
   return getBoss().send(RUN_QUEUE, data, {
-    // One live job per campaign — a duplicate start collapses onto the same key.
+    // One live job per campaign: with the stately policy a second created job
+    // for the same key conflicts (ON CONFLICT DO NOTHING) and send returns null.
     singletonKey: data.campaignId,
     expireInSeconds: JOB_EXPIRE_SECONDS,
   });
+}
+
+export interface RunJobRef {
+  id: string;
+  state: string;
+}
+
+// Find this campaign's live queue jobs by singletonKey. pg-boss job ids are
+// its own UUIDs (NOT the campaignId), so lookup goes through singleton_key.
+export async function findRunJobs(campaignId: string): Promise<RunJobRef[]> {
+  const s = sql();
+  const rows = await s<RunJobRef[]>`
+    select id::text as id, state::text as state
+      from ${s(QUEUE_SCHEMA)}.job
+     where name = ${RUN_QUEUE}
+       and singleton_key = ${campaignId}
+       and state in ('created', 'retry', 'active')`;
+  return rows;
 }
 
 // Cancel a still-queued (not yet active) job. A running job is stopped in-process
@@ -101,9 +149,10 @@ export async function enqueueRun(data: RunJobData): Promise<string | null> {
 export async function cancelQueuedRun(campaignId: string): Promise<void> {
   const b = getBoss();
   try {
-    const job = await b.getJobById(RUN_QUEUE, campaignId);
-    if (job && (job.state === "created" || job.state === "retry")) {
-      await b.cancel(RUN_QUEUE, job.id);
+    for (const job of await findRunJobs(campaignId)) {
+      if (job.state === "created" || job.state === "retry") {
+        await b.cancel(RUN_QUEUE, job.id);
+      }
     }
   } catch {
     /* best-effort; graph-level cancellation is authoritative */
