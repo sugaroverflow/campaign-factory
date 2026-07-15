@@ -56,8 +56,10 @@ export interface AttachedTools {
 export function buildTools(def: AgentDef): AttachedTools {
   const p = def.toolPolicy;
   const allowSearch =
-    p === "search_discovery" || p === "search_specialist" || p === "adjudication" || p === "official_record";
-  const allowFetch = allowSearch || p === "geo_lookup";
+    (p === "search_discovery" || p === "search_specialist" || p === "adjudication" || p === "official_record") &&
+    def.searchBudget > 0; // max_uses: 0 is rejected by the API — a zero budget means no search tool at all
+  const allowFetch =
+    allowSearch || p === "geo_lookup" || p === "official_record"; // record agents may still read pages
   const tools: unknown[] = [];
   if (allowSearch) tools.push({ type: "web_search_20260209", name: "web_search", max_uses: def.searchBudget });
   if (allowFetch) tools.push(FETCH_PAGE_TOOL);
