@@ -51,16 +51,25 @@ export function CampaignApp() {
   const [lastInput, setLastInput] = useState<StartInput | null>(null);
 
   useEffect(() => {
-    void getStatus().then(setStatus);
+    let cancelled = false;
+    const cleanup = () => {
+      cancelled = true;
+    };
+
+    void getStatus().then((nextStatus) => {
+      if (!cancelled) setStatus(nextStatus);
+    });
     const saved = typeof window !== "undefined" ? localStorage.getItem(ACCESS_CODE_KEY) : null;
-    if (saved) setCode(saved);
+    queueMicrotask(() => {
+      if (!cancelled && saved) setCode(saved);
+    });
 
     // Recover an in-flight/recent run after an accidental refresh. We confirm
     // the run still exists (a 404 clears the pointer) and only restore recent
     // ones; restoring into "running" lets RunProgress drive a terminal run
     // straight to the done/failed view via onComplete.
     const raw = typeof window !== "undefined" ? localStorage.getItem(RUN_ID_KEY) : null;
-    if (!raw) return;
+    if (!raw) return cleanup;
     let id: string | undefined;
     try {
       const parsed = JSON.parse(raw) as { id?: string; ts?: number };
@@ -72,9 +81,10 @@ export function CampaignApp() {
     }
     if (!id) {
       forgetRun();
-      return;
+      return cleanup;
     }
     void pollRun(id).then((s) => {
+      if (cancelled) return;
       if (!s) {
         forgetRun();
         return;
@@ -82,6 +92,7 @@ export function CampaignApp() {
       setRunId(id!);
       setPhase("running");
     });
+    return cleanup;
   }, []);
 
   const begin = useCallback(

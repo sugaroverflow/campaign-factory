@@ -18,12 +18,17 @@ export function Reveal({
   const [on, setOn] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const el = ref.current;
     if (!el) return;
     // Respect reduced-motion: reveal immediately.
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      setOn(true);
-      return;
+      queueMicrotask(() => {
+        if (!cancelled) setOn(true);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
     const io = new IntersectionObserver(
       (entries) => {

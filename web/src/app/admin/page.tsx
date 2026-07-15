@@ -18,9 +18,17 @@ export default function AdminPage() {
 
   const load = async () => setItems(await getWall());
   useEffect(() => {
+    let cancelled = false;
     const k = typeof window !== "undefined" ? localStorage.getItem(ADMIN_KEY) : null;
-    if (k) setKey(k);
-    void load();
+    queueMicrotask(() => {
+      if (!cancelled && k) setKey(k);
+    });
+    void getWall().then((nextItems) => {
+      if (!cancelled) setItems(nextItems);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const hide = async (id: string) => {
