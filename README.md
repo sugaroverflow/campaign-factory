@@ -76,7 +76,7 @@ Key points (full detail in [`web/README.md`](web/README.md) and [`worker/README.
 
 | URL | What it does |
 |---|---|
-| [`/live`](web/src/app/live/page.tsx) | **Audience link for the session** — redirects to `/factory/replay/conference`. |
+| [`/replay`](web/src/app/replay/page.tsx) | **Audience link for the session** — redirects to `/factory/replay/conference`. (`/live` is kept as a silent forward for older links.) |
 | [`/factory/replay/conference`](web/src/app/factory/replay/conference/page.tsx) | The pinned, immutable **recorded run**, condensed to exactly 15:00 (honestly labelled, real-time toggle). Rendered entirely from stored Factory Events through the same renderer as a live run — zero model calls, zero writes. The route never changes; promotion is a back-office CLI step (`scripts/promote-replay.mjs`). Shows an honest empty state if nothing is pinned. |
 | [`/factory/live`](web/src/app/factory/live/page.tsx) | The **true real-time spectator view**: read-only mirror of the most recent presenter batch's gallery (polling, no tokens). Falls back to the recorded replay when no batch has run. |
 | [`/presenter`](web/src/app/presenter/page.tsx) | Alias — redirects to `/factory/multi-campaign-demo`. |
