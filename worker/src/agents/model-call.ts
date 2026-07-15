@@ -1,7 +1,8 @@
 // Shared low-level model invocation. Reuses web/anthropic.ts for streaming,
 // pause_turn resume (web_search server tool), structured output, and the usage
 // sink. Adds: the fetch_page client-tool loop (one agent identity across turns),
-// a roster-timeout + cancellation guard via AbortController, one automatic
+// a roster-timeout + cancellation guard that aborts the underlying request via
+// AbortController (CallOptions.signal), one automatic
 // correction retry on invalid structured output, per-call usage recording, and
 // per-search Factory Events. The visible operational retry (timeout/provider)
 // lives one level up, in the executor / reviewer.
@@ -19,26 +20,37 @@ import type { WorkEmitter } from "./work.js";
 export class TurnTimeoutError extends Error {}
 export class TurnAbortedError extends Error {}
 
-/** Race a promise against a per-turn deadline and the run's cancellation signal. */
-function withDeadline<T>(p: Promise<T>, ms: number, signal: AbortSignal): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    const finish = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      signal.removeEventListener("abort", onAbort);
-      fn();
-    };
-    const timer = setTimeout(() => finish(() => reject(new TurnTimeoutError(`model turn exceeded ${ms}ms`))), ms);
-    const onAbort = () => finish(() => reject(new TurnAbortedError("run cancelled")));
-    if (signal.aborted) {
-      finish(() => reject(new TurnAbortedError("run cancelled")));
-      return;
-    }
-    signal.addEventListener("abort", onAbort, { once: true });
-    p.then((v) => finish(() => resolve(v)), (e) => finish(() => reject(e)));
-  });
+/**
+ * Run one model call under a per-turn deadline and the run's cancellation
+ * signal. Unlike a plain promise race, this passes a real AbortSignal INTO the
+ * request (via CallOptions.signal), so a timed-out or cancelled turn tears down
+ * the underlying HTTP stream instead of leaking it in the background. The abort
+ * reason is tracked so the rejection surfaces as the typed error the executor's
+ * operational-retry logic branches on (TurnTimeoutError vs TurnAbortedError).
+ */
+async function runCall<T>(make: (signal: AbortSignal) => Promise<T>, ms: number, parent: AbortSignal): Promise<T> {
+  if (parent.aborted) throw new TurnAbortedError("run cancelled");
+  const ac = new AbortController();
+  let reason: "timeout" | "cancel" | null = null;
+  const abortWith = (r: "timeout" | "cancel") => {
+    if (reason) return;
+    reason = r;
+    ac.abort();
+  };
+  const onParent = () => abortWith("cancel");
+  parent.addEventListener("abort", onParent, { once: true });
+  const timer = setTimeout(() => abortWith("timeout"), Math.max(1, ms));
+  (timer as { unref?: () => void }).unref?.();
+  try {
+    return await make(ac.signal);
+  } catch (e) {
+    if (reason === "timeout") throw new TurnTimeoutError(`model turn exceeded ${ms}ms`);
+    if (reason === "cancel") throw new TurnAbortedError("run cancelled");
+    throw e;
+  } finally {
+    clearTimeout(timer);
+    parent.removeEventListener("abort", onParent);
+  }
 }
 
 export interface ModelTurnSpec {
@@ -134,8 +146,8 @@ export async function runModelTurn(spec: ModelTurnSpec, deps: ExecutorDeps): Pro
   for (let turn = 0; turn <= maxToolTurns; turn++) {
     if (remaining() <= 0) throw new TurnTimeoutError(`model turn exceeded ${spec.timeoutMs}ms`);
     spec.work.work(turn === 0 ? "Working" : "Reviewing sources", "thinking");
-    const msg = await withDeadline(
-      call(client, { ...baseParams, messages } as Parameters<typeof call>[1], opts),
+    const msg = await runCall(
+      (signal) => call(client, { ...baseParams, messages } as Parameters<typeof call>[1], { ...opts, signal }),
       Math.max(1, remaining()),
       deps.signal,
     );
@@ -177,8 +189,8 @@ export async function runModelTurn(spec: ModelTurnSpec, deps: ExecutorDeps): Pro
         content: `Your previous response did not match the required schema. Problems:\n- ${errors.slice(0, 20).join("\n- ")}\n\nReturn ONLY the corrected single JSON object — no prose, no fences.`,
       });
       try {
-        const msg2 = await withDeadline(
-          call(client, { ...baseParams, messages, tools: undefined } as Parameters<typeof call>[1], { onUsage }),
+        const msg2 = await runCall(
+          (signal) => call(client, { ...baseParams, messages, tools: undefined } as Parameters<typeof call>[1], { onUsage, signal }),
           Math.max(1, remaining()),
           deps.signal,
         );
