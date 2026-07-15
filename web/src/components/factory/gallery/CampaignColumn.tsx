@@ -135,23 +135,17 @@ export function CampaignColumn({
             accent={hueByIndex(campaign.hue).accent}
           />
           <PublishedBriefStack cards={run.publishedCards} hue={campaign.hue} />
-          {/* Cards still inside their readable window (or failed agents worth a
-              look) stay visible below the receipt instead of vanishing. */}
-          {expanded.length > 0 || compact.length > 0 ? (
+          {/* Done mode keeps EVERY agent workspace readable (grayed by its
+              terminal status) so the finished factory floor can be browsed. */}
+          {cards.length > 0 ? (
             <div className={styles.cardGroup}>
-              {expanded.map((vm) => (
+              {cards.map((vm) => (
                 <div key={vm.agentRunId} data-agent-run-id={vm.agentRunId} className={cardStyles.reposition}>
                   <AgentWorkCard vm={vm} now={now} />
                 </div>
               ))}
-              {compact.map((vm) => (
-                <div key={vm.agentRunId} data-agent-run-id={vm.agentRunId} className={cardStyles.reposition}>
-                  <CompactAgentCard vm={vm} now={now} />
-                </div>
-              ))}
             </div>
           ) : null}
-          {pillGroup(pills)}
         </>
       ) : (
         <>
