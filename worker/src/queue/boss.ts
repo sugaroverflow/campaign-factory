@@ -1,11 +1,13 @@
 // Durable run queue (ADR 0016): pg-boss in its own `pgboss` schema. One job per
-// campaign run. Retry lease + dead-letter configured. NOTE: pg-boss 11 does NOT
-// reclaim a crashed worker's `active` jobs on restart — an ungraceful kill
-// (SIGKILL/OOM) leaves the job leased until expireInSeconds passes. Immediate
-// recovery is therefore done explicitly at boot by runtime/recover.ts, which
-// retires stale active jobs and re-enqueues; the graph resumes from its
-// checkpoint. Dead-lettered work becomes a VISIBLE Terminal Gap event, never a
-// hidden item.
+// campaign run. Retry lease + dead-letter configured. TWO pg-boss 11 gotchas
+// are handled explicitly here — do not regress them:
+//  1. No crash reclaim: a crashed worker's `active` jobs stay leased until
+//     expireInSeconds passes; runtime/recover.ts retires stale leases at boot
+//     and re-enqueues (graph resumes from checkpoint).
+//  2. No intra-subscription concurrency: work() delivers a fetch's jobs to ONE
+//     handler call and fetches nothing more until it returns — concurrency
+//     requires N separate work() slots of batchSize=1 (see startWorkers).
+// Dead-lettered work becomes a VISIBLE Terminal Gap event, never a hidden item.
 
 import PgBoss from "pg-boss";
 import { QUEUE_SCHEMA } from "@web/lib/factory/contracts/tables.js";
@@ -87,23 +89,23 @@ export async function ensureQueues(): Promise<void> {
 export async function startWorkers(run: RunFn, dead: DeadFn): Promise<void> {
   const b = getBoss();
 
-  // Main worker: up to 5 campaigns concurrently (a presenter batch). Each job is
-  // isolated — the runner always drives its run to a terminal state and only
-  // THROWS on systemic failure, which surfaces to pg-boss retry/dead-letter.
-  await b.work<RunJobData>(
-    RUN_QUEUE,
-    { batchSize: RUNTIME_LIMITS.campaignsPerPresenterBatch },
-    async (jobs) => {
-      const results = await Promise.allSettled(jobs.map((j) => run(j.data)));
-      const firstReject = results.find((r) => r.status === "rejected");
-      if (firstReject && firstReject.status === "rejected") {
-        // Fail the batch so leased jobs are retried / eventually dead-lettered.
-        throw firstReject.reason instanceof Error
-          ? firstReject.reason
-          : new Error(String(firstReject.reason));
-      }
-    },
-  );
+  // Main workers: N INDEPENDENT single-job slots, not one batchSize=N handler.
+  // REGRESSION NOTE (live batch defect, 15 Jul 2026): pg-boss 11's work() loop
+  // is fetch(batchSize) → await handler(jobs) → fetch again — a single
+  // subscription with batchSize=5 hands up to 5 jobs to ONE handler call and
+  // fetches NOTHING further until that call returns. A 5th campaign enqueued
+  // just after a 4-job fetch therefore sat queued for the whole first wave
+  // (~20 min), violating ADR 0003's five-concurrent-graphs requirement. v11 has
+  // no teamSize/concurrency option, but each work() call registers its own
+  // worker with an independent polling loop — so N slots of batchSize=1 keep
+  // delivery continuous. Per-model-call fairness stays in the gate; a slot that
+  // throws fails only ITS job (per-job retry/dead-letter, no batch coupling).
+  const slots = RUNTIME_LIMITS.campaignsPerPresenterBatch;
+  for (let i = 0; i < slots; i++) {
+    await b.work<RunJobData>(RUN_QUEUE, { batchSize: 1 }, async (jobs) => {
+      for (const job of jobs) await run(job.data);
+    });
+  }
 
   // Dead-letter drain: turn a give-up into a visible Terminal Gap, not silence.
   await b.work<RunJobData>(RUN_DEAD_QUEUE, { batchSize: 5 }, async (jobs) => {
