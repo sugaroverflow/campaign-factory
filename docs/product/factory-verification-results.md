@@ -28,7 +28,11 @@ Playwright: presenter-batch spec **passed twice** against local mock (~3 min/run
 - Five `agent.failed` events produced zero `gap.terminal` events — ADR 0011 expects failed responsibilities to surface as Terminal Gaps (state-level next-checks may cover this; needs confirmation).
 - Run duration 24.9 min vs the 20-min hard execution limit — verify the limit stops new model nodes at 20 min as specified.
 
-## Live run #2 (Leicester, after the container fix — in progress at time of writing)
+## Live run #2 — FINAL (Leicester, after the container fix)
+
+**Terminal: honest partial · ~70 min · $5.01 · 457 events · zero agent failures/retries** (run #1: five of five tool agents failed). Output: 138 claims (89 load-bearing, 58 verified, 31 honestly unresolved), 21 recorded conflicts, 38 next checks; documents — tactics_timeline and organising_plan **ready** (7k/8.7k chars), media/digital packs substantial but **needs verification** (15k each), campaign_brief 67k chars under review, unaccepted sections carry explicit "Nothing invented to fill it" placeholders. **Zero fabrication tells; 36 verification markers.** Latency misses (first finding 703 s vs 45 s target; first accepted section ~60 min vs 90 s) are roster/search-tuning work, recorded below.
+
+## Live run #2 observations (during run)
 
 **Container fix PROVEN in production shape:** zero tool-agent failures or retries across the entire run (run #1: five of five tool agents failed). All ten first-wave agents completed; both specialists spawned and delivered. Real evidence at depth: six `evidence.found` batches (claims mostly load-bearing), six honest `evidence.conflicted`, seven `evidence.gap`.
 
