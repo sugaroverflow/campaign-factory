@@ -8,6 +8,7 @@ import { usePathname } from "next/navigation";
 const LINKS = [
   { href: "/factory", label: "Factory Builder" },
   { href: "/gallery", label: "Campaign Gallery" },
+  { href: "/operations", label: "Operations" },
 ];
 
 export function SiteNav() {
