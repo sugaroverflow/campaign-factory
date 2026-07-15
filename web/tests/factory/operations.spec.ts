@@ -1,15 +1,18 @@
 import { test, expect } from "@playwright/test";
 
-test("operations workspace: local review and demo queue flow", async ({ page }) => {
+test("operations workbench: cross-view local review and demo queue flow", async ({ page }) => {
   await page.goto("/operations");
 
-  await expect(
-    page.getByRole("heading", { name: /Turn a brief into campaign operations/i }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toBeVisible();
   await expect(page.getByText("Demo workspace", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Local fixture state", { exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
 
+  await page.getByRole("button", { name: /Audiences/ }).first().click();
   await page.getByRole("button", { name: /Nearby ward parents/ }).click();
+  await expect(page.getByText(/44 fixture contacts include postcode-level relevance/)).toBeVisible();
+
+  await page.getByRole("button", { name: /Drafts/ }).first().click();
   await expect(page.getByRole("heading", { name: /Parent update for nearby ward parents/i })).toBeVisible();
 
   const subject = page.getByLabel("Subject");
@@ -28,18 +31,18 @@ test("operations workspace: local review and demo queue flow", async ({ page }) 
     ].join("\n"),
   );
 
-  await page.getByRole("button", { name: "preview" }).click();
+  await page.getByRole("button", { name: "preview", exact: true }).click();
   await expect(page.getByText("Back the permanent school street before the order lapses")).toBeVisible();
   await expect(page.getByText(/44 ready fixture contacts/)).toBeVisible();
 
   await page.getByRole("button", { name: "Mark ready for review" }).click();
+  await expect(page.getByRole("heading", { name: "Human approval gate" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Needs human review" })).toBeVisible();
 
   await page.getByRole("button", { name: "Approve as human reviewer" }).click();
   await expect(page.getByRole("heading", { name: "Approved by human" })).toBeVisible();
 
   await page.getByRole("button", { name: "Queue locally for demo" }).click();
-  await expect(page.getByRole("heading", { name: "Queued for demo" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "One local queue item" })).toBeVisible();
   await expect(page.getByText(/It is not connected to an email provider/)).toBeVisible();
 
@@ -48,36 +51,47 @@ test("operations workspace: local review and demo queue flow", async ({ page }) 
   await expect(provider).toHaveAttribute("aria-describedby", "operations-provider-note");
 
   await page.reload();
-  await expect(page.getByRole("heading", { name: "Queued for demo" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "One local queue item" })).toBeVisible();
   await expect(page.getByText("Back the permanent school street before the order lapses")).toBeVisible();
 
-  await page.getByRole("button", { name: "Reset demo state" }).click();
-  await expect(page.getByRole("heading", { name: "Draft" })).toBeVisible();
+  await page.getByRole("button", { name: "Reset demo state" }).last().click();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toBeVisible();
+  await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
   await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
 });
 
-test("operations workspace: desktop and narrow layouts avoid horizontal overflow", async ({ page }) => {
+test("operations workbench: desktop and narrow layouts avoid horizontal overflow", async ({ page }) => {
   for (const viewport of [
     { width: 1440, height: 1000 },
-    { width: 390, height: 1000 },
+    { width: 1024, height: 768 },
+    { width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
     await page.goto("/operations");
-    await expect(page.getByRole("heading", { name: /Turn a brief into campaign operations/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toBeVisible();
 
-    const metrics = await page.evaluate(() => ({
-      bodyScrollWidth: document.body.scrollWidth,
-      viewportWidth: window.innerWidth,
-      navScrollWidth: document.querySelector("nav")?.scrollWidth ?? 0,
-      navClientWidth: document.querySelector("nav")?.clientWidth ?? 0,
-    }));
+    const metrics = await page.evaluate(() => {
+      const operationsNav = document.querySelector('nav[aria-label="Campaign operations views"]');
+      const header = document.querySelector("header");
+      const main = document.querySelector("main");
+      return {
+        bodyScrollWidth: document.body.scrollWidth,
+        viewportWidth: window.innerWidth,
+        navScrollWidth: operationsNav?.scrollWidth ?? 0,
+        navClientWidth: operationsNav?.clientWidth ?? 0,
+        headerBottom: header?.getBoundingClientRect().bottom ?? 0,
+        mainTop: main?.getBoundingClientRect().top ?? 0,
+      };
+    });
 
     expect(metrics.bodyScrollWidth, `body should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(
       metrics.viewportWidth,
     );
-    expect(metrics.navScrollWidth, `nav should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(
+    expect(metrics.navScrollWidth, `operations nav should not overflow at ${viewport.width}px`).toBeLessThanOrEqual(
       metrics.navClientWidth,
+    );
+    expect(metrics.mainTop, `main should not be hidden under chrome at ${viewport.width}px`).toBeGreaterThanOrEqual(
+      metrics.headerBottom - 1,
     );
   }
 });

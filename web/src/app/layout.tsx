@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Inter_Tight, Instrument_Serif, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "./journey.css";
-import { SiteNav } from "@/components/SiteNav";
-import { SiteFooter } from "@/components/SiteFooter";
+import { AppChrome } from "@/components/AppChrome";
 
 // Awake pairing: Inter Tight (sans) + Instrument Serif (italic display accents).
 const interTight = Inter_Tight({
@@ -42,9 +41,7 @@ export default function RootLayout({
       className={`${interTight.variable} ${instrumentSerif.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <SiteNav />
-        <div className="flex-1">{children}</div>
-        <SiteFooter />
+        <AppChrome>{children}</AppChrome>
       </body>
     </html>
   );
