@@ -23,6 +23,7 @@ const LEGACY_STORAGE_KEYS = ["cf_operations_demo_v2", "cf_operations_demo_v1"];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const PORTFOLIO_CAMPAIGNS: PortfolioCampaign[] = [...OPERATIONS_PUBLIC_CAMPAIGNS];
+const SOURCE_CLIENT_TIMEOUT_MS = 15_000;
 
 type SegmentId = "school_gates" | "ward_parents" | "local_allies";
 type DraftId = "supporter_email" | "decision_maker_letter" | "press_pitch";
@@ -1443,11 +1444,31 @@ function buildSourceContext(source: CampaignSource): typeof campaignContext {
 }
 
 async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Promise<CampaignSource> {
-  const sourceRes = await fetch(`/api/operations/sources/${encodeURIComponent(campaignId)}`, {
-    headers: { accept: "application/json" },
-    cache: "no-store",
-    signal,
-  });
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, SOURCE_CLIENT_TIMEOUT_MS);
+  const abortSource = () => controller.abort();
+  signal.addEventListener("abort", abortSource, { once: true });
+
+  let sourceRes: Response;
+  try {
+    sourceRes = await fetch(`/api/operations/sources/${encodeURIComponent(campaignId)}`, {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(`The Operations source adapter did not respond within ${SOURCE_CLIENT_TIMEOUT_MS / 1000} seconds. No fixture fallback was used.`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+    signal.removeEventListener("abort", abortSource);
+  }
   if (!sourceRes.ok) {
     const errorBody = (await sourceRes.json().catch(() => null)) as { error?: string; detail?: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string } | null;
     const sourceOrigin = normaliseOperationsSourceOrigin(errorBody?.sourceOrigin);

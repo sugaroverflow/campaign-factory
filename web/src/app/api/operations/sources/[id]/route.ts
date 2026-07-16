@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
 const READ_ONLY_ALLOW_HEADERS = { ...NO_STORE_HEADERS, Allow: "GET" };
+const SOURCE_FETCH_TIMEOUT_MS = 10_000;
 
 function sourceJson<T>(body: T, status = 200, headers: Record<string, string> = NO_STORE_HEADERS) {
   return NextResponse.json(body, { status, headers });
@@ -40,10 +41,18 @@ function sourceOrigin() {
 }
 
 async function fetchSourceJson<T>(origin: string, path: string): Promise<{ ok: true; value: T } | { ok: false; status: number; message: string; path: string }> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, SOURCE_FETCH_TIMEOUT_MS);
+
   try {
     const response = await fetch(`${origin}${path}`, {
       headers: { accept: "application/json" },
       cache: "no-store",
+      signal: controller.signal,
     });
     if (!response.ok) {
       return { ok: false, status: response.status, path, message: `Read-only source ${path} returned HTTP ${response.status}.` };
@@ -52,10 +61,14 @@ async function fetchSourceJson<T>(origin: string, path: string): Promise<{ ok: t
   } catch (error) {
     return {
       ok: false,
-      status: 502,
+      status: timedOut ? 504 : 502,
       path,
-      message: error instanceof Error ? error.message : "The read-only source could not be reached.",
+      message: timedOut
+        ? `Read-only source ${path} timed out after ${SOURCE_FETCH_TIMEOUT_MS / 1000} seconds.`
+        : error instanceof Error ? error.message : "The read-only source could not be reached.",
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -101,7 +114,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!docs.ok) {
     return sourceJson(
       { error: "Campaign source documents unavailable", detail: upstreamFailureDetail(docs, run.ok ? undefined : run), sourceOrigin: origin },
-      docs.status === 404 ? 404 : 502,
+      docs.status === 404 ? 404 : docs.status === 504 ? 504 : 502,
     );
   }
 
