@@ -115,10 +115,10 @@ export const STEP_COPY: Record<JourneyStepKey, RungCopy> = {
   documents: {
     title: (
       <>
-        Campaign <span className="serif">documents</span>
+        Campaign <span className="serif">materials</span>
       </>
     ),
-    short: "Documents",
+    short: "Materials",
     sub: "Nine documents compiled from the accepted brief — copy or download each one when it's ready.",
     limit: "Every document reads from one shared campaign brief; regenerate any one alone.",
   },

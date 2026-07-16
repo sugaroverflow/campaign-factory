@@ -18,7 +18,7 @@
 // Pure: no fetching here — the live hook (AssemblyClient) or the fixture
 // preview supplies `run`. The page never auto-jumps between sections.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   JOURNEY_STEPS,
   type JourneyStepKey,
@@ -45,8 +45,14 @@ import { NEXT_STEPS_COPY, SOURCES_COPY, STEP_COPY } from "./stepCopy";
 import "./assembly.css";
 
 const JOURNEY_KEYS = new Set<string>(JOURNEY_STEPS.map((s) => s.key));
+const DRAFTED_KEY = "drafted";
 const SOURCES_KEY = "sources";
 const NEXT_STEPS_KEY = "next-steps";
+
+// First slice of a compiled document body shown inline in the Drafted materials
+// rung; the remainder lives in a native <details> so a 10k-char pack never
+// dumps uncollapsed.
+const DRAFT_HEAD = 800;
 
 // The nine acceptable sections (step 10 is compiled from document statuses,
 // never reviewer-accepted — same denominator as buildCampaignReceipt).
@@ -93,6 +99,67 @@ function contentArrayLength(content: unknown, key: string): number {
   return Array.isArray(v) ? v.length : 0;
 }
 
+/** Dedicated "Drafted materials" rung (the legacy Journey "drafts" stage): every
+ *  BUILT compiled document's full body as a draftblock, ordered by d.num — first
+ *  ~800 chars inline, the remainder behind a native "Read the rest" expander.
+ *  `documents` is already the filtered+sorted built list. It is rendered only
+ *  once the terminal-run compiled payload has loaded, which is AFTER the reveal
+ *  observer runs — so it is shown revealed (data-on="1") rather than waiting for
+ *  an intersection that would never be recorded for this late-mounted section. */
+function DraftedMaterialsRung({
+  id,
+  n,
+  documents,
+  active,
+}: {
+  id: string;
+  n: number;
+  documents: CompiledDocument[];
+  active: boolean;
+}) {
+  if (!documents.length) return null;
+  return (
+    <section className={`rung cf-reveal${active ? " active" : ""}`} id={id} data-stage={DRAFTED_KEY} data-on="1">
+      <div className="jcontainer rung-grid">
+        <aside>
+          <div className="n">{n}</div>
+          <h2>
+            Drafted <span className="serif">materials</span>
+          </h2>
+          <p className="limit">
+            First drafts, compiled from the accepted brief — a person edits and approves before anything is sent.
+          </p>
+        </aside>
+        <div className="rc">
+          {documents.map((d) => {
+            const head = d.plainText.slice(0, DRAFT_HEAD);
+            const rest = d.plainText.slice(DRAFT_HEAD);
+            return (
+              <div key={d.key} className="draftblock" data-anim="2">
+                <div className="db-head">
+                  <b>{d.name}</b>
+                </div>
+                <div className="db-body">
+                  <p>
+                    {head}
+                    {rest ? "…" : null}
+                  </p>
+                  {rest ? (
+                    <details className="fa-material-more">
+                      <summary>Read the rest</summary>
+                      <p>{rest}</p>
+                    </details>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function AssemblyView({
   run,
   connection,
@@ -131,24 +198,19 @@ export function AssemblyView({
     return { bySection, orphans };
   }, [run.judgements]);
 
-  // FEATURE B — full compiled material text scrolls by inside the owning
-  // production step. Each BUILT document (one with a status pill) is assigned to
-  // a single home rail step by the section it's built from: docs 2–6 sit under
-  // their one/two brief sections (sectionKeys[0]); the whole-brief document and
-  // the lobbying/media/digital packs (no single section) sit under the step-10
-  // "Campaign materials" rung, below the library grid. Contentless documents
-  // have no body, so they contribute nothing here.
-  const materialsByStep = useMemo(() => {
-    const map: Record<string, CompiledDocument[]> = {};
-    if (!compiled) return map;
-    for (const d of compiled.documents) {
-      if (documentPill(d.status, d.flags.length > 0) == null) continue; // built only
-      const home =
-        d.sectionKeys.length >= 1 && d.sectionKeys.length <= 2 ? d.sectionKeys[0] : "documents";
-      (map[home] ??= []).push(d);
-    }
-    return map;
+  // Every BUILT compiled document (one that earns a status pill), as a flat
+  // d.num-ordered list — the body of the dedicated "Drafted materials" rung.
+  // Empty until the terminal-run compiled payload loads, so that rung is absent
+  // on live runs and on runs that produced no built documents.
+  const draftedMaterials = useMemo(() => {
+    if (!compiled) return [] as CompiledDocument[];
+    return compiled.documents
+      .filter((d) => documentPill(d.status, d.flags.length > 0) != null)
+      .sort((a, b) => a.num - b.num);
   }, [compiled]);
+  const showDrafted = draftedMaterials.length > 0;
+  // Rungs after the Drafted materials rung shift up by one when it is present.
+  const tailOffset = showDrafted ? 1 : 0;
 
   // Name flip: generated campaign name (fold beats register — it's fresher on
   // a live stream), falling back to the user's problem text while none exists.
@@ -180,8 +242,13 @@ export function AssemblyView({
     return out;
   }, [register.sources.length, run.sections.power.content, run.sections.tactics.content]);
 
+  // documents is the last journey step (step 10); the Drafted materials rung is
+  // interleaved immediately before it so the rail auto-numbers coherently.
+  const journeyRail = JOURNEY_STEPS.map((s) => ({ key: s.key as string, title: STEP_COPY[s.key].short }));
   const rail: { key: string; title: string }[] = [
-    ...JOURNEY_STEPS.map((s) => ({ key: s.key as string, title: STEP_COPY[s.key].short })),
+    ...journeyRail.slice(0, -1),
+    ...(showDrafted ? [{ key: DRAFTED_KEY, title: "Drafted materials" }] : []),
+    journeyRail[journeyRail.length - 1],
     { key: SOURCES_KEY, title: SOURCES_COPY.short },
     { key: NEXT_STEPS_KEY, title: NEXT_STEPS_COPY.short },
   ];
@@ -264,24 +331,28 @@ export function AssemblyView({
         </div>
       ) : null}
 
-      {/* rungs 1–10: the journey steps */}
+      {/* rungs 1–9 (the journey steps), then — when built — the dedicated
+          Drafted materials rung, then the documents grid rung ("Campaign
+          materials"). The drafted rung is emitted immediately before the
+          documents step so it lands in the right rail slot. */}
       {JOURNEY_STEPS.map((s) => {
         const section = run.sections[s.key as JourneyStepKey];
-        // Step 10 footer: full compiled library (bodies + Word export) once the
-        // terminal-run read path responds; honest status-only grid until then.
-        const footer =
-          s.step === 10 ? (
-            compiled ? (
-              <CompiledDocumentLibrary
-                documents={compiled.documents}
-                intro="Built from your accepted campaign brief — copy or download each document once it's ready."
-                showHeading={false}
-              />
-            ) : (
-              <DocumentLibrary documents={run.documents} />
-            )
-          ) : undefined;
-        return (
+        const isDocs = s.step === 10;
+        // Documents-step footer: full compiled library (bodies + Word export)
+        // once the terminal-run read path responds; honest status-only grid
+        // until then.
+        const footer = isDocs ? (
+          compiled ? (
+            <CompiledDocumentLibrary
+              documents={compiled.documents}
+              intro="Built from your accepted campaign brief — copy or download each document once it's ready."
+              showHeading={false}
+            />
+          ) : (
+            <DocumentLibrary documents={run.documents} />
+          )
+        ) : undefined;
+        const rung = (
           <BriefSection
             key={s.key}
             id={`fa-${s.key}`}
@@ -291,7 +362,8 @@ export function AssemblyView({
             onAnswer={onAnswer}
             canDecide={canDecide}
             footer={footer}
-            materials={materialsByStep[s.key]}
+            // documents shifts to 11 when the Drafted materials rung precedes it
+            num={isDocs ? JOURNEY_STEPS.length + tailOffset : undefined}
             active={active === s.key}
             revealed={revealed.has(s.key)}
             evidenceExtras={
@@ -301,24 +373,38 @@ export function AssemblyView({
             }
           />
         );
+        if (!isDocs) return rung;
+        return (
+          <Fragment key={s.key}>
+            <DraftedMaterialsRung
+              id={`fa-${DRAFTED_KEY}`}
+              n={JOURNEY_STEPS.length}
+              documents={draftedMaterials}
+              active={active === DRAFTED_KEY}
+            />
+            {rung}
+          </Fragment>
+        );
       })}
 
-      {/* rung 11: the full source register, legacy Sources pattern */}
+      {/* the full source register, legacy Sources pattern (rung 11, or 12 when
+          the Drafted materials rung is present) */}
       <SourcesSection
         id={`fa-${SOURCES_KEY}`}
         stageKey={SOURCES_KEY}
-        n={11}
+        n={11 + tailOffset}
         sources={register.sources}
         terminal={terminal}
         active={active === SOURCES_KEY}
         revealed={revealed.has(SOURCES_KEY)}
       />
 
-      {/* rung 12 (final): Next steps — the fact-check material, all collapsed */}
+      {/* final rung: Next steps — the fact-check material, all collapsed
+          (rung 12, or 13 when the Drafted materials rung is present) */}
       <NextStepsSection
         id={`fa-${NEXT_STEPS_KEY}`}
         stageKey={NEXT_STEPS_KEY}
-        n={12}
+        n={12 + tailOffset}
         evidence={run.evidence}
         nextChecks={run.nextChecks}
         terminalGaps={run.terminalGaps}

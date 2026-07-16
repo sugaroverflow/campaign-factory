@@ -14,40 +14,9 @@
 import { type ReactNode } from "react";
 import type { JudgementVM, SectionVM } from "@/lib/factory/client";
 import type { JudgementAnswerRequest } from "@/lib/factory/contracts";
-import type { CompiledDocument } from "@/lib/factory/documents";
 import { YourJudgementCard } from "@/components/factory/judgement/YourJudgementCard";
 import { SectionContent, type EvidenceExtras } from "./SectionContent";
 import type { RungCopy } from "./stepCopy";
-
-// First slice of a compiled document body shown inline; the remainder lives in
-// a native <details> so a 10k-char pack never dumps uncollapsed (FEATURE B).
-const DRAFT_HEAD = 800;
-
-/** One compiled material rendered in the legacy draftblock anatomy (db-head =
- *  document title, db-body = the text), long bodies truncated with an expander. */
-function MaterialDraft({ title, body }: { title: string; body: string }) {
-  const head = body.slice(0, DRAFT_HEAD);
-  const rest = body.slice(DRAFT_HEAD);
-  return (
-    <div className="draftblock">
-      <div className="db-head">
-        <b>{title}</b>
-      </div>
-      <div className="db-body">
-        <p>
-          {head}
-          {rest ? "…" : null}
-        </p>
-        {rest ? (
-          <details className="fa-material-more">
-            <summary>Read the rest</summary>
-            <p>{rest}</p>
-          </details>
-        ) : null}
-      </div>
-    </div>
-  );
-}
 
 export function BriefSection({
   section,
@@ -57,7 +26,7 @@ export function BriefSection({
   canDecide = true,
   id,
   footer,
-  materials,
+  num,
   active = false,
   revealed = true,
   evidenceExtras,
@@ -70,9 +39,9 @@ export function BriefSection({
   canDecide?: boolean;
   id: string;
   footer?: ReactNode;
-  /** Compiled documents this step owns — their full bodies scroll by inline as
-   *  legacy draftblocks below the section content (FEATURE B, terminal runs). */
-  materials?: CompiledDocument[];
+  /** Override the aside badge number (defaults to the data's step index). Used
+   *  when a non-step rung is interleaved into the rail and later steps shift up. */
+  num?: number;
   active?: boolean;
   revealed?: boolean;
   /** Register-backed claim rows for the evidence rung's framed card. */
@@ -89,7 +58,7 @@ export function BriefSection({
     >
       <div className="jcontainer rung-grid">
         <aside>
-          <div className="n">{section.step}</div>
+          <div className="n">{num ?? section.step}</div>
           <h2>{copy.title}</h2>
           {copy.limit ? <p className="limit">{copy.limit}</p> : null}
         </aside>
@@ -105,15 +74,6 @@ export function BriefSection({
           ) : null}
 
           {footer ? <div data-anim="2">{footer}</div> : null}
-
-          {materials && materials.length ? (
-            <div data-anim="2" className="fa-materials">
-              <h3 className="draftgroup">Full material text</h3>
-              {materials.map((d) => (
-                <MaterialDraft key={d.key} title={d.name} body={d.plainText} />
-              ))}
-            </div>
-          ) : null}
 
           {!hasContent && !footer ? (
             <div>
