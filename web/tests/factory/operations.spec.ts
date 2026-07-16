@@ -804,6 +804,15 @@ test("operations workbench: real source working copies move through local review
   await expect(page.locator("main")).toContainText("Local copy from Digital Campaign Pack");
   await expect(page.getByText(/It is not connected to an email provider/)).toBeVisible();
 
+  await page.goto("/operations?campaignId=6b54225d-afa3-41d1-b053-89741094f153&view=outbox");
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Ormskirk KFC source update");
+
+  await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95&view=outbox");
+  await expect(page.getByRole("heading", { name: "One local queue item" })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Ormskirk KFC source update");
+
   await page.goto("/operations");
   const portfolio = page.getByLabel("Campaign operations portfolio");
   const ormskirkRow = portfolio.locator("article", { hasText: "Keep KFC Out of Ormskirk" });
