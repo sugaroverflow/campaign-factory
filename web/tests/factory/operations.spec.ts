@@ -837,6 +837,74 @@ test("operations workbench: real source working copies move through local review
   await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
 });
 
+test("operations workbench: editing a queued source working copy clears local queue state", async ({ page }) => {
+  const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? ormskirkId;
+    const sourceTitle =
+      id === ormskirkId
+        ? "Keep KFC Out of Ormskirk"
+        : id === "57678ae0-29fd-4b4b-8a53-5c711cdb21cf"
+          ? "Build 5,000 affordable houses in Tower Hamlets in the next 3 years"
+          : "Stop the leisure park redevelopment in Barnet";
+    const sourcePlace = id === ormskirkId ? "Ormskirk, Lancashire" : id === "57678ae0-29fd-4b4b-8a53-5c711cdb21cf" ? "Tower Hamlets, London" : "Barnet, London";
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "partial", stateVersion: 18, lastSequence: 31, events: [] },
+        documents: [
+          { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${sourceTitle}\n\nPlace: ${sourcePlace}\n\nTHE PROBLEM\nSource-backed campaign problem.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+          {
+            key: "digital_pack",
+            num: 2,
+            name: "Digital Campaign Pack",
+            status: "ready",
+            html: "",
+            plainText: ["DIGITAL CAMPAIGN PACK", "", "Ormskirk supporter email", "", "Subject: Ormskirk KFC source update", "", "Dear supporter,", "", "The public source says this copy must keep the appeal-status check visible before any local outreach is considered.", "", "Before you send this, check", "", "- Keep the public source boundary attached."].join("\n"),
+            isPack: true,
+            sectionKeys: [],
+            resourceCount: 1,
+            flags: [],
+          },
+        ],
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check the Planning Inspectorate appeal status before queueing local copy", reason: "Queued edit regression", claimIds: ["C1"], affectedSections: ["digital_pack"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 12, loadBearing: 8, verifiedLoadBearing: 4, unresolvedLoadBearing: 4 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${ormskirkId}&view=drafts`);
+  await page.getByLabel("Source pack resources").getByRole("button", { name: "Use in editable draft" }).first().click();
+  await page.getByRole("button", { name: "Mark ready for review" }).click();
+  await page.getByRole("button", { name: "Approve as human reviewer" }).click();
+  await page.getByRole("button", { name: "Queue locally for demo" }).click();
+  await expect(page.getByRole("heading", { name: "One local queue item" })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Ormskirk KFC source update");
+
+  await page.getByRole("button", { name: /Drafts/ }).first().click();
+  await page.getByLabel("Subject").fill("Edited Ormskirk KFC source update");
+  await expect(page.getByText("Editable local draft. It has not been reviewed or queued.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Mark ready for review" })).toBeEnabled();
+
+  await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Edited Ormskirk KFC source update");
+
+  await page.goto("/operations");
+  const portfolio = page.getByLabel("Campaign operations portfolio");
+  const ormskirkRow = portfolio.locator("article", { hasText: "Keep KFC Out of Ormskirk" });
+  await expect(ormskirkRow).toContainText("Local signals: 1 working draft.");
+  await expect(ormskirkRow).not.toContainText("queued locally");
+});
+
 test("operations portfolio ignores stale local state under the wrong campaign key", async ({ page }) => {
   const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
