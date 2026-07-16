@@ -97,6 +97,7 @@ export function AssemblyView({
   run,
   connection,
   onAnswer,
+  canDecide = true,
   compiled = null,
   register = EMPTY_BRIEF_REGISTER,
   isFixture = false,
@@ -104,6 +105,9 @@ export function AssemblyView({
   run: RunVM;
   connection: ConnectionState;
   onAnswer: (jid: string, action: JudgementAnswerRequest["action"], answer?: string) => Promise<boolean>;
+  /** False for a shared-link viewer (no run token): decision cards show an
+   *  honest "only the starter can decide" message instead of a doomed POST. */
+  canDecide?: boolean;
   /** W6-compiled document bodies + evidence ledger for a TERMINAL run (from
    *  W2's durable read route). Null during a live run or until the route
    *  responds — the view then keeps its status-only documents grid. */
@@ -211,13 +215,8 @@ export function AssemblyView({
             is not a live run and makes no model calls.
           </div>
         ) : null}
-        {run.status === "partial" || run.status === "failed" || run.status === "cancelled" ? (
-          <div className="jbanner" style={{ maxWidth: "72ch" }}>
-            {run.status === "cancelled"
-              ? "This run was cancelled. What completed is kept and shown below — nothing was invented to fill the gaps."
-              : "This run didn't fully complete. What's shown is real; unfinished work is listed as gaps, not filled in."}
-          </div>
-        ) : null}
+        {/* The graded receipt + honest per-item pills communicate run state;
+            the "didn't fully complete" banner is intentionally not rendered. */}
       </header>
 
       {/* the Agent Build Bar (kept graft): live runs only, gone once terminal */}
@@ -241,7 +240,7 @@ export function AssemblyView({
       {orphans.length ? (
         <div className="jcontainer" style={{ paddingTop: "0.5rem" }}>
           {orphans.map((j) => (
-            <YourJudgementCard key={j.id} judgement={j} onAnswer={(action, answer) => onAnswer(j.id, action, answer)} />
+            <YourJudgementCard key={j.id} judgement={j} canDecide={canDecide} onAnswer={(action, answer) => onAnswer(j.id, action, answer)} />
           ))}
         </div>
       ) : null}
@@ -271,6 +270,7 @@ export function AssemblyView({
             copy={STEP_COPY[s.key]}
             judgements={bySection[s.key] ?? []}
             onAnswer={onAnswer}
+            canDecide={canDecide}
             footer={footer}
             active={active === s.key}
             revealed={revealed.has(s.key)}

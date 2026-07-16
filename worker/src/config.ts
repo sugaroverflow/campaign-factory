@@ -44,8 +44,18 @@ function resolveDbUrl(): string | undefined {
   return str("FACTORY_DATABASE_URL") ?? str("DATABASE_URL_UNPOOLED") ?? str("DATABASE_URL");
 }
 
-const modelModeRaw = (str("FACTORY_MODEL_MODE") ?? "mock").toLowerCase();
-const modelMode: ModelMode = modelModeRaw === "live" ? "live" : "mock";
+// Fail-loud (C2): a typo or unset FACTORY_MODEL_MODE must never silently select
+// mock — that shipped a live show against the mock executor. Accept exactly
+// "live" or "mock"; anything else crashes at boot.
+const modelModeRaw = str("FACTORY_MODEL_MODE")?.toLowerCase();
+if (modelModeRaw !== "live" && modelModeRaw !== "mock") {
+  throw new Error(
+    `FACTORY_MODEL_MODE must be exactly "live" or "mock" (got ${
+      modelModeRaw === undefined ? "unset" : JSON.stringify(modelModeRaw)
+    }).`,
+  );
+}
+const modelMode: ModelMode = modelModeRaw;
 
 const port = num("PORT", 8787);
 

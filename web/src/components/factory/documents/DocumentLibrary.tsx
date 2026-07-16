@@ -26,6 +26,10 @@ import "./documents.css";
 
 const PILL_TAG: Record<"complete" | "nearly", string> = { complete: "real", nearly: "mock" };
 
+// Rotating pastel tints for the "Coming soon" (contentless) cards — the brief's
+// blue / pink / yellow palette family, so placeholders read as design.
+const SOON_TINTS = ["t-b", "t-p", "t-y"] as const;
+
 function Pill({ status, flagged }: { status: DocumentStatus; flagged: boolean }) {
   const pill = documentPill(status, flagged);
   if (!pill) return null;
@@ -52,6 +56,11 @@ export function DocumentLibrary({
   const [openKey, setOpenKey] = useState<string | null>(null);
   const readyCount = documents.filter((d) => d.status === "ready").length;
   const open = documents.find((d) => d.key === openKey) || null;
+  // deterministic tint per contentless doc (rotates across only the soon cards)
+  const soonTint = new Map<string, string>();
+  documents
+    .filter((d) => documentPill(d.status, d.flags.length > 0) == null)
+    .forEach((d, i) => soonTint.set(d.key, SOON_TINTS[i % SOON_TINTS.length]));
 
   return (
     <div className="fa-doclib">
@@ -66,11 +75,27 @@ export function DocumentLibrary({
       <div className="docgrid" style={{ marginTop: "0.75rem" }}>
         {documents.map((d) => {
           const dim = documentPill(d.status, d.flags.length > 0) == null;
+          // Contentless documents are non-clickable "Coming soon" pastel cards
+          // (never a dead-end empty view).
+          if (dim) {
+            return (
+              <div key={d.key} className={`doccard fa-doccard fa-doccard--soon ${soonTint.get(d.key) ?? ""}`}>
+                <span className="d-n">
+                  Document {d.num} of {documents.length}
+                  {d.isPack ? " · pack" : ""}
+                </span>
+                <h3>{d.name}</h3>
+                <div className="d-prev">
+                  <span className="fa-soon-pill">Coming soon</span>
+                </div>
+              </div>
+            );
+          }
           return (
             <button
               key={d.key}
               type="button"
-              className={`doccard fa-doccard${openKey === d.key ? " fa-doccard--open" : ""}${dim ? " fa-doccard--dim" : ""}`}
+              className={`doccard fa-doccard${openKey === d.key ? " fa-doccard--open" : ""}`}
               onClick={() => setOpenKey(openKey === d.key ? null : d.key)}
               aria-expanded={openKey === d.key}
             >

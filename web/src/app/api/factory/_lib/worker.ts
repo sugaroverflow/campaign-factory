@@ -68,6 +68,8 @@ export async function forwardSigned(
       },
       body: method === "GET" ? undefined : body,
       cache: "no-store",
+      // Never hang a request on a stuck worker — fail fast to the 502 below.
+      signal: AbortSignal.timeout(10_000),
     });
     let parsed: unknown = null;
     try {

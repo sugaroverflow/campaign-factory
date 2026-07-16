@@ -23,7 +23,9 @@ export const config = {
   runCap: intEnv("CF_RUN_CAP", 3),
   // Runs allowed per client IP (harder backstop against abuse). Set to 1 for
   // "everyone gets one run". Cost is controlled here, not by degrading research.
-  ipRunCap: intEnv("CF_IP_RUN_CAP", 3),
+  // venue NAT: hundreds of attendees share one egress IP — default high so the
+  // whole room isn't locked out by one shared address (env var still overrides).
+  ipRunCap: intEnv("CF_IP_RUN_CAP", 200),
   // Global daily spend ceiling (kill-switch), in GBP, converted to USD for the
   // ledger. Sized ~2x expected launch-day cost.
   dailyBudgetGBP: numEnv("CF_DAILY_BUDGET_GBP", 150),

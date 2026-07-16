@@ -23,6 +23,7 @@ export function BriefSection({
   copy,
   judgements,
   onAnswer,
+  canDecide = true,
   id,
   footer,
   active = false,
@@ -33,6 +34,8 @@ export function BriefSection({
   copy: RungCopy;
   judgements: JudgementVM[];
   onAnswer: (jid: string, action: JudgementAnswerRequest["action"], answer?: string) => Promise<boolean>;
+  /** False for a shared-link viewer with no run token (see AssemblyView). */
+  canDecide?: boolean;
   id: string;
   footer?: ReactNode;
   active?: boolean;
@@ -53,12 +56,11 @@ export function BriefSection({
         <aside>
           <div className="n">{section.step}</div>
           <h2>{copy.title}</h2>
-          <p className="whatsnew">{copy.sub}</p>
           {copy.limit ? <p className="limit">{copy.limit}</p> : null}
         </aside>
         <div className="rc">
           {judgements.map((j) => (
-            <YourJudgementCard key={j.id} judgement={j} onAnswer={(action, answer) => onAnswer(j.id, action, answer)} />
+            <YourJudgementCard key={j.id} judgement={j} canDecide={canDecide} onAnswer={(action, answer) => onAnswer(j.id, action, answer)} />
           ))}
 
           {hasContent ? (

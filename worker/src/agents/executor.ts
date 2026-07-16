@@ -105,6 +105,11 @@ export const executeAgentTurn: AgentTurnFn = async (envelope, deps) => {
 // a failed/skipped retry so the caller can emit a failed result rather than
 // crash the node.
 const MIN_RETRY_HEADROOM_MS = 30_000;
+// A timeout consumes the whole envelope window, so the raw headroom to the
+// envelope deadline is ~0 and the single operational retry would always be
+// skipped. For a timeout we grant one fresh, bounded retry window instead —
+// capped so a flaky agent still can't double a long turn timeout.
+const MAX_RETRY_TIMEOUT_MS = 120_000;
 
 async function runWithOperationalRetry(
   spec: ModelTurnSpec,
@@ -119,7 +124,14 @@ async function runWithOperationalRetry(
     if (e instanceof TurnAbortedError || e instanceof EmptyOutputError) throw e;
     const nowMs = (deps.now?.() ?? new Date()).getTime();
     const deadlineMs = deadlineAt ? Date.parse(deadlineAt) : NaN;
-    const headroomMs = Number.isFinite(deadlineMs) ? deadlineMs - nowMs : spec.timeoutMs;
+    const rawHeadroomMs = Number.isFinite(deadlineMs) ? deadlineMs - nowMs : spec.timeoutMs;
+    // A timeout leaves ~0 headroom to the envelope deadline; grant one fresh,
+    // bounded window so the single retry is reachable. Provider errors fail fast
+    // and keep their real headroom.
+    const headroomMs =
+      e instanceof TurnTimeoutError
+        ? Math.min(spec.timeoutMs, MAX_RETRY_TIMEOUT_MS)
+        : rawHeadroomMs;
     if (headroomMs < MIN_RETRY_HEADROOM_MS) {
       diag(`${spec.def.key} retry skipped`, new Error(`${headroomMs}ms left before envelope deadline`));
       return null;

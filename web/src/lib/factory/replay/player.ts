@@ -22,7 +22,7 @@
 
 import type { FactoryEvent } from "../contracts/core";
 
-export type ReplaySpeed = 1 | 2 | 4;
+export type ReplaySpeed = 1 | 2 | 4 | 6;
 
 export type ReplayStatus = "idle" | "playing" | "paused" | "ended";
 

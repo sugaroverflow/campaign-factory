@@ -117,7 +117,7 @@ export async function runSynthesisReview(input: ReviewInput, deps: ExecutorDeps)
     schema: REVIEW_SCHEMA,
     structuredOutput: false,
     model,
-    effort: "high",
+    effort: input.profile === "express" ? def.effort : "high",
     adaptiveThinking: true, // reviewer runs on Sonnet/Opus, both adaptive
     maxOutputTokens,
     timeoutMs: def.timeoutMs,

@@ -36,8 +36,14 @@ export async function POST(req: Request) {
   if (typeof problem !== "string" || problem.trim().length < 3) {
     return NextResponse.json({ error: "A campaign problem is required." }, { status: 400 });
   }
+  if (problem.trim().length > 2000) {
+    return NextResponse.json({ error: "That campaign problem is too long — please keep it under 2000 characters." }, { status: 400 });
+  }
   if (typeof place !== "string" || place.trim().length < 1) {
     return NextResponse.json({ error: "A named place is required — no run accepts a blank place." }, { status: 400 });
+  }
+  if (place.trim().length > 200) {
+    return NextResponse.json({ error: "That place name is too long — please keep it under 200 characters." }, { status: 400 });
   }
 
   const isAdmin = !!config.adminKey && (req.headers.get("x-cf-admin-key") || "").trim() === config.adminKey;

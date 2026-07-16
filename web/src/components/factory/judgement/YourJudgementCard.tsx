@@ -54,13 +54,18 @@ async function postAnswer(
   judgementId: string,
   action: Action,
   answer?: string,
+  streamToken?: string,
 ): Promise<boolean> {
   try {
     const res = await fetch(
       `/api/factory/runs/${encodeURIComponent(campaignId)}/judgements/${encodeURIComponent(judgementId)}`,
       {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          // Without the run-scoped stream token the judgement route 401s.
+          ...(streamToken ? { "x-factory-stream-token": streamToken } : {}),
+        },
         body: JSON.stringify({ action, answer } satisfies JudgementAnswerRequest),
       },
     );
@@ -69,6 +74,11 @@ async function postAnswer(
     return false;
   }
 }
+
+// Shown when a shared-link viewer (no run-scoped token) tries to decide — the
+// route would 401, so we are honest instead of surfacing a generic failure.
+const NO_TOKEN_MESSAGE =
+  "Only the person who started this run can decide — proceeding on the provisional default.";
 
 const KIND_LABEL: Record<JudgementKind, string> = {
   scope_ambiguity: "scope",
@@ -81,6 +91,8 @@ export function YourJudgementCard({
   judgement,
   onAnswer,
   campaignId,
+  streamToken,
+  canDecide = true,
   readOnly = false,
 }: {
   judgement: JudgementCardView;
@@ -88,6 +100,11 @@ export function YourJudgementCard({
   onAnswer?: (action: Action, answer?: string) => Promise<boolean>;
   /** Fallback when no onAnswer: POST directly to the worker proxy route. */
   campaignId?: string;
+  /** Run-scoped token for the fallback POST (attached as x-factory-stream-token). */
+  streamToken?: string;
+  /** False for a shared-link viewer with no token: decisions can't be recorded,
+   *  so we show an honest message instead of attempting a doomed 401 POST. */
+  canDecide?: boolean;
   /** Replay / dev: render state without accepting input. */
   readOnly?: boolean;
 }) {
@@ -99,12 +116,17 @@ export function YourJudgementCard({
 
   const send = async (action: Action, answer?: string) => {
     if (busy || readOnly) return;
+    if (!canDecide) {
+      // Shared-link viewer: no run-scoped token, so nothing can be recorded.
+      setError(NO_TOKEN_MESSAGE);
+      return;
+    }
     setBusy(true);
     setError(null);
     const ok = onAnswer
       ? await onAnswer(action, answer)
       : campaignId
-        ? await postAnswer(campaignId, judgement.id, action, answer)
+        ? await postAnswer(campaignId, judgement.id, action, answer, streamToken)
         : false;
     setBusy(false);
     if (!ok) {

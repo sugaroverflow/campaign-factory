@@ -18,13 +18,11 @@ import type { ReactNode } from "react";
 import type { NextCheck, TerminalGap } from "@/lib/factory/contracts";
 import type { EvidenceTally } from "@/lib/factory/client";
 import {
-  NEXT_CHECKS_GROUP,
   SETTLED_EVIDENCE_GROUP,
   TERMINAL_GAPS_NOTE,
   TERMINAL_GAPS_TITLE,
   UNRESOLVED_EVIDENCE_GROUPS,
   claimDetailLines,
-  plainOutputName,
   type EvidenceAndNextChecks,
   type EvidenceClaimView,
 } from "@/lib/factory/documents";
@@ -109,7 +107,6 @@ export function NextStepsSection({
         <aside>
           <div className="n">{n}</div>
           <h2>{NEXT_STEPS_COPY.title}</h2>
-          <p className="whatsnew">{NEXT_STEPS_COPY.sub}</p>
           {NEXT_STEPS_COPY.limit ? <p className="limit">{NEXT_STEPS_COPY.limit}</p> : null}
         </aside>
         {/* no data-anim gate: the FINAL rung sits at the page bottom, where the
@@ -137,35 +134,13 @@ export function NextStepsSection({
             </p>
           ) : null}
 
-          {/* the three plain-English categories, all collapsed */}
+          {/* the fact-check categories, all collapsed dropdowns.
+              Order (15 Jul 2026): "Confirmed facts" leads, then "Things to
+              verify", then the remaining honest-construction groups (they show
+              only when non-empty). The old "Things to check next" category was
+              removed — its items are not re-homed. */}
+          {compiled ? <SettledGroup data={compiled} /> : null}
           {compiled ? <UnresolvedGroups data={compiled} /> : null}
-
-          {/* the specific checks to make next (includes notes stripped from drafts) */}
-          <Category
-            title={NEXT_CHECKS_GROUP.title}
-            caption={NEXT_CHECKS_GROUP.caption}
-            count={checks.length + draftNotes.length}
-          >
-            <ul className="fa-factlist">
-              {checks.map((c) => (
-                <li key={c.id}>
-                  {c.description}
-                  {c.reason ? <> — {c.reason}</> : null}
-                  {c.affectedSections?.length ? (
-                    <span className="fa-factlist__meta">
-                      Affects: {c.affectedSections.map(plainOutputName).join(", ")}
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-              {draftNotes.map((dn, i) => (
-                <li key={`dn-${i}`}>
-                  {dn.text}
-                  <span className="fa-factlist__meta">Flagged while drafting {dn.section}</span>
-                </li>
-              ))}
-            </ul>
-          </Category>
 
           {/* work that did not finish — visible, never filled in */}
           <Category title={TERMINAL_GAPS_TITLE} caption={TERMINAL_GAPS_NOTE} count={gaps.length}>
@@ -175,9 +150,6 @@ export function NextStepsSection({
               ))}
             </ul>
           </Category>
-
-          {/* everything the research settled, kept visible last */}
-          {compiled ? <SettledGroup data={compiled} /> : null}
         </div>
       </div>
     </section>
@@ -186,14 +158,34 @@ export function NextStepsSection({
 
 // ---- full ledger (terminal runs): the claim categories ----
 
+// Brief-page display order for the unresolved groups: "Things to verify" leads
+// (renamed from the canonical "Not yet double-checked"); the other honest-
+// construction groups keep their canonical titles and follow. Canonical labels
+// on the data are unchanged — only the display order/title differ here.
+const UNRESOLVED_ORDER = [
+  "Verification incomplete",
+  "Conflicting evidence",
+  "External information unavailable",
+] as const;
+const UNRESOLVED_TITLE_OVERRIDE: Partial<Record<string, string>> = {
+  "Verification incomplete": "Things to verify",
+};
+
 function UnresolvedGroups({ data }: { data: EvidenceAndNextChecks }) {
   const byLabel = new Map(data.groups.map((g) => [g.label, g.claims]));
   return (
     <>
-      {UNRESOLVED_EVIDENCE_GROUPS.map((spec) => {
+      {UNRESOLVED_ORDER.map((label) => {
+        const spec = UNRESOLVED_EVIDENCE_GROUPS.find((g) => g.label === label);
+        if (!spec) return null;
         const claims = byLabel.get(spec.label) ?? [];
         return (
-          <Category key={spec.label} title={spec.title} caption={spec.caption} count={claims.length}>
+          <Category
+            key={spec.label}
+            title={UNRESOLVED_TITLE_OVERRIDE[spec.label] ?? spec.title}
+            caption={spec.caption}
+            count={claims.length}
+          >
             <ClaimBullets claims={claims} />
           </Category>
         );
@@ -206,11 +198,7 @@ function SettledGroup({ data }: { data: EvidenceAndNextChecks }) {
   const unresolvedLabels = new Set(UNRESOLVED_EVIDENCE_GROUPS.map((g) => g.label));
   const settled = data.groups.filter((g) => !unresolvedLabels.has(g.label)).flatMap((g) => g.claims);
   return (
-    <Category
-      title={SETTLED_EVIDENCE_GROUP.title}
-      caption={SETTLED_EVIDENCE_GROUP.caption}
-      count={settled.length}
-    >
+    <Category title="Confirmed facts" caption={SETTLED_EVIDENCE_GROUP.caption} count={settled.length}>
       <ClaimBullets claims={settled} />
     </Category>
   );

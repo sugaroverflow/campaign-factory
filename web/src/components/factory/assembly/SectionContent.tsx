@@ -268,6 +268,17 @@ const strs = (v: unknown): string[] | undefined =>
   Array.isArray(v) ? (v.filter((x) => typeof x === "string") as string[]) : undefined;
 const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
+/** Clamp a decision-route diagram node label so long agent text never breaks
+ *  the chart layout: keep at most the first two sentences, and if that's still
+ *  over ~160 chars, hard-truncate with an ellipsis. Used ONLY for the step-4
+ *  route diagram nodes — prose elsewhere is never trimmed. */
+function clampNodeLabel(text: string): string {
+  const sentences = text.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g);
+  let out = (sentences ? sentences.slice(0, 2).join("") : text).trim();
+  if (out.length > 160) out = `${out.slice(0, 159).trimEnd()}…`;
+  return out;
+}
+
 // -- 1 problem --
 // campaignName is consumed here but rendered in the HERO (name flip) — never
 // repeated inside the rung.
@@ -533,6 +544,8 @@ const ROUTE_KEYS = [
   "unresolved",
 ] as const;
 function DecisionRouteContent(c: Record<string, unknown>) {
+  const implementer = str(c.implementer);
+  const formal = str(c.formal);
   return (
     <>
       <div className="diagram">
@@ -540,17 +553,17 @@ function DecisionRouteContent(c: Record<string, unknown>) {
         <div className="routeviz">
           <span className="rnode">You / the campaign</span>
           <span className="rarrow">→</span>
-          {str(c.implementer) ? (
+          {implementer ? (
             <>
               <span className="rnode">
-                {str(c.implementer)}
+                {clampNodeLabel(implementer)}
                 <small>implements</small>
               </span>
               <span className="rarrow">→</span>
             </>
           ) : null}
           <span className="rnode dm">
-            {str(c.formal)}
+            {formal ? clampNodeLabel(formal) : null}
             <small>decides</small>
           </span>
         </div>

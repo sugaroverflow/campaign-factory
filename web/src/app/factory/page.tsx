@@ -125,7 +125,10 @@ export default function FactoryIntakePage() {
 
         <div className="mt-6 space-y-2.5">
           <Label htmlFor="place" className="flex-wrap text-base">
-            Where? <span className="font-normal text-muted-foreground">(a specific, named place — required)</span>
+            Where?{" "}
+            <span className="font-normal text-muted-foreground">
+              (a specific, named place — <span className="font-medium text-[var(--brand)]">required</span>)
+            </span>
           </Label>
           <Input
             id="place"

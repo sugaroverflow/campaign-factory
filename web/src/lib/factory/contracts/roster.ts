@@ -361,6 +361,15 @@ const EXPRESS_OVERRIDES: Partial<Record<AgentKey, Partial<Omit<AgentDef, "key" |
   // truncated at 8k in live batch 8 (Barnet) even with the doubled retry, and
   // the reviewer rightly rejected the cut-off plan. Same cure as above.
   tactics_planner: { maxOutputTokens: 12000 },
+  // Packs (~11 drafted resources) are the biggest outputs of all: both show-
+  // batch failures (16 Jul, lobbying + media producers, empty-after-retry)
+  // were this truncation class. Strategy/organising get headroom for the same
+  // reason before it bites.
+  lobbying_producer: { maxOutputTokens: 14000 },
+  media_producer: { maxOutputTokens: 14000 },
+  digital_producer: { maxOutputTokens: 14000 },
+  strategy_architect: { model: "claude-sonnet-5", maxOutputTokens: 14000 },
+  organising_designer: { maxOutputTokens: 14000 },
   // The four sequential review passes measured ~8 of the 20-minute budget at
   // high effort (batch 5, 15 Jul). Medium + 6k reclaims ~4 min of slack.
   synthesis_reviewer: { effort: "medium", maxOutputTokens: 6000 },
@@ -368,7 +377,6 @@ const EXPRESS_OVERRIDES: Partial<Record<AgentKey, Partial<Omit<AgentDef, "key" |
   decision_route: { effort: "medium", searchBudget: 0, timeoutMs: 240000 },
   power_stakeholder: { effort: "medium" },
   pressure_analysis: { effort: "medium" },
-  strategy_architect: { model: "claude-sonnet-5" },
 };
 
 /** Profile-aware agent definition: "full" returns the roster def unchanged;

@@ -91,7 +91,7 @@ function SourceEntry({ s }: { s: SourceRegisterEntry }) {
   const displayName = sourceDisplayName(s);
   const org = s.organisation ? decodeEntities(s.organisation).trim() : "";
   return (
-    <details className="fa-src">
+    <details className="fa-src" data-tier={s.tier}>
       <summary>
         <b>{displayName}</b>
         {org && org !== displayName ? <span className="fa-src__org">{org}</span> : null}
@@ -141,7 +141,6 @@ export function SourcesSection({
         <aside>
           <div className="n">{n}</div>
           <h2>{SOURCES_COPY.title}</h2>
-          <p className="whatsnew">{SOURCES_COPY.sub}</p>
           {SOURCES_COPY.limit ? <p className="limit">{SOURCES_COPY.limit}</p> : null}
         </aside>
         <div className="rc">

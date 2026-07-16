@@ -164,7 +164,10 @@ function toArgs(r: handlers.HandlerResult): [number, unknown] {
 }
 
 function resolveAfter(afterParam: string | null, lastEventId: string | undefined): number {
-  const a = afterParam != null ? Number(afterParam) : lastEventId != null ? Number(lastEventId) : 0;
+  // A reconnecting EventSource sends Last-Event-ID; it must win over the
+  // after=0 baked into the stream URL, otherwise every reconnect replays the
+  // full event log. Fall back to the query param only when the header is absent.
+  const a = lastEventId != null ? Number(lastEventId) : afterParam != null ? Number(afterParam) : 0;
   return Number.isFinite(a) && a >= 0 ? a : 0;
 }
 

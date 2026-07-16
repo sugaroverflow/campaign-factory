@@ -276,8 +276,25 @@ export function useFactoryRun(opts: UseFactoryRunOptions): UseFactoryRunResult {
 
     void boot();
 
+    // H3: when the tab returns to the foreground or the network comes back,
+    // force an immediate catch-up poll (?after=lastSeq). This folds through the
+    // SAME dedupe (ingest) as SSE/polling, so it is safe in any mode and does
+    // not disturb the live SSE connection — a mobile browser that suspended the
+    // EventSource in the background re-syncs the instant it is shown again.
+    const forceSync = () => {
+      if (disposed || terminalRef.current) return;
+      void pollOnce();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") forceSync();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", forceSync);
+
     return () => {
       disposed = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", forceSync);
       closeSse();
       stopPolling();
       clearGrace();
@@ -300,7 +317,12 @@ export function useFactoryRun(opts: UseFactoryRunOptions): UseFactoryRunResult {
           `/api/factory/runs/${encodeURIComponent(campaignId)}/judgements/${encodeURIComponent(judgementId)}`,
           {
             method: "POST",
-            headers: { "content-type": "application/json" },
+            headers: {
+              "content-type": "application/json",
+              // The judgement route authorises with the run's stream token; a
+              // shared-link viewer has no token, so the POST would 401.
+              ...(streamToken ? { "x-factory-stream-token": streamToken } : {}),
+            },
             body: JSON.stringify(body),
           },
         );
@@ -309,7 +331,7 @@ export function useFactoryRun(opts: UseFactoryRunOptions): UseFactoryRunResult {
         return false;
       }
     },
-    [campaignId],
+    [campaignId, streamToken],
   );
 
   return { run, connection, answerJudgement };

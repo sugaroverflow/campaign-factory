@@ -86,13 +86,14 @@ export function AssemblyClient({
   const [compiled, setCompiled] = useState<CompiledCampaignBundle | null>(null);
   const attempted = useRef(false);
   useEffect(() => {
-    if (attempted.current || !terminal) return;
-    attempted.current = true;
+    if (!terminal || compiled) return;
     let cancelled = false;
     // W2 emits the terminal run.* event only AFTER finalisation persists the
     // compiled output, so the first attempt should succeed; a couple of spaced
     // retries cover propagation lag (route answers 409 while non-terminal).
-    void (async () => {
+    const runBurst = async () => {
+      if (attempted.current || cancelled) return;
+      attempted.current = true;
       for (let attempt = 0; attempt < 3 && !cancelled; attempt++) {
         const bundle = await fetchCompiledCampaign(campaignId);
         if (cancelled) return;
@@ -102,11 +103,28 @@ export function AssemblyClient({
         }
         if (attempt < 2) await new Promise((r) => setTimeout(r, 2500 * (attempt + 1)));
       }
-    })();
+    };
+    void runBurst();
+
+    // The three-try burst gives up after ~7.5s. If it failed because the tab was
+    // backgrounded or offline during finalisation, re-attempt when the page is
+    // shown again or the network returns — reset the guard so a fresh burst runs.
+    const retry = () => {
+      if (cancelled || compiled) return;
+      attempted.current = false;
+      void runBurst();
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") retry();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", retry);
     return () => {
       cancelled = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", retry);
     };
-  }, [terminal, campaignId]);
+  }, [terminal, campaignId, compiled]);
 
   return (
     <main className="min-h-dvh">
@@ -115,6 +133,9 @@ export function AssemblyClient({
         connection={connection}
         compiled={compiled}
         register={reg}
+        // Only the run's starter holds the stream token; a shared-link viewer
+        // has none, so decision cards stay honest rather than 401 on submit.
+        canDecide={Boolean(stored?.streamToken)}
         onAnswer={(jid, action, answer) => answerJudgement(jid, action, answer)}
       />
     </main>

@@ -29,7 +29,7 @@ import { useReplayPlayer } from "@/lib/factory/replay/useReplayPlayer";
 import type { ReplayManifestBody } from "@/lib/factory/replay";
 import type { ReplaySpeed } from "@/lib/factory/replay";
 
-const SPEEDS: ReplaySpeed[] = [1, 2, 4];
+const SPEEDS: ReplaySpeed[] = [1, 2, 4, 6];
 
 function clock(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) ms = 0;
@@ -112,12 +112,12 @@ export function ReplayClient({
     onBufferReset,
   });
 
-  // Spectacle default (user decision, 15 Jul): the session opens at 4x.
+  // Spectacle default (user decision, 15 Jul): the session opens at 6x.
   const speedSeeded = useRef(false);
   useEffect(() => {
     if (speedSeeded.current) return;
     speedSeeded.current = true;
-    setSpeed(4);
+    setSpeed(6);
   }, [setSpeed]);
 
   // Permanent, honest tab title.
@@ -191,6 +191,47 @@ export function ReplayClient({
       {/* The gallery renderer — identical to live. connectionLabel puts the same
           permanent label into the Factory Ledger area. No live handlers. */}
       <FactoryGallery campaigns={campaigns} now={state.virtualNowMs} connectionLabel={label} />
+
+      {/* Per-campaign "open the full brief" links. Fixed bottom-LEFT, sat just
+          above the centred playback controls (bottom:14) and width-capped so it
+          clears both those controls and the fixed run label / narrow badge on
+          the right. Shown at all times — they are small. */}
+      <div
+        aria-label="Open a campaign brief"
+        style={{
+          position: "fixed",
+          bottom: 60,
+          left: 12,
+          zIndex: 50,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 6,
+          maxWidth: "calc(100% - 168px)",
+        }}
+      >
+        {body.campaigns.map((c, i) => (
+          <a
+            key={c.campaignId}
+            href={`/factory/c/${c.campaignId}`}
+            target="_blank"
+            rel="noreferrer"
+            title="Open the full brief in a new tab"
+            aria-label={`Open brief — ${campaigns[i]?.shortName ?? "campaign"}`}
+            style={{
+              ...btn,
+              background: "rgba(22,24,27,0.94)",
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {campaigns[i]?.shortName ?? "Open brief"}
+            <span aria-hidden style={{ opacity: 0.8 }}>↗</span>
+          </a>
+        ))}
+      </div>
 
       {/* Playback controls. Play/pause/jump/replay + condensed toggle for
           everyone; the speed multiplier is presenter-only (rehearsal aid). */}

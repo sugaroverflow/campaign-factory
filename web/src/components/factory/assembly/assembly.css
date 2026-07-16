@@ -240,6 +240,41 @@
   overflow-wrap: anywhere;
 }
 
+/* ---- Sources rung: per-tier colour accent (same pastel palette) ---- */
+.fa-src[data-tier] { border-left-width: 3px; }
+.fa-src[data-tier="A"] { border-left-color: var(--pastel-blue); background: rgba(112, 181, 255, 0.06); }
+.fa-src[data-tier="B"] { border-left-color: var(--pastel-purple); background: rgba(186, 129, 238, 0.07); }
+.fa-src[data-tier="C"] { border-left-color: var(--pale-yellow); background: rgba(246, 230, 131, 0.14); }
+.fa-src[data-tier="D"] { border-left-color: var(--pastel-green); background: rgba(121, 212, 94, 0.08); }
+
+/* ---- documents step: contentless docs as "Coming soon" pastel cards ---- */
+.doccard.fa-doccard--soon {
+  cursor: default;
+  opacity: 1;
+  border-style: dashed;
+  border-color: rgba(27, 29, 30, 0.16);
+  transform: none;
+}
+.doccard.fa-doccard--soon:hover {
+  transform: none;
+  border-color: rgba(27, 29, 30, 0.16);
+}
+.doccard.fa-doccard--soon.t-b { background: var(--tint-blue); }
+.doccard.fa-doccard--soon.t-p { background: rgba(186, 129, 238, 0.18); }
+.doccard.fa-doccard--soon.t-y { background: var(--tint-yellow); }
+.fa-soon-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--muted-foreground);
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(27, 29, 30, 0.1);
+  border-radius: 999px;
+  padding: 0.12rem 0.6rem;
+}
+
 /* ---- connection badge ---- */
 .fa-conn {
   display: inline-flex;

@@ -15,6 +15,7 @@ import type { AgentResult, ChangeProposalDraft, ClaimDraft } from "@web/lib/fact
 import type { AgentTaskEnvelope } from "@web/lib/factory/contracts/envelope.js";
 import type { JourneyStepKey } from "@web/lib/factory/contracts/journey.js";
 import { recordSource } from "../store/index.js";
+import { config } from "../config.js";
 
 export interface RuntimeAgents {
   executeAgentTurn: AgentTurnFn;
@@ -29,7 +30,15 @@ export interface RuntimeAgents {
 async function tryImport(spec: string): Promise<Record<string, unknown> | null> {
   try {
     return (await import(spec)) as Record<string, unknown>;
-  } catch {
+  } catch (err) {
+    // C2 fail-loud: in live mode a missing/broken agent module must crash the
+    // worker, not silently fall back to the zero-cost mock executor (which
+    // would run a "live" show entirely on mock content). The fallback survives
+    // only for mock mode, where it is the intended path.
+    if (config.modelMode === "live") {
+      console.error(`[executor-loader] failed to import ${spec} in live mode:`, err);
+      throw err;
+    }
     return null;
   }
 }

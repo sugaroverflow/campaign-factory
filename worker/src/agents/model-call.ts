@@ -342,13 +342,18 @@ export async function runModelTurn(spec: ModelTurnSpec, deps: ExecutorDeps): Pro
       // tools ("Container identifier can only be provided when using the code
       // execution tool"). There are no pending tool uses at correction time —
       // the last assistant turn is plain text — so it is not needed either.
+      // The tool loop above, however, may have left tool_use / server_tool_use /
+      // tool_result / web_search_tool_result blocks in earlier turns. With
+      // `tools` stripped the API 400s on those blocks, so flatten them to plain
+      // text before retrying (role alternation is preserved).
+      const retryMessages = sanitizeForToollessRetry(messages);
       const msg2 = await runCall(
         (signal) =>
           call(
             client,
             {
               ...baseParams,
-              messages,
+              messages: retryMessages,
               tools: undefined,
               // A truncated first attempt would truncate again at the same
               // budget — give the correction room to finish the object.
@@ -389,4 +394,30 @@ export async function runModelTurn(spec: ModelTurnSpec, deps: ExecutorDeps): Pro
   }
 
   return { raw: parsed, rawText: finalText, searchCount };
+}
+
+// Flatten any tool-related content blocks left by the web-search tool loop into
+// plain text so a `tools: undefined` correction retry does not 400 ("tool_use/
+// tool_result blocks require the tools that produced them"). String content is
+// passed through; a block-array turn keeps its text blocks and replaces tool
+// blocks with a short placeholder, so no message becomes empty and roles keep
+// alternating.
+function sanitizeForToollessRetry(messages: Anthropic.MessageParam[]): Anthropic.MessageParam[] {
+  return messages.map((m) => {
+    if (typeof m.content === "string") return m;
+    const kept: Array<{ type: "text"; text: string }> = [];
+    for (const block of m.content as Array<{ type?: string; text?: string; name?: string }>) {
+      const t = block.type;
+      if (t === "text") {
+        kept.push({ type: "text", text: block.text ?? "" });
+      } else if (t === "tool_use" || t === "server_tool_use") {
+        kept.push({ type: "text", text: `[used tool ${block.name ?? ""}]`.trim() });
+      } else if (t === "tool_result" || t === "web_search_tool_result") {
+        kept.push({ type: "text", text: "[tool result omitted for correction retry]" });
+      }
+      // any other block type is dropped
+    }
+    if (kept.length === 0) kept.push({ type: "text", text: "[omitted]" });
+    return { role: m.role, content: kept as unknown as Anthropic.MessageParam["content"] };
+  });
 }

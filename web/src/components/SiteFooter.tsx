@@ -12,6 +12,9 @@ export function SiteFooter() {
           <Link href="/how">How it works</Link>
         </nav>
       </div>
+      <p className="footer-caption">
+        This application was built as a prototype in 2 days for the AI &amp; Campaigning conference on 16 July 2026. Please verify before using any AI generated content.
+      </p>
     </footer>
   );
 }

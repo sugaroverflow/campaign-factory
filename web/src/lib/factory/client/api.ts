@@ -28,6 +28,17 @@ export async function startFactoryRun(intake: CampaignIntake): Promise<StartFact
       }
       return { ok: false, status: r.status, error: "The run started but returned no campaign id." };
     }
+    // A 429 carries the raw per-IP / per-session cap wording ("This network has
+    // reached its run limit (N)"). That cap is a backstop (default 200), not a
+    // user-facing quota, so never surface it on the public intake — show a
+    // generic capacity message instead. Other statuses keep the server's copy.
+    if (r.status === 429) {
+      return {
+        ok: false,
+        status: 429,
+        error: "We're at capacity right now — please try again in a few minutes.",
+      };
+    }
     return {
       ok: false,
       status: r.status,
