@@ -57,7 +57,11 @@ async function fetchSourceJson<T>(origin: string, path: string): Promise<{ ok: t
     if (!response.ok) {
       return { ok: false, status: response.status, path, message: `Read-only source ${path} returned HTTP ${response.status}.` };
     }
-    return { ok: true, value: (await response.json()) as T };
+    try {
+      return { ok: true, value: (await response.json()) as T };
+    } catch {
+      return { ok: false, status: 502, path, message: `Read-only source ${path} returned a non-JSON response.` };
+    }
   } catch (error) {
     return {
       ok: false,

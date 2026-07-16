@@ -722,6 +722,27 @@ test("operations workspace: failed direct source load keeps canonical source bri
   );
 });
 
+test("operations workspace: non-JSON source responses stay as no-fixture-fallback failures", async ({ page }) => {
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<!doctype html><title>Preview error shell</title><p>not json</p>",
+    });
+  });
+
+  await page.goto("/operations?campaignId=6b54225d-afa3-41d1-b053-89741094f153");
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText(/Operations source adapter returned a non-JSON response \(HTTP 200\)/)).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "View source brief" })).toHaveAttribute(
+    "href",
+    "https://campaign-factory.vercel.app/factory/c/6b54225d-afa3-41d1-b053-89741094f153",
+  );
+});
+
 test("operations workspace: upstream 404 source failures keep checked source diagnostics", async ({ page }) => {
   await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
     await route.fulfill({

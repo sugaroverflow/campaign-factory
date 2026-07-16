@@ -1469,8 +1469,9 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
     window.clearTimeout(timeout);
     signal.removeEventListener("abort", abortSource);
   }
+  const sourceBody = (await sourceRes.json().catch(() => null)) as Partial<OperationsSourcePayload> | ({ error?: string; detail?: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string } & Record<string, unknown>) | null;
   if (!sourceRes.ok) {
-    const errorBody = (await sourceRes.json().catch(() => null)) as { error?: string; detail?: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string } | null;
+    const errorBody = sourceBody as { error?: string; detail?: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string } | null;
     const sourceOrigin = normaliseOperationsSourceOrigin(errorBody?.sourceOrigin);
     const fallbackMessage = sourceRes.status === 404 && !sourceOrigin
       ? "No curated public campaign source was found for that campaign ID."
@@ -1480,7 +1481,9 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
     if (sourceOrigin) (err as Error & { sourceOrigin?: string }).sourceOrigin = sourceOrigin;
     throw err;
   }
-  const sourceBody = (await sourceRes.json()) as Partial<OperationsSourcePayload>;
+  if (!sourceBody) {
+    throw new Error(`The Operations source adapter returned a non-JSON response (HTTP ${sourceRes.status}). No fixture fallback was used.`);
+  }
   const sourceOrigin = normaliseOperationsSourceOrigin(sourceBody.sourceOrigin);
   const run = sourceBody.run;
   if (!sourceOrigin || !isOperationsRunReadModel(run, campaignId)) {
