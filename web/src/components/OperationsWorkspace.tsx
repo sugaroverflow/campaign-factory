@@ -1448,12 +1448,14 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
     cache: "no-store",
     signal,
   });
-  if (sourceRes.status === 404) throw new Error("No curated public campaign source was found for that campaign ID.");
   if (!sourceRes.ok) {
     const errorBody = (await sourceRes.json().catch(() => null)) as { error?: string; detail?: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string } | null;
-    const err = new Error(errorBody?.detail || errorBody?.error || `The public campaign source could not be loaded (HTTP ${sourceRes.status}).`);
-    if (errorBody?.runStatus) (err as Error & { runStatus?: RunReadModel["status"] }).runStatus = errorBody.runStatus;
     const sourceOrigin = normaliseOperationsSourceOrigin(errorBody?.sourceOrigin);
+    const fallbackMessage = sourceRes.status === 404 && !sourceOrigin
+      ? "No curated public campaign source was found for that campaign ID."
+      : `The public campaign source could not be loaded (HTTP ${sourceRes.status}).`;
+    const err = new Error(errorBody?.detail || errorBody?.error || fallbackMessage);
+    if (errorBody?.runStatus) (err as Error & { runStatus?: RunReadModel["status"] }).runStatus = errorBody.runStatus;
     if (sourceOrigin) (err as Error & { sourceOrigin?: string }).sourceOrigin = sourceOrigin;
     throw err;
   }

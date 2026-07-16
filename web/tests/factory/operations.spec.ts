@@ -722,6 +722,26 @@ test("operations workspace: failed direct source load keeps canonical source bri
   );
 });
 
+test("operations workspace: upstream 404 source failures keep checked source diagnostics", async ({ page }) => {
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      status: 404,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Campaign source run unavailable", detail: "Read-only source /api/factory/runs/69f257b6-9913-4395-94f7-5c25b4b5fe95 returned HTTP 404.", sourceOrigin: "https://campaign-factory.vercel.app" }),
+    });
+  });
+
+  await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95");
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText(/Read-only source \/api\/factory\/runs\/69f257b6-9913-4395-94f7-5c25b4b5fe95 returned HTTP 404/)).toBeVisible();
+  await expect(page.getByText("Checked read-only source:")).toBeVisible();
+  await expect(page.getByText("https://campaign-factory.vercel.app", { exact: true })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/No curated public campaign source was found/)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+});
+
 test("operations portfolio: source labels carry through workspace switching without shared fixture contacts", async ({ page }) => {
   const campaigns = {
     "69f257b6-9913-4395-94f7-5c25b4b5fe95": {
