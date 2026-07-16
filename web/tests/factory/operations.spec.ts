@@ -1335,14 +1335,19 @@ test("operations workbench: invalid or non-curated campaign IDs are blocked with
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText("A. Patel")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Back to Factory" })).toHaveAttribute("href", "/factory");
+  await expect(page.getByRole("link", { name: "View source brief" })).toHaveCount(0);
 
   await page.goto("/operations?campaignId=00000000-0000-4000-8000-000000000000");
 
   await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
   await expect(page.getByText("No curated public campaign source was found for that campaign ID.")).toBeVisible();
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText("Use one of the curated Operations campaign IDs or return to Campaign Factory.")).toBeVisible();
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText("A. Patel")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Back to Factory" })).toHaveAttribute("href", "/factory");
+  await expect(page.getByRole("link", { name: "View source brief" })).toHaveCount(0);
 });
 
 test("operations source adapter: rejects arbitrary proxy reads and non-GET writes", async ({ request }) => {

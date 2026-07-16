@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { foldEvents } from "@/lib/factory/client/fold";
 import type { RunReadModel } from "@/lib/factory/contracts/api";
 import type { CompiledDocument, EvidenceAndNextChecks } from "@/lib/factory/documents";
-import { OPERATIONS_DEFAULT_SOURCE_ORIGIN, OPERATIONS_PUBLIC_CAMPAIGNS, type OperationsSourcePayload } from "@/lib/operations/source";
+import { OPERATIONS_PUBLIC_CAMPAIGNS, type OperationsSourcePayload } from "@/lib/operations/source";
 
 const STORAGE_KEY = "cf_operations_demo_v3";
 const LEGACY_STORAGE_KEYS = ["cf_operations_demo_v2", "cf_operations_demo_v1"];
@@ -1642,8 +1642,9 @@ function OperationsPortfolio() {
 
 function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fixture" } | { status: "ready" }> }) {
   const campaignId = state.campaignId;
-  const curatedSourceHref = PORTFOLIO_CAMPAIGNS.find((campaign) => campaign.id === campaignId)?.sourceHref;
-  const sourceHref = curatedSourceHref ?? (UUID_RE.test(campaignId) ? `${OPERATIONS_DEFAULT_SOURCE_ORIGIN}/factory/c/${campaignId}` : "/factory");
+  const curatedCampaign = PORTFOLIO_CAMPAIGNS.find((campaign) => campaign.id === campaignId);
+  const sourceHref = curatedCampaign?.sourceHref ?? "/factory";
+  const canLinkSource = Boolean(curatedCampaign);
   const title =
     state.status === "loading"
       ? "Loading campaign source"
@@ -1670,7 +1671,7 @@ function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fi
             <span className="rounded-full border border-ops-line bg-background/70 px-3 py-1 text-xs text-muted-foreground">Read-only source load</span>
           </div>
           <Link href={sourceHref} className="rounded-full border border-ops-line bg-background/70 px-3 py-1.5 text-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-            {UUID_RE.test(campaignId) ? "Back to source brief" : "Back to Factory"}
+            {canLinkSource ? "Back to source brief" : "Back to Factory"}
           </Link>
         </div>
       </header>
@@ -1686,14 +1687,16 @@ function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fi
           ) : (
             <div className="mt-6 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-secondary p-4 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">No fixture fallback used</p>
-              <p className="mt-1">Fix the campaign ID or return to the source brief. External sending, imports, scheduling, and source write-back remain disconnected.</p>
+              <p className="mt-1">
+                {canLinkSource ? "Fix the campaign ID or return to the source brief." : "Use one of the curated Operations campaign IDs or return to Campaign Factory."} External sending, imports, scheduling, and source write-back remain disconnected.
+              </p>
             </div>
           )}
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href="/operations?demo=fixture" className="rounded-full border border-ops-line bg-background px-4 py-2 text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
               Open labelled fixture demo
             </Link>
-            {UUID_RE.test(campaignId) ? (
+            {canLinkSource ? (
               <Link href={sourceHref} className="rounded-full bg-ops-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                 View source brief
               </Link>
