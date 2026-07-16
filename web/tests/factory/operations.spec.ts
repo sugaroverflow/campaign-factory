@@ -258,7 +258,32 @@ test("operations workbench: campaignId route loads a read-only public campaign s
     ["organising_plan", "Organising Plan", "ready", "ORGANISING PLAN\n\nCoordinate residents without implying a connected CRM."],
     ["lobbying_pack", "Lobbying Pack", "ready", "LOBBYING PACK\n\nMeeting request email and briefing drafts are available for later local working copies."],
     ["media_pack", "Media Pack", "assembling", "MEDIA PACK\n\nNothing in this pack yet."],
-    ["digital_pack", "Digital Campaign Pack", "ready", "DIGITAL CAMPAIGN PACK\n\nSupporter email and social post source drafts are available."],
+    [
+      "digital_pack",
+      "Digital Campaign Pack",
+      "ready",
+      [
+        "DIGITAL CAMPAIGN PACK",
+        "",
+        "Supporter email — status update",
+        "",
+        "Subject: Ormskirk KFC — what we know, what we don't",
+        "",
+        "Dear supporter,",
+        "",
+        "What we know: the council reportedly refused the KFC change-of-use application, but the official record still needs checking.",
+        "",
+        "What we don't know: whether an appeal to the Planning Inspectorate is live, or decided. We are not treating one uncorroborated report as fact.",
+        "",
+        "Before you send this, check",
+        "",
+        "- Explicitly frames the disputed appeal outcome as unconfirmed single-source information.",
+        "",
+        "Social media post set",
+        "",
+        "POST 1: Follow for verified updates on the Ormskirk KFC planning status.",
+      ].join("\n"),
+    ],
   ].map(([key, name, status, plainText], index) => ({
     key,
     num: index + 1,
@@ -324,6 +349,15 @@ test("operations workbench: campaignId route loads a read-only public campaign s
     `/factory/c/${campaignId}`,
   );
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Drafts/ }).first().click();
+  await expect(page.getByLabel("Source pack resources")).toContainText("Supporter email — status update");
+  await page.getByRole("button", { name: "Use in editable draft" }).first().click();
+  await expect(page.getByRole("heading", { name: /Working copy: Supporter email — status update/i })).toBeVisible();
+  await expect(page.getByText(/Copied from Digital Campaign Pack in campaign/)).toBeVisible();
+  await expect(page.getByLabel("Subject")).toHaveValue("Ormskirk KFC — what we know, what we don't");
+  await expect(page.getByLabel("Message")).toHaveValue(/Dear supporter/);
+  await expect(page.getByText(/unconfirmed single-source information/i)).toBeVisible();
 
   await page.getByRole("button", { name: /Campaign brief/ }).first().click();
   await expect(page.getByText("What the source says", { exact: true })).toBeVisible();

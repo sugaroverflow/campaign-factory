@@ -52,6 +52,18 @@ type LocalAction = {
   provenance: string;
 };
 
+type SourceWorkingCopy = {
+  id: string;
+  campaignId: string;
+  title: string;
+  channel: string;
+  sourceDocument: string;
+  sourceDocumentKey: string;
+  createdAt: string;
+  warnings: string[];
+  provenance: string;
+};
+
 type DemoState = {
   selectedSegment: SegmentId;
   subject: string;
@@ -65,6 +77,7 @@ type DemoState = {
   scheduleIntent: "after_approval" | "tomorrow_morning" | "school_run";
   queuedAt: string | null;
   localActions: LocalAction[];
+  sourceWorkingCopy: SourceWorkingCopy | null;
   activity: Activity[];
 };
 
@@ -91,6 +104,18 @@ type DraftLibraryItem = {
   audience: string;
   requires: string;
   outline: string[];
+};
+
+type SourceResource = {
+  id: string;
+  title: string;
+  channel: string;
+  sourceDocument: string;
+  sourceDocumentKey: string;
+  subject: string;
+  body: string;
+  warnings: string[];
+  preview: string;
 };
 
 type CampaignSource = {
@@ -432,6 +457,7 @@ const initialState: DemoState = {
   scheduleIntent: "after_approval",
   queuedAt: null,
   localActions: [],
+  sourceWorkingCopy: null,
   activity: [{ id: "seed", label: "Demo workspace loaded with seeded campaign brief and local fixture contacts." }],
 };
 
@@ -491,6 +517,23 @@ function normaliseLocalActions(actions: unknown): LocalAction[] {
     }));
 }
 
+function normaliseSourceWorkingCopy(value: unknown): SourceWorkingCopy | null {
+  if (!value || typeof value !== "object") return null;
+  const copy = value as Partial<SourceWorkingCopy>;
+  if (!copy.id || !copy.title || !copy.sourceDocument || !copy.campaignId) return null;
+  return {
+    id: copy.id,
+    campaignId: copy.campaignId,
+    title: copy.title,
+    channel: copy.channel || "Source draft",
+    sourceDocument: copy.sourceDocument,
+    sourceDocumentKey: copy.sourceDocumentKey || "source_document",
+    createdAt: copy.createdAt || new Date().toISOString(),
+    warnings: Array.isArray(copy.warnings) ? copy.warnings.filter((warning): warning is string => typeof warning === "string") : [],
+    provenance: copy.provenance || "Copied from a read-only Campaign Factory source document into this browser-local workspace.",
+  };
+}
+
 function normaliseState(parsed: Partial<DemoState>): DemoState {
   return {
     ...initialState,
@@ -516,6 +559,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
       ? (parsed.scheduleIntent as DemoState["scheduleIntent"])
       : initialState.scheduleIntent,
     localActions: normaliseLocalActions(parsed.localActions),
+    sourceWorkingCopy: normaliseSourceWorkingCopy(parsed.sourceWorkingCopy),
     activity: parsed.activity?.length ? parsed.activity : initialState.activity,
     mode: parsed.mode === "preview" ? "preview" : "compose",
   };
@@ -555,6 +599,54 @@ function documentExcerpt(doc: CompiledDocument | undefined, max = 260) {
     .join(" ");
   if (!text) return "This source document is present, but no readable excerpt was exposed by the typed document route.";
   return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+const SOURCE_RESOURCE_DEFS = [
+  { title: "Meeting Request Email — Council Planning Officers", channel: "Council email", docKey: "lobbying_pack" },
+  { title: "Decision-Maker Briefing: Ormskirk KFC (former Tile Giant unit)", channel: "Briefing note", docKey: "lobbying_pack" },
+  { title: "Supporter email — status update", channel: "Supporter email", docKey: "digital_pack" },
+  { title: "Volunteer recruitment message", channel: "Volunteer email", docKey: "digital_pack" },
+  { title: "Social media post set", channel: "Social posts", docKey: "digital_pack" },
+  { title: "Landing page copy — Keep KFC Out of Ormskirk", channel: "Landing page", docKey: "digital_pack" },
+  { title: "Action page copy — Add your name", channel: "Action page", docKey: "digital_pack" },
+] as const;
+
+function extractSourceResources(source: CampaignSource): SourceResource[] {
+  const resourceTitles: Set<string> = new Set(SOURCE_RESOURCE_DEFS.map((def) => def.title));
+  return SOURCE_RESOURCE_DEFS.flatMap((def) => {
+    const doc = source.documents.find((item) => item.key === def.docKey);
+    if (!doc || doc.status !== "ready" || !doc.plainText) return [];
+    const lines = doc.plainText.split(/\r?\n/);
+    const start = lines.findIndex((line) => line.trim() === def.title);
+    if (start < 0) return [];
+    const end = lines.findIndex((line, index) => index > start && resourceTitles.has(line.trim()));
+    const block = lines.slice(start + 1, end > start ? end : undefined);
+    const checkIndex = block.findIndex((line) => /^Before you send this, check$/i.test(line.trim()));
+    const bodyLines = (checkIndex >= 0 ? block.slice(0, checkIndex) : block).map((line) => line.trimEnd());
+    const warningLines = (checkIndex >= 0 ? block.slice(checkIndex + 1) : [])
+      .map((line) => line.trim().replace(/^-\s*/, ""))
+      .filter(Boolean);
+    const subjectLine = bodyLines.find((line) => /^Subject:/i.test(line.trim()));
+    const subject = subjectLine?.replace(/^Subject:\s*/i, "").trim() || def.title;
+    const body = bodyLines
+      .filter((line) => line.trim() && line !== subjectLine)
+      .join("\n\n")
+      .trim();
+    if (!body) return [];
+    return [
+      {
+        id: `${source.campaignId}:${def.docKey}:${def.title}`,
+        title: def.title,
+        channel: def.channel,
+        sourceDocument: doc.name,
+        sourceDocumentKey: doc.key,
+        subject,
+        body,
+        warnings: warningLines,
+        preview: body.length > 220 ? `${body.slice(0, 219).trimEnd()}…` : body,
+      },
+    ];
+  });
 }
 
 function statusPhrase(status: RunReadModel["status"]) {
@@ -882,6 +974,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
   const source = sourceState.status === "ready" ? sourceState.source : null;
   const sourceLoaded = Boolean(source);
   const sourceContext = useMemo(() => (source ? buildSourceContext(source) : campaignContext), [source]);
+  const sourceResources = useMemo(() => (source ? extractSourceResources(source) : []), [source]);
 
   const selected = useMemo(
     () => segments.find((segment) => segment.id === state.selectedSegment) ?? segments[0],
@@ -891,6 +984,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
   const status = statusCopy[state.status];
   const activeDraft = draftLibrary.find((draft) => draft.id === state.activeDraft) ?? draftLibrary[0];
   const activeDraftEditable = activeDraft.id === "supporter_email";
+  const activeSourceWorkingCopy = activeDraftEditable ? state.sourceWorkingCopy : null;
   const canRequestReview = state.subject.trim().length > 8 && state.body.trim().length > 80;
   const reviewBlocked = !canRequestReview;
   const queuedCount = state.status === "queued" ? "1" : undefined;
@@ -1007,6 +1101,32 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
         current.activeDraft === activeDraft
           ? current.activity
           : [record(`Opened draft library item: ${draftLibrary.find((draft) => draft.id === activeDraft)?.title ?? "Draft"}.`), ...current.activity].slice(0, 7),
+    }));
+  };
+
+  const createSourceWorkingCopy = (resource: SourceResource) => {
+    if (!source) return;
+    setState((current) => ({
+      ...current,
+      activeView: "drafts",
+      activeDraft: "supporter_email",
+      mode: "compose",
+      subject: resource.subject,
+      body: resource.body,
+      status: "draft",
+      queuedAt: null,
+      sourceWorkingCopy: {
+        id: resource.id,
+        campaignId: source.campaignId,
+        title: resource.title,
+        channel: resource.channel,
+        sourceDocument: resource.sourceDocument,
+        sourceDocumentKey: resource.sourceDocumentKey,
+        createdAt: new Date().toISOString(),
+        warnings: resource.warnings,
+        provenance: `Copied from ${resource.sourceDocument} in campaign ${source.campaignId}; this editable copy is browser-local and does not change the public source document.`,
+      },
+      activity: [record(`Created editable local copy from source resource: ${resource.title}.`), ...current.activity].slice(0, 7),
     }));
   };
 
@@ -1324,7 +1444,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
         <SmallLabel>Draft library</SmallLabel>
         <h2 className="mt-2 text-2xl font-medium tracking-tight">Communications</h2>
         <p className="mt-2 text-sm text-white/65">
-          An editorial desk for the outreach sequence. Only the supporter email is working/editable in this local demo.
+          An editorial desk for the outreach sequence. Source pack resources can be copied into a browser-local editable working draft.
         </p>
         <div className="mt-5 space-y-3">
           {draftLibrary.map((draft, index) => (
@@ -1346,16 +1466,46 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
             </button>
           ))}
         </div>
+        {sourceResources.length ? (
+          <div className="mt-6 border-t border-white/15 pt-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Real source resources</p>
+            <div className="mt-3 space-y-3" aria-label="Source pack resources">
+              {sourceResources.slice(0, 5).map((resource) => (
+                <div key={resource.id} className="rounded-[var(--r-xl)] border border-white/15 bg-white/[0.07] p-3 text-sm text-white">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{resource.title}</p>
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-white/45">{resource.channel} · {resource.sourceDocument}</p>
+                    </div>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">Source</span>
+                  </div>
+                  <p className="mt-2 line-clamp-3 text-xs text-white/60">{resource.preview}</p>
+                  <button
+                    type="button"
+                    onClick={() => createSourceWorkingCopy(resource)}
+                    className="mt-3 rounded-full border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ops-yellow"
+                  >
+                    Use in editable draft
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : source ? (
+          <div className="mt-6 rounded-[var(--r-xl)] border border-white/15 bg-white/[0.07] p-3 text-sm text-white/65">
+            No ready Lobbying/Digital Pack resources were exposed as editable candidates. Media Pack is still incomplete.
+          </div>
+        ) : null}
       </Panel>
       <Panel className="bg-[linear-gradient(90deg,oklch(0.96_0.012_82)_0_1px,transparent_1px),linear-gradient(oklch(0.96_0.012_82)_0_1px,transparent_1px)] bg-[size:28px_28px] shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <SmallLabel>{activeDraft.channel} draft</SmallLabel>
             <h2 className="mt-1 text-3xl font-medium tracking-tight">
-              {activeDraftEditable ? `Parent update for ${selected.name.toLowerCase()}` : activeDraft.title}
+              {activeSourceWorkingCopy ? `Working copy: ${activeSourceWorkingCopy.title}` : activeDraftEditable ? `Parent update for ${selected.name.toLowerCase()}` : activeDraft.title}
             </h2>
             <p className="mt-2 max-w-2xl text-muted-foreground">
-              {activeDraftEditable ? selected.ask : activeDraft.detail}
+              {activeSourceWorkingCopy ? activeSourceWorkingCopy.provenance : activeDraftEditable ? selected.ask : activeDraft.detail}
             </p>
           </div>
           <div className="flex rounded-full border border-border bg-background p-1" aria-label="Draft mode">
@@ -1377,8 +1527,21 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
         </div>
 
         <div className="mt-6 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-ops-yellow/45 p-4 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Review warning:</span> {activeDraft.requires} {activeDraftEditable ? selected.caveat : "This staged fixture is not available for approval or queueing."}
+          <span className="font-medium text-foreground">Review warning:</span> {activeSourceWorkingCopy ? `This copy came from ${activeSourceWorkingCopy.sourceDocument}; keep its source warnings attached before approval.` : activeDraft.requires} {activeDraftEditable && !activeSourceWorkingCopy ? selected.caveat : !activeDraftEditable ? "This staged fixture is not available for approval or queueing." : null}
         </div>
+        {activeSourceWorkingCopy ? (
+          <div className="mt-4 rounded-[var(--r-2xl)] border border-ops-line bg-background/85 p-4 text-sm">
+            <p className="font-medium">Source provenance attached</p>
+            <p className="mt-1 text-muted-foreground">{activeSourceWorkingCopy.sourceDocument} · campaign {activeSourceWorkingCopy.campaignId} · local copy created {formatQueuedTime(activeSourceWorkingCopy.createdAt)}. The public campaign document is read-only.</p>
+            {activeSourceWorkingCopy.warnings.length ? (
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-muted-foreground">
+                {activeSourceWorkingCopy.warnings.slice(0, 3).map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
 
         {!activeDraftEditable ? (
           <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
@@ -1460,6 +1623,12 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
             <p className="font-medium">Boundary</p>
             <p className="mt-1 text-muted-foreground">Provider, import, and production scheduling are not connected.</p>
           </div>
+          {activeSourceWorkingCopy ? (
+            <div className="rounded-[var(--r-xl)] border border-ops-line bg-background/75 p-3">
+              <p className="font-medium">Source copy</p>
+              <p className="mt-1 text-muted-foreground">{activeSourceWorkingCopy.title} from {activeSourceWorkingCopy.sourceDocument}; editable only in this browser.</p>
+            </div>
+          ) : null}
         </div>
       </Panel>
     </div>
@@ -1515,6 +1684,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
         <article className="mt-5 rounded-[var(--r-xl)] border border-white/15 bg-white p-4 text-sm text-foreground shadow-sm" aria-label="Communication preview for approval">
           <p className="font-medium">{state.subject || "Untitled campaign email"}</p>
           <p className="mt-1 text-muted-foreground">Audience: {selected.name}</p>
+          {state.sourceWorkingCopy ? <p className="mt-1 text-muted-foreground">Source copy: {state.sourceWorkingCopy.title} · {state.sourceWorkingCopy.sourceDocument}</p> : null}
           <div className="mt-4 line-clamp-6 whitespace-pre-wrap border-t border-border pt-4 text-muted-foreground">{state.body}</div>
         </article>
         <div className="mt-5 rounded-[var(--r-xl)] border border-white/15 bg-white/[0.08] p-3 text-sm">
@@ -1561,7 +1731,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
           </div>
           {state.status === "queued" ? (
             <div className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_0.8fr_0.7fr_0.8fr]">
-              <div><span className="md:hidden font-medium">Communication: </span>{state.subject}</div>
+              <div><span className="md:hidden font-medium">Communication: </span>{state.subject}{state.sourceWorkingCopy ? <p className="mt-1 text-xs text-muted-foreground">Local copy from {state.sourceWorkingCopy.sourceDocument}</p> : null}</div>
               <div><span className="md:hidden font-medium">Audience: </span>{selected.name}</div>
               <div><span className="md:hidden font-medium">State: </span>Queued for demo</div>
               <div><span className="md:hidden font-medium">Local timing: </span>{formatQueuedTime(state.queuedAt)} · {scheduleCopy[state.scheduleIntent]}</div>
@@ -1622,7 +1792,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
           </h2>
         </div>
         <p className="max-w-md text-sm text-white/65">
-          Every node is derived from fixture/local state. Select a stage to work there; no provider action is connected.
+          Every node is derived from source, fixture, or local browser state. Select a stage to work there; no provider action is connected.
         </p>
       </div>
       <div className="ops-runway" role="list" aria-label="Six-stage campaign runway">
