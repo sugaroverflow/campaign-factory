@@ -1558,6 +1558,8 @@ test("operations workbench: failed or not-yet-usable real source loads do not fa
   await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByText(/typed public document contract/i)).toBeVisible();
+  await expect(page.getByText("Checked read-only source:")).toBeVisible();
+  await expect(page.getByText("https://campaign-factory.vercel.app", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 
@@ -1622,6 +1624,8 @@ test("operations workbench: failed or not-yet-usable real source loads do not fa
   await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByText(/did not match the requested campaign/i)).toBeVisible();
+  await expect(page.getByText("Checked read-only source:")).toBeVisible();
+  await expect(page.getByText("https://campaign-factory.vercel.app", { exact: true })).toBeVisible();
   await expect(page.getByText("Malformed source without a run should not hydrate Ormskirk")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText("A. Patel")).toHaveCount(0);

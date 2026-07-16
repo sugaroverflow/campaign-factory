@@ -1487,7 +1487,9 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
   const sourceOrigin = normaliseOperationsSourceOrigin(sourceBody.sourceOrigin);
   const run = sourceBody.run;
   if (!sourceOrigin || !isOperationsRunReadModel(run, campaignId)) {
-    throw new Error("The public campaign source did not match the requested campaign.");
+    const err = new Error("The public campaign source did not match the requested campaign.");
+    if (sourceOrigin) (err as Error & { sourceOrigin?: string }).sourceOrigin = sourceOrigin;
+    throw err;
   }
   const folded = foldEvents(campaignId, run.events);
   if (run.status !== "completed" && run.status !== "partial") {
@@ -1498,7 +1500,9 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
 
   const body = { documents: sourceBody.documents, evidence: sourceBody.evidence };
   if (!isOperationsCompiledDocumentList(body.documents) || !isOperationsEvidenceAndNextChecks(body.evidence)) {
-    throw new Error("The compiled campaign response did not match the typed public document contract.");
+    const err = new Error("The compiled campaign response did not match the typed public document contract.");
+    (err as Error & { sourceOrigin?: string }).sourceOrigin = sourceOrigin;
+    throw err;
   }
   const brief = body.documents.find((doc) => doc.key === "campaign_brief");
   const title = folded.campaignName || firstNonEmptyLine(brief?.plainText) || folded.problem || "Untitled campaign";
