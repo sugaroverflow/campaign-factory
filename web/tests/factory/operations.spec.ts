@@ -402,6 +402,80 @@ test("operations portfolio: local signals reflect only genuine campaign-local wo
   await expect(ormskirkRow).not.toContainText("working draft");
 });
 
+test("operations workbench: resetting one real campaign leaves other campaign-local work intact", async ({ page }) => {
+  const campaigns = {
+    "69f257b6-9913-4395-94f7-5c25b4b5fe95": {
+      title: "Keep KFC Out of Ormskirk",
+      place: "Ormskirk, Lancashire",
+      status: "partial",
+      next: "Check Ormskirk appeal status before public escalation",
+      unresolved: 34,
+    },
+    "57678ae0-29fd-4b4b-8a53-5c711cdb21cf": {
+      title: "Build 5,000 affordable houses in Tower Hamlets in the next 3 years",
+      place: "Tower Hamlets, London",
+      status: "partial",
+      next: "Check Tower Hamlets affordable housing target papers",
+      unresolved: 22,
+    },
+    "6b54225d-afa3-41d1-b053-89741094f153": {
+      title: "Stop the leisure park redevelopment in Barnet",
+      place: "Barnet, London",
+      status: "completed",
+      next: "Check Barnet GLA and committee decision records",
+      unresolved: 17,
+    },
+  } as const;
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] as keyof typeof campaigns;
+    const campaign = campaigns[id];
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: campaign.status, stateVersion: 5, lastSequence: 15, events: [] },
+        documents: [
+          { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+          { key: "tactics_timeline", num: 2, name: "Tactics and Timeline", status: "ready", html: "", plainText: `TACTICS AND TIMELINE\n\n${campaign.next}\n\nType: research\n\nTarget: public source record`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+          { key: "media_pack", num: 3, name: "Media Pack", status: "ready", html: "", plainText: "MEDIA PACK", isPack: true, sectionKeys: [], resourceCount: 0, flags: [] },
+        ],
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: campaign.next, reason: "Reset isolation regression", claimIds: [], affectedSections: [] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 30, loadBearing: 24, verifiedLoadBearing: 24 - campaign.unresolved, unresolvedLoadBearing: campaign.unresolved },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95&view=evidence");
+  await page.getByLabel("Source next checks ledger").getByRole("button", { name: "Create action" }).first().click();
+  await expect(page.getByText("Check Ormskirk appeal status before public escalation", { exact: true }).first()).toBeVisible();
+
+  await page.goto("/operations?campaignId=6b54225d-afa3-41d1-b053-89741094f153&view=evidence");
+  await page.getByLabel("Source next checks ledger").getByRole("button", { name: "Create action" }).first().click();
+  await expect(page.getByText("Check Barnet GLA and committee decision records", { exact: true }).first()).toBeVisible();
+
+  await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95&view=outbox");
+  await page.getByRole("button", { name: "Reset local workspace" }).last().click();
+  await expect(page.getByText("Local source workspace state reset; public campaign data was not changed.")).toBeVisible();
+  await page.getByRole("button", { name: /Action plan/ }).first().click();
+  await expect(page.getByText("No local actions yet. Create the primary source-check action to turn the campaign boundary into owned work.")).toBeVisible();
+  await expect(page.getByText("Actions: 0 local items")).toBeVisible();
+
+  await page.goto("/operations");
+  const portfolio = page.getByLabel("Campaign operations portfolio");
+  const ormskirkRow = portfolio.locator("article", { hasText: "Keep KFC Out of Ormskirk" });
+  const barnetRow = portfolio.locator("article", { hasText: "Stop the leisure park redevelopment" });
+
+  await expect(ormskirkRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
+  await expect(barnetRow).toContainText("Local signals: 1 action.");
+});
+
 test("operations portfolio: one failed source does not blank usable campaigns", async ({ page }) => {
   const campaigns = {
     "69f257b6-9913-4395-94f7-5c25b4b5fe95": {
