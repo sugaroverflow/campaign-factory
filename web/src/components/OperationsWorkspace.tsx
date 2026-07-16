@@ -737,6 +737,7 @@ function hasStoredState(storageKey = STORAGE_KEY) {
 function portfolioLocalCounts(campaignId: string): PortfolioLocalCounts {
   if (typeof window === "undefined") return { actions: 0, drafts: 0, reviews: 0, queued: 0 };
   const state = loadState(localStorageKeyFor(campaignId));
+  if (state.workspaceKey !== campaignId) return { actions: 0, drafts: 0, reviews: 0, queued: 0 };
   return {
     actions: state.localActions.length,
     drafts: state.workingDrafts.length,

@@ -824,6 +824,67 @@ test("operations workbench: real source working copies move through local review
   await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
 });
 
+test("operations portfolio ignores stale local state under the wrong campaign key", async ({ page }) => {
+  const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? ormskirkId;
+    const isBarnet = id === barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: isBarnet ? "completed" : "partial", stateVersion: 11, lastSequence: 22, events: [] },
+        documents: [
+          { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${isBarnet ? "Stop the leisure park redevelopment in Barnet" : "Keep KFC Out of Ormskirk"}\n\nPlace: ${isBarnet ? "Barnet, London" : "Ormskirk, Lancashire"}\n\nTHE PROBLEM\nPortfolio state isolation fixture.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+        ],
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: isBarnet ? "Check Barnet decision records" : "Check Ormskirk appeal records", reason: "Portfolio local-state guard", claimIds: ["C1"], affectedSections: ["brief"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 8, loadBearing: 6, verifiedLoadBearing: 3, unresolvedLoadBearing: 3 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate(
+    ({ ormskirkId, barnetId }) => {
+      const staleState = {
+        workspaceKey: ormskirkId,
+        selectedSegment: "school_gates",
+        subject: "Stale Ormskirk subject must not count for Barnet",
+        body: "This stale state is stored under the Barnet key but still belongs to Ormskirk, so the portfolio must ignore it.",
+        status: "queued",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "outbox",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: "2026-07-16T16:50:00.000Z",
+        localActions: [{ id: "stale-action", title: "Stale Ormskirk local action", source: "Stale workspace", owner: "Campaigner", timing: "Next", priority: "High", status: "next", provenance: "Wrong-key regression fixture" }],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        activity: [{ id: "stale", label: "Stale wrong-key state" }],
+      };
+      localStorage.setItem(`cf_operations_demo_v3:${barnetId}`, JSON.stringify(staleState));
+    },
+    { ormskirkId, barnetId },
+  );
+
+  await page.goto("/operations");
+  const portfolio = page.getByLabel("Campaign operations portfolio");
+  const barnetRow = portfolio.locator("article", { hasText: "Stop the leisure park redevelopment" });
+  await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
+  await expect(barnetRow).not.toContainText("Stale Ormskirk local action");
+});
+
 test("operations workbench: failed or not-yet-usable real source loads do not fall back to the fixture", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
