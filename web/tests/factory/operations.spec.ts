@@ -5,6 +5,19 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 
+test("operations source API: invalid and non-curated ids are allow-list misses with no-store caching", async ({ request }) => {
+  for (const id of ["not-a-campaign-id", "00000000-0000-4000-8000-000000000000"]) {
+    const response = await request.get(`/api/operations/sources/${id}`);
+    expect(response.status()).toBe(404);
+    expect(response.headers()["cache-control"]).toBe("no-store");
+
+    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string };
+    expect(body.error).toBe("Operations source not found");
+    expect(body.detail).toContain("curated public operations campaigns");
+    expect(body.sourceOrigin).toBeUndefined();
+  }
+});
+
 test("operations workbench: cross-view local review and demo queue flow", async ({ page }) => {
   await page.goto("/operations?demo=fixture");
 

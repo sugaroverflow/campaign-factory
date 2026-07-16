@@ -5,6 +5,12 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
+
+function sourceJson<T>(body: T, status = 200) {
+  return NextResponse.json(body, { status, headers: NO_STORE_HEADERS });
+}
+
 function sourceOrigin() {
   return normaliseOperationsSourceOrigin(process.env.OPERATIONS_SOURCE_ORIGIN) ?? OPERATIONS_DEFAULT_SOURCE_ORIGIN;
 }
@@ -31,54 +37,53 @@ async function fetchSourceJson<T>(origin: string, path: string): Promise<{ ok: t
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   if (!UUID_RE.test(id) || !isOperationsPublicCampaignId(id)) {
-    return NextResponse.json(
+    return sourceJson(
       { error: "Operations source not found", detail: "This read-only preview source path only exposes the curated public operations campaigns." },
-      { status: 404 },
+      404,
     );
   }
 
   const origin = sourceOrigin();
   const run = await fetchSourceJson<OperationsSourcePayload["run"]>(origin, `/api/factory/runs/${encodeURIComponent(id)}`);
   if (!run.ok) {
-    return NextResponse.json({ error: "Campaign source run unavailable", detail: run.message, sourceOrigin: origin }, { status: run.status === 404 ? 404 : 502 });
+    return sourceJson({ error: "Campaign source run unavailable", detail: run.message, sourceOrigin: origin }, run.status === 404 ? 404 : 502);
   }
   if (
     run.value.campaignId !== id ||
     !["queued", "running", "partial", "completed", "failed", "cancelled"].includes(run.value.status) ||
     !Array.isArray(run.value.events)
   ) {
-    return NextResponse.json(
+    return sourceJson(
       { error: "Campaign source contract mismatch", detail: "The public source did not return a run in the expected shape.", sourceOrigin: origin },
-      { status: 502 },
+      502,
     );
   }
 
   if (run.value.status !== "partial" && run.value.status !== "completed") {
-    return NextResponse.json(
+    return sourceJson(
       {
         error: "Campaign source not ready",
         detail: `This campaign is ${run.value.status}, so compiled operations source material is not available yet.`,
         runStatus: run.value.status,
         sourceOrigin: origin,
       },
-      { status: 409, headers: { "Cache-Control": "no-store" } },
+      409,
     );
   }
 
   const docs = await fetchSourceJson<Pick<OperationsSourcePayload, "documents" | "evidence">>(origin, `/api/factory/runs/${encodeURIComponent(id)}/documents`);
   if (!docs.ok) {
-    return NextResponse.json({ error: "Campaign source documents unavailable", detail: docs.message, sourceOrigin: origin }, { status: docs.status === 404 ? 404 : 502 });
+    return sourceJson({ error: "Campaign source documents unavailable", detail: docs.message, sourceOrigin: origin }, docs.status === 404 ? 404 : 502);
   }
 
   if (!Array.isArray(docs.value.documents) || !docs.value.evidence?.totals || !Array.isArray(docs.value.evidence.nextChecks)) {
-    return NextResponse.json(
+    return sourceJson(
       { error: "Campaign source contract mismatch", detail: "The public source did not return compiled documents and evidence in the expected shape.", sourceOrigin: origin },
-      { status: 502 },
+      502,
     );
   }
 
-  return NextResponse.json(
+  return sourceJson(
     { sourceOrigin: origin, run: run.value, documents: docs.value.documents, evidence: docs.value.evidence } satisfies OperationsSourcePayload,
-    { headers: { "Cache-Control": "no-store" } },
   );
 }
