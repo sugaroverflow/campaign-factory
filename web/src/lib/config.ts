@@ -29,8 +29,9 @@ export const config = {
   // whole room isn't locked out by one shared address (env var still overrides).
   ipRunCap: intEnv("CF_IP_RUN_CAP", 200),
   // Global daily spend ceiling (kill-switch), in GBP, converted to USD for the
-  // ledger. Sized ~2x expected launch-day cost.
-  dailyBudgetGBP: numEnv("CF_DAILY_BUDGET_GBP", 150),
+  // ledger. Conference day (16 Jul): raised to ≈$600 USD at the configured FX
+  // (user decision; was £150 ≈ $190).
+  dailyBudgetGBP: numEnv("CF_DAILY_BUDGET_GBP", 472.44),
   fxGbpUsd: numEnv("CF_FX_GBP_USD", 1.27),
   // Sunset / maintenance switch — disables new runs, existing URLs stay readable.
   readonly: boolEnv("CF_READONLY", false),
