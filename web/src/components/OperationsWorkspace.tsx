@@ -73,6 +73,7 @@ type WorkingDraft = {
   channel: string;
   subject: string;
   body: string;
+  reviewerNote: string;
   status: DraftStatus;
   queuedAt: string | null;
   createdAt: string;
@@ -88,6 +89,7 @@ type DemoState = {
   selectedSegment: SegmentId;
   subject: string;
   body: string;
+  reviewerNote: string;
   status: DraftStatus;
   mode: Mode;
   activeDraft: DraftId;
@@ -525,6 +527,7 @@ const initialState: DemoState = {
   subject: "Make the St John the Baptist school street permanent",
   body:
     "Hello,\n\nWe are asking Leicester City Council to make the school street outside St John the Baptist CofE Primary permanent, with clear enforcement before the experimental order lapses.\n\nThe campaign is focused on safer school-run streets, cleaner air at the gates, and a decision route parents can follow. If you support the permanent order, please add your name to the campaign update and share one local reason this matters to your family.\n\nBefore any provider connection is used, a campaigner should check the council timing, the wording of the order, and whether this message fits your contact consent records.\n\nThank you,\nCampaign Factory demo workspace",
+  reviewerNote: "",
   status: "draft",
   mode: "compose",
   activeDraft: "supporter_email",
@@ -645,6 +648,7 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
         channel: draft.channel || sourceWorkingCopy.channel || "Source draft",
         subject: typeof draft.subject === "string" && draft.subject ? draft.subject : draft.title,
         body: typeof draft.body === "string" && draft.body ? draft.body : "",
+        reviewerNote: typeof draft.reviewerNote === "string" ? draft.reviewerNote : "",
         status: draft.status === "draft" || draft.status === "review" || draft.status === "approved" || draft.status === "queued" ? draft.status : "draft",
         queuedAt: typeof draft.queuedAt === "string" ? draft.queuedAt : null,
         createdAt,
@@ -662,6 +666,7 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
       channel: legacyCopy.channel,
       subject: typeof legacyState.subject === "string" && legacyState.subject ? legacyState.subject : legacyCopy.title,
       body: typeof legacyState.body === "string" && legacyState.body ? legacyState.body : "",
+      reviewerNote: typeof legacyState.reviewerNote === "string" ? legacyState.reviewerNote : "",
       status: legacyState.status === "review" || legacyState.status === "approved" || legacyState.status === "queued" ? legacyState.status : "draft",
       queuedAt: typeof legacyState.queuedAt === "string" ? legacyState.queuedAt : null,
       createdAt: legacyCopy.createdAt,
@@ -696,6 +701,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     sourceStateVersion: typeof parsed.sourceStateVersion === "number" ? parsed.sourceStateVersion : null,
     sourceLastSequence: typeof parsed.sourceLastSequence === "number" ? parsed.sourceLastSequence : null,
     sourceDocumentSignature: typeof parsed.sourceDocumentSignature === "string" ? parsed.sourceDocumentSignature : null,
+    reviewerNote: typeof parsed.reviewerNote === "string" ? parsed.reviewerNote : "",
     activeView: viewIds.includes(parsed.activeView as ViewId) ? (parsed.activeView as ViewId) : "overview",
     contactFilter:
       parsed.contactFilter === "all" || segments.some((segment) => segment.id === parsed.contactFilter)
@@ -1803,6 +1809,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const communicationStatus = activeWorkingDraft?.status ?? state.status;
   const communicationSubject = activeWorkingDraft?.subject ?? state.subject;
   const communicationBody = activeWorkingDraft?.body ?? state.body;
+  const reviewerNote = activeWorkingDraft?.reviewerNote ?? state.reviewerNote;
   const status = statusCopy[communicationStatus];
   const canRequestReview = communicationSubject.trim().length > 8 && communicationBody.trim().length > 80;
   const reviewBlocked = !canRequestReview;
@@ -1969,6 +1976,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         channel: resource.channel,
         subject: resource.subject,
         body: resource.body,
+        reviewerNote: "",
         status: "draft",
         queuedAt: null,
         createdAt: sourceWorkingCopy.createdAt,
@@ -2014,6 +2022,25 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           : current.status === "approved" || current.status === "queued")
           ? [record("Edited communication copy; approval and local queue state were cleared for re-review."), ...current.activity].slice(0, 7)
           : current.activity,
+    }));
+  };
+
+  const updateReviewerNote = (note: string) => {
+    setState((current) => ({
+      ...current,
+      ...(current.activeWorkingDraftId
+        ? {
+            workingDrafts: current.workingDrafts.map((draft) =>
+              draft.id === current.activeWorkingDraftId
+                ? {
+                    ...draft,
+                    reviewerNote: note,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : draft,
+            ),
+          }
+        : { reviewerNote: note }),
     }));
   };
 
@@ -2198,7 +2225,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const buildOperationsPack = () => {
     const queuedDrafts = [
       ...(state.status === "queued"
-        ? [{ id: "seeded-supporter-email", title: "Supporter email", subject: state.subject, status: state.status, queuedAt: state.queuedAt, source: state.sourceWorkingCopy?.sourceDocument ?? (source ? "Browser-local source workspace draft" : "Demo fixture draft") }]
+        ? [{ id: "seeded-supporter-email", title: "Supporter email", subject: state.subject, status: state.status, queuedAt: state.queuedAt, source: state.sourceWorkingCopy?.sourceDocument ?? (source ? "Browser-local source workspace draft" : "Demo fixture draft"), reviewerNote: state.reviewerNote }]
         : []),
       ...state.workingDrafts.map((draft) => ({
         id: draft.id,
@@ -2207,6 +2234,9 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         status: draft.status,
         queuedAt: draft.queuedAt,
         source: `${draft.sourceWorkingCopy.sourceDocument} (${draft.sourceWorkingCopy.sourceDocumentKey})`,
+        provenance: draft.sourceWorkingCopy.provenance,
+        warnings: draft.sourceWorkingCopy.warnings,
+        reviewerNote: draft.reviewerNote,
       })),
     ];
     return {
@@ -2305,7 +2335,13 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         ...(pack.actions.length ? pack.actions.map((action) => `- [${action.statusLabel}] ${action.title} — ${action.owner}; ${action.timing}`) : ["- No browser-local actions yet."]),
         "",
         "## Drafts & local outbox",
-        ...(pack.drafts.length ? pack.drafts.map((draft) => `- [${draft.status}] ${draft.title}: ${draft.subject}${draft.queuedAt ? ` · queued locally ${formatQueuedTime(draft.queuedAt)}` : ""}`) : ["- No local working drafts or queued items yet."]),
+        ...(pack.drafts.length
+          ? pack.drafts.flatMap((draft) => [
+              `- [${draft.status}] ${draft.title}: ${draft.subject}${draft.queuedAt ? ` · queued locally ${formatQueuedTime(draft.queuedAt)}` : ""}`,
+              `  - Source/provenance: ${draft.source}`,
+              ...(draft.reviewerNote ? [`  - Reviewer note: ${draft.reviewerNote}`] : []),
+            ])
+          : ["- No local working drafts or queued items yet."]),
         `- Queue count: ${pack.outbox.queuedCount}`,
         `- Schedule intent: ${pack.outbox.scheduleIntent}`,
         "",
@@ -2859,6 +2895,17 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             Queue locally for demo
           </Button>
         </div>
+        <div className="mt-5 border-t border-border pt-5">
+          <Label htmlFor="operations-reviewer-note">Optional reviewer note</Label>
+          <Textarea
+            id="operations-reviewer-note"
+            className="mt-2 min-h-24 bg-background"
+            value={reviewerNote}
+            onChange={(event) => updateReviewerNote(event.target.value)}
+            placeholder="Record the human check, evidence caveat, or consent question that should travel with this local copy."
+          />
+          <p className="mt-2 text-xs text-muted-foreground">Saved only in this browser-local workspace and included in client-side exports; it does not write back to the campaign source.</p>
+        </div>
       </Panel>
       <Panel className="bg-ops-ink text-white">
         <SmallLabel>Current review item</SmallLabel>
@@ -2873,6 +2920,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           <p className="font-medium">{communicationSubject || "Untitled campaign email"}</p>
           <p className="mt-1 text-muted-foreground">Audience: {selected.name}</p>
           {activeSourceWorkingCopy ? <p className="mt-1 text-muted-foreground">Source copy: {activeSourceWorkingCopy.title} · {activeSourceWorkingCopy.sourceDocument}</p> : null}
+          {reviewerNote.trim() ? <p className="mt-3 rounded-[var(--r-lg)] bg-ops-yellow/60 p-3 text-foreground">Reviewer note: {reviewerNote}</p> : null}
           <div className="mt-4 line-clamp-6 whitespace-pre-wrap border-t border-border pt-4 text-muted-foreground">{communicationBody}</div>
         </article>
         <div className="mt-5 rounded-[var(--r-xl)] border border-white/15 bg-white/[0.08] p-3 text-sm">

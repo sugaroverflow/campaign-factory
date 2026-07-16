@@ -795,6 +795,8 @@ test("operations workbench: real source working copies move through local review
   await expect(page.getByRole("heading", { name: "Human approval gate" })).toBeVisible();
   await expect(page.getByLabel("Local working drafts for review")).toContainText("Ormskirk supporter email");
   await expect(page.getByLabel("Communication preview for approval")).toContainText("Digital Campaign Pack");
+  await page.getByLabel("Optional reviewer note").fill("Reviewer confirmed the appeal-status warning must stay attached before any provider setup.");
+  await expect(page.getByLabel("Communication preview for approval")).toContainText("Reviewer confirmed the appeal-status warning");
 
   await page.getByRole("button", { name: "Approve as human reviewer" }).click();
   await expect(page.getByRole("heading", { name: "Approved by human" })).toBeVisible();
@@ -803,6 +805,17 @@ test("operations workbench: real source working copies move through local review
   await expect(page.locator("main")).toContainText("Ormskirk KFC source update");
   await expect(page.locator("main")).toContainText("Local copy from Digital Campaign Pack");
   await expect(page.getByText(/It is not connected to an email provider/)).toBeVisible();
+
+  const [markdownDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download Markdown" }).click(),
+  ]);
+  const markdownPath = await markdownDownload.path();
+  expect(markdownPath).toBeTruthy();
+  const markdownPack = await readFile(markdownPath!, "utf8");
+  expect(markdownPack).toContain("Reviewer note: Reviewer confirmed the appeal-status warning must stay attached before any provider setup.");
+  expect(markdownPack).toContain("Source/provenance: Digital Campaign Pack (digital_pack)");
+  expect(markdownPack).toContain("Provider sending: Not connected");
 
   await page.goto("/operations?campaignId=6b54225d-afa3-41d1-b053-89741094f153&view=outbox");
   await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
