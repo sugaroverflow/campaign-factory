@@ -541,6 +541,35 @@ test("operations portfolio: one failed source does not blank usable campaigns", 
   await expect(page.getByRole("link", { name: "Open workspace" }).nth(0)).toHaveAttribute("href", "/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95");
   await expect(page.getByRole("link", { name: "Open workspace" }).nth(2)).toHaveAttribute("href", "/operations?campaignId=6b54225d-afa3-41d1-b053-89741094f153");
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "View source brief" }).nth(1)).toHaveAttribute(
+    "href",
+    "https://campaign-factory.vercel.app/factory/c/57678ae0-29fd-4b4b-8a53-5c711cdb21cf",
+  );
+});
+
+test("operations workspace: failed direct source load keeps canonical source brief links", async ({ page }) => {
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 500." }),
+    });
+  });
+
+  await page.goto("/operations?campaignId=57678ae0-29fd-4b4b-8a53-5c711cdb21cf");
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText(/Preview source returned HTTP 500/)).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "View source brief" })).toHaveAttribute(
+    "href",
+    "https://campaign-factory.vercel.app/factory/c/57678ae0-29fd-4b4b-8a53-5c711cdb21cf",
+  );
+  await expect(page.getByRole("link", { name: "Back to source brief" })).toHaveAttribute(
+    "href",
+    "https://campaign-factory.vercel.app/factory/c/57678ae0-29fd-4b4b-8a53-5c711cdb21cf",
+  );
 });
 
 test("operations portfolio: source labels carry through workspace switching without shared fixture contacts", async ({ page }) => {

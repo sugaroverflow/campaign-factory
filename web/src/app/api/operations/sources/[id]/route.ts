@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { isOperationsPublicCampaignId, type OperationsSourcePayload } from "@/lib/operations/source";
+import { OPERATIONS_DEFAULT_SOURCE_ORIGIN, isOperationsPublicCampaignId, type OperationsSourcePayload } from "@/lib/operations/source";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const DEFAULT_SOURCE_ORIGIN = "https://campaign-factory.vercel.app";
-
 function sourceOrigin() {
-  const raw = process.env.OPERATIONS_SOURCE_ORIGIN?.trim() || DEFAULT_SOURCE_ORIGIN;
+  const raw = process.env.OPERATIONS_SOURCE_ORIGIN?.trim() || OPERATIONS_DEFAULT_SOURCE_ORIGIN;
   return raw.replace(/\/+$/, "");
 }
 

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { foldEvents } from "@/lib/factory/client/fold";
 import type { RunReadModel } from "@/lib/factory/contracts/api";
 import type { CompiledDocument, EvidenceAndNextChecks } from "@/lib/factory/documents";
-import { OPERATIONS_PUBLIC_CAMPAIGNS, type OperationsSourcePayload } from "@/lib/operations/source";
+import { OPERATIONS_DEFAULT_SOURCE_ORIGIN, OPERATIONS_PUBLIC_CAMPAIGNS, type OperationsSourcePayload } from "@/lib/operations/source";
 
 const STORAGE_KEY = "cf_operations_demo_v3";
 const LEGACY_STORAGE_KEYS = ["cf_operations_demo_v2", "cf_operations_demo_v1"];
@@ -1642,7 +1642,8 @@ function OperationsPortfolio() {
 
 function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fixture" } | { status: "ready" }> }) {
   const campaignId = state.campaignId;
-  const sourceHref = UUID_RE.test(campaignId) ? `/factory/c/${campaignId}` : "/factory";
+  const curatedSourceHref = PORTFOLIO_CAMPAIGNS.find((campaign) => campaign.id === campaignId)?.sourceHref;
+  const sourceHref = curatedSourceHref ?? (UUID_RE.test(campaignId) ? `${OPERATIONS_DEFAULT_SOURCE_ORIGIN}/factory/c/${campaignId}` : "/factory");
   const title =
     state.status === "loading"
       ? "Loading campaign source"
