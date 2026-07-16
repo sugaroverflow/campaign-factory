@@ -2,9 +2,14 @@
 // is already present we skip straight to batch intake; otherwise a session is
 // opened first. The cookie is HttpOnly and verified server-side (ADR 0013).
 
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { PRESENTER_COOKIE, verifyPresenterToken } from "@/app/api/factory/present/session";
 import { PresenterEntry } from "./PresenterEntry";
+
+export const metadata: Metadata = {
+  title: "Live Demo - Factory",
+};
 
 export const dynamic = "force-dynamic"; // reads the request cookie
 
