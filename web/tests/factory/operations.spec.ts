@@ -460,6 +460,23 @@ test("operations workbench: failed or not-yet-usable real source loads do not fa
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
+test("operations workbench: invalid or non-curated campaign IDs are blocked without fixture fallback", async ({ page }) => {
+  await page.goto("/operations?campaignId=not-a-campaign-id");
+
+  await expect(page.getByRole("heading", { name: "Campaign ID not recognised" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+
+  await page.goto("/operations?campaignId=00000000-0000-4000-8000-000000000000");
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No curated public campaign source was found for that campaign ID.")).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
 test("operations workbench: source updates preserve browser-local work and require acknowledgement", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   let sourceVersion = 44;

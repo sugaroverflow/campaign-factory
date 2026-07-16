@@ -1980,7 +1980,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         mode: "compose",
         workingDrafts: existing ? current.workingDrafts : [newDraft, ...current.workingDrafts],
         sourceWorkingCopy: null,
-        activity: [record(`${existing ? "Reopened" : "Created"} editable local copy from source resource: ${resource.title}.`), ...current.activity].slice(0, 7),
+        activity: [record(`${existing ? "Selected existing" : "Created"} editable local copy from source resource: ${resource.title}.`), ...current.activity].slice(0, 7),
       };
     });
   };
