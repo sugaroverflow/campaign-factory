@@ -1624,13 +1624,13 @@ test("operations workbench: malformed source document entries do not hydrate a r
         run: { campaignId, status: "partial", stateVersion: 9, lastSequence: 99, events: [] },
         documents: [
           {
-            key: "campaign_brief",
-            num: 1,
-            name: "Campaign Brief",
-            status: "ready",
+            key: "fixture_pack",
+            num: 99,
+            name: "Fixture Pack",
+            status: "done",
             html: "<p>Malformed document should not hydrate Ormskirk</p>",
-            plainText: 123,
-            isPack: false,
+            plainText: "Unknown compiled document should not hydrate Ormskirk",
+            isPack: true,
             sectionKeys: [],
             resourceCount: 0,
             flags: [],
@@ -1654,6 +1654,7 @@ test("operations workbench: malformed source document entries do not hydrate a r
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByText(/typed public document contract/i)).toBeVisible();
   await expect(page.getByText("Malformed document should not hydrate Ormskirk")).toHaveCount(0);
+  await expect(page.getByText("Unknown compiled document should not hydrate Ormskirk")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });

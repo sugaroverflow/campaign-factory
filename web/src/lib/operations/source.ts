@@ -1,4 +1,5 @@
 import type { RunReadModel } from "@/lib/factory/contracts/api";
+import { CANONICAL_DOCUMENTS, DOCUMENT_STATUSES } from "@/lib/factory/contracts/documents";
 import type { CompiledDocument, EvidenceAndNextChecks } from "@/lib/factory/documents";
 
 export const OPERATIONS_DEFAULT_SOURCE_ORIGIN = "https://campaign-factory.vercel.app";
@@ -43,13 +44,18 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+const OPERATIONS_DOCUMENT_KEYS = new Set<string>(CANONICAL_DOCUMENTS.map((doc) => doc.key));
+const OPERATIONS_DOCUMENT_STATUSES = new Set<string>(DOCUMENT_STATUSES);
+
 export function isOperationsCompiledDocument(value: unknown): value is CompiledDocument {
   if (!isRecord(value)) return false;
   return (
     typeof value.key === "string" &&
+    OPERATIONS_DOCUMENT_KEYS.has(value.key) &&
     isFiniteNumber(value.num) &&
     typeof value.name === "string" &&
     typeof value.status === "string" &&
+    OPERATIONS_DOCUMENT_STATUSES.has(value.status) &&
     typeof value.html === "string" &&
     typeof value.plainText === "string" &&
     typeof value.isPack === "boolean" &&
@@ -60,7 +66,13 @@ export function isOperationsCompiledDocument(value: unknown): value is CompiledD
 }
 
 export function isOperationsCompiledDocumentList(value: unknown): value is CompiledDocument[] {
-  return Array.isArray(value) && value.every(isOperationsCompiledDocument);
+  if (!Array.isArray(value)) return false;
+  const seen = new Set<string>();
+  for (const doc of value) {
+    if (!isOperationsCompiledDocument(doc) || seen.has(doc.key)) return false;
+    seen.add(doc.key);
+  }
+  return true;
 }
 
 export function isOperationsEvidenceAndNextChecks(value: unknown): value is EvidenceAndNextChecks {
