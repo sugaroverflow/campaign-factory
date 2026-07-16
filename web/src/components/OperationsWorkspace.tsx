@@ -82,6 +82,9 @@ type WorkingDraft = {
 
 type DemoState = {
   workspaceKey: string;
+  sourceStateVersion: number | null;
+  sourceLastSequence: number | null;
+  sourceDocumentSignature: string | null;
   selectedSegment: SegmentId;
   subject: string;
   body: string;
@@ -515,6 +518,9 @@ const viewIds: ViewId[] = [
 
 const initialState: DemoState = {
   workspaceKey: "fixture",
+  sourceStateVersion: null,
+  sourceLastSequence: null,
+  sourceDocumentSignature: null,
   selectedSegment: "school_gates",
   subject: "Make the St John the Baptist school street permanent",
   body:
@@ -669,6 +675,9 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
       ? (parsed.activeDraft as DraftId)
       : initialState.activeDraft,
     workspaceKey: typeof parsed.workspaceKey === "string" ? parsed.workspaceKey : initialState.workspaceKey,
+    sourceStateVersion: typeof parsed.sourceStateVersion === "number" ? parsed.sourceStateVersion : null,
+    sourceLastSequence: typeof parsed.sourceLastSequence === "number" ? parsed.sourceLastSequence : null,
+    sourceDocumentSignature: typeof parsed.sourceDocumentSignature === "string" ? parsed.sourceDocumentSignature : null,
     activeView: viewIds.includes(parsed.activeView as ViewId) ? (parsed.activeView as ViewId) : "overview",
     contactFilter:
       parsed.contactFilter === "all" || segments.some((segment) => segment.id === parsed.contactFilter)
@@ -1143,11 +1152,24 @@ function buildSourceDraftLibrary(source: CampaignSource): DraftLibraryItem[] {
   ];
 }
 
+function sourceDocumentSignature(source: CampaignSource) {
+  const documentStatuses = source.documents
+    .map((doc) => `${doc.key}:${doc.status}:${doc.resourceCount}`)
+    .sort()
+    .join("|");
+  const evidenceTotals = source.evidence.totals;
+  const nextChecks = source.evidence.nextChecks.map((check) => `${check.id}:${check.description}`).join("|");
+  return `${documentStatuses}::${evidenceTotals.claims}/${evidenceTotals.loadBearing}/${evidenceTotals.verifiedLoadBearing}/${evidenceTotals.unresolvedLoadBearing}::${nextChecks}`;
+}
+
 function buildInitialStateForSource(source: CampaignSource): DemoState {
   const nextCheck = source.nextGate ?? source.evidence.nextChecks[0]?.description ?? "Review the unresolved source checks before stronger campaign claims are used.";
   return {
     ...initialState,
     workspaceKey: source.campaignId,
+    sourceStateVersion: source.stateVersion,
+    sourceLastSequence: source.lastSequence,
+    sourceDocumentSignature: sourceDocumentSignature(source),
     subject: `${source.title}: update for review`,
     body: [
       "Hello,",
@@ -1680,6 +1702,19 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   }, [hasStoredLocalState, hydrated, source]);
 
   useEffect(() => {
+    if (!hydrated || !source || !hasStoredLocalState || state.workspaceKey !== source.campaignId || state.sourceStateVersion !== null) return;
+    const signature = sourceDocumentSignature(source);
+    queueMicrotask(() => {
+      setState((current) => ({
+        ...current,
+        sourceStateVersion: source.stateVersion,
+        sourceLastSequence: source.lastSequence,
+        sourceDocumentSignature: signature,
+      }));
+    });
+  }, [hasStoredLocalState, hydrated, source, state.sourceStateVersion, state.workspaceKey]);
+
+  useEffect(() => {
     if (!hydrated) return;
     if (campaignId && !hasStoredLocalState && sourceState.status !== "ready") return;
     if (campaignId && source && !hasStoredLocalState && state.activity[0]?.id !== `source-${source.campaignId}`) return;
@@ -1718,6 +1753,12 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   );
   const sourceTactics = useMemo(() => (source ? extractSourceTactics(source) : []), [source]);
   const sourceResources = useMemo(() => (source ? extractSourceResources(source) : []), [source]);
+  const currentSourceDocumentSignature = useMemo(() => (source ? sourceDocumentSignature(source) : null), [source]);
+  const sourceBaselineChanged = Boolean(
+    source &&
+      state.sourceStateVersion !== null &&
+      (state.sourceStateVersion !== source.stateVersion || state.sourceLastSequence !== source.lastSequence || state.sourceDocumentSignature !== currentSourceDocumentSignature),
+  );
   const sourceResourceGroups = useMemo(() => {
     const groups = new Map<string, SourceResource[]>();
     sourceResources.forEach((resource) => {
@@ -2108,6 +2149,17 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     }));
   };
 
+  const acknowledgeSourceRefresh = () => {
+    if (!source || !currentSourceDocumentSignature) return;
+    setState((current) => ({
+      ...current,
+      sourceStateVersion: source.stateVersion,
+      sourceLastSequence: source.lastSequence,
+      sourceDocumentSignature: currentSourceDocumentSignature,
+      activity: [record(`Acknowledged updated read-only source for ${source.title}; existing local work was preserved.`), ...current.activity].slice(0, 7),
+    }));
+  };
+
   const reset = () => {
     localStorage.removeItem(storageKey);
     if (storageKey !== STORAGE_KEY) localStorage.removeItem(STORAGE_KEY);
@@ -2168,7 +2220,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   );
 
   const goButton = (view: ViewId, label: string) => (
-    <Button type="button" variant="outline" onClick={() => setView(view)}>
+    <Button type="button" variant="outline" onClick={() => setView(view)} className="max-w-full min-w-0 !shrink whitespace-normal text-left">
       {label}
     </Button>
   );
@@ -2821,7 +2873,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     <div className="space-y-5">
       <Panel className="bg-ops-paper">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div>
+          <div className="min-w-0">
           <SmallLabel>{source ? "Real campaign source" : "Today"}</SmallLabel>
           <h1 className="mt-2 max-w-3xl text-4xl font-medium tracking-tight sm:text-5xl">
             {source ? (
@@ -2870,6 +2922,19 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
               <p className="mt-2 text-sm text-muted-foreground">
                 Campaign ID <span className="font-mono text-xs text-foreground">{source.campaignId}</span> · state v{source.stateVersion} · event #{source.lastSequence} · loaded {formatQueuedTime(source.loadedAt)}.
               </p>
+              {sourceBaselineChanged ? (
+                <div className="mt-4 rounded-[var(--r-xl)] border border-ops-coral bg-ops-coral/55 p-3 text-sm text-ops-ink" role="status">
+                  <p className="font-medium">Read-only source has changed since this local workspace started.</p>
+                  <p className="mt-1">Your browser-local actions and drafts were preserved. Re-check Evidence, Strategy, and Drafts before approving or queueing local work.</p>
+                  <button
+                    type="button"
+                    onClick={acknowledgeSourceRefresh}
+                    className="mt-3 rounded-full border border-ops-ink/20 bg-background/70 px-3 py-1.5 text-xs font-medium hover:bg-background focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    Acknowledge updated source
+                  </button>
+                </div>
+              ) : null}
               <div className="mt-4 flex flex-wrap gap-3">
                 <Link href={source.sourceHref} className="rounded-full bg-ops-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                   View original brief

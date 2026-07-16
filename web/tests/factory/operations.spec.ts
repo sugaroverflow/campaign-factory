@@ -411,6 +411,53 @@ test("operations workbench: failed real source load does not fall back to the fi
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
+test("operations workbench: source updates preserve browser-local work and require acknowledgement", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  let sourceVersion = 44;
+  let lastSequence = 1909;
+  const sourcePayload = () => ({
+    sourceOrigin: "https://campaign-factory.vercel.app",
+    run: { campaignId, status: "partial", stateVersion: sourceVersion, lastSequence, events: [] },
+    documents: [
+      { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: "Keep KFC Out of Ormskirk\n\nPlace: Ormskirk, Lancashire\n\nTHE PROBLEM\nPublic source changed safely.", isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+      { key: "campaign_strategy", num: 2, name: "Campaign Strategy", status: "ready", html: "", plainText: "CAMPAIGN STRATEGY\n\nPriority audiences\n\n- Residents directly affected by amenity", isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+      { key: "tactics_timeline", num: 3, name: "Tactics and Timeline", status: "ready", html: "", plainText: "TACTICS AND TIMELINE\n\nP0 Official status verification\n\nType: research\n\nTarget: Planning Inspectorate", isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+      { key: "media_pack", num: 4, name: "Media Pack", status: sourceVersion === 44 ? "assembling" : "ready", html: "", plainText: "MEDIA PACK", isPack: true, sectionKeys: [], resourceCount: sourceVersion === 44 ? 0 : 1, flags: [] },
+    ],
+    evidence: {
+      groups: [],
+      conflicts: [],
+      nextChecks: [{ id: "appeal-check", description: sourceVersion === 44 ? "Check the Planning Inspectorate appeals database" : "Check the updated Planning Inspectorate and council appeal records", reason: "Source version changed", claimIds: ["C3"], affectedSections: ["strategy"] }],
+      terminalGaps: [],
+      draftNotes: [],
+      totals: { claims: 12, loadBearing: 10, verifiedLoadBearing: sourceVersion === 44 ? 5 : 6, unresolvedLoadBearing: sourceVersion === 44 ? 5 : 4 },
+    },
+  });
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(sourcePayload()) });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+  await expect(page.getByRole("heading", { name: /Keep KFC Out of Ormskirk into operations/i })).toBeVisible();
+  await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
+  await page.getByRole("button", { name: "Create appeal-status action" }).click();
+  await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
+
+  sourceVersion = 45;
+  lastSequence = 1918;
+  await page.reload();
+  await page.getByRole("button", { name: /Overview/ }).first().click();
+  await expect(page.getByText("Read-only source has changed since this local workspace started.")).toBeVisible();
+  await expect(page.getByText(/Your browser-local actions and drafts were preserved/)).toBeVisible();
+  await page.getByRole("button", { name: /Action plan/ }).first().click();
+  await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: /Overview/ }).first().click();
+  await page.getByRole("button", { name: "Acknowledge updated source" }).click();
+  await expect(page.getByText("Read-only source has changed since this local workspace started.")).toHaveCount(0);
+});
+
 test("operations workbench: campaignId route loads a read-only public campaign source", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const documents = [
