@@ -1034,6 +1034,26 @@ test("operations workbench: source updates preserve browser-local work and requi
   await page.getByRole("button", { name: /Action plan/ }).first().click();
   await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
 
+  await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
+  await expect(page.getByLabel("Export operations pack")).toContainText("Client-side download");
+  const [changedJsonDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download JSON" }).click(),
+  ]);
+  const changedJsonPath = await changedJsonDownload.path();
+  expect(changedJsonPath).toBeTruthy();
+  const changedPack = JSON.parse(await readFile(changedJsonPath!, "utf8")) as { campaign: { sourceBaselineChanged: boolean } };
+  expect(changedPack.campaign.sourceBaselineChanged).toBe(true);
+
+  const [changedMarkdownDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download Markdown" }).click(),
+  ]);
+  const changedMarkdownPath = await changedMarkdownDownload.path();
+  expect(changedMarkdownPath).toBeTruthy();
+  const changedMarkdown = await readFile(changedMarkdownPath!, "utf8");
+  expect(changedMarkdown).toContain("Source update warning: read-only source changed after this local workspace started");
+
   await page.getByRole("button", { name: /Overview/ }).first().click();
   await page.getByRole("button", { name: "Acknowledge updated source" }).click();
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toHaveCount(0);

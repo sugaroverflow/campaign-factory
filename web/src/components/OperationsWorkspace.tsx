@@ -2310,6 +2310,9 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         `Exported: ${pack.exportedAt}`,
         `Source: ${campaign.sourceOrigin}${campaign.sourceHref ? ` · ${campaign.sourceHref}` : ""}`,
         `Status: ${campaign.runStatus}`,
+        ...(campaign.sourceBaselineChanged
+          ? ["Source update warning: read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing."]
+          : []),
         "",
         "## Operating boundary",
         `- Source write-back: ${pack.boundary.sourceWriteBack}`,
