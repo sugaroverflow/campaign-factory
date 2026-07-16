@@ -56,6 +56,7 @@ const OPERATIONS_DOCUMENT_STATUSES = new Set<string>(DOCUMENT_STATUSES);
 const OPERATIONS_RUN_STATUSES = new Set<string>(["queued", "running", "partial", "completed", "failed", "cancelled"]);
 const OPERATIONS_EVENT_TYPES = new Set<string>(FACTORY_EVENT_TYPES);
 const OPERATIONS_EVENT_VISIBILITIES = new Set<string>(["public", "internal"]);
+const OPERATIONS_SECTION_STATUSES = new Set<string>(["empty", "assembling", "under_review", "accepted", "needs_verification"]);
 const OPERATIONS_VERIFICATION_LABELS = new Set<string>(VERIFICATION_LABELS);
 const OPERATIONS_CLAIM_CONFIDENCES = new Set<string>(["high", "medium", "low"]);
 
@@ -65,6 +66,22 @@ function isOptionalString(value: unknown): value is string | undefined {
 
 function isOptionalNonNegativeInteger(value: unknown): value is number | undefined {
   return value === undefined || isNonNegativeInteger(value);
+}
+
+function isOptionalJourneyStep(value: unknown): value is number | undefined {
+  return value === undefined || (isNonNegativeInteger(value) && value >= 1 && value <= 10);
+}
+
+function isOptionalDocumentKey(value: unknown): value is string | undefined {
+  return value === undefined || (typeof value === "string" && OPERATIONS_DOCUMENT_KEYS.has(value));
+}
+
+function isOptionalDocumentStatus(value: unknown): value is string | undefined {
+  return value === undefined || (typeof value === "string" && OPERATIONS_DOCUMENT_STATUSES.has(value));
+}
+
+function isOptionalSectionStatus(value: unknown): value is string | undefined {
+  return value === undefined || (typeof value === "string" && OPERATIONS_SECTION_STATUSES.has(value));
 }
 
 function isIsoDateTimeString(value: unknown): value is string {
@@ -87,7 +104,7 @@ function isOperationsFactoryEvent(value: unknown, campaignId: string): value is 
     isOptionalString(value.batchId) &&
     isOptionalString(value.agentRunId) &&
     isOptionalString(value.parentAgentRunId) &&
-    isOptionalNonNegativeInteger(value.journeyStep) &&
+    isOptionalJourneyStep(value.journeyStep) &&
     typeof value.type === "string" &&
     OPERATIONS_EVENT_TYPES.has(value.type) &&
     isIsoDateTimeString(value.at) &&
@@ -103,25 +120,39 @@ function isOperationsFactoryEvent(value: unknown, campaignId: string): value is 
     isOptionalString(payload.proposalId) &&
     isOptionalString(payload.judgementId) &&
     isOptionalString(payload.handoffToAgentRunId) &&
-    isOptionalNonNegativeInteger(payload.sectionStep) &&
-    isOptionalString(payload.sectionStatus) &&
-    isOptionalString(payload.documentKey) &&
-    isOptionalString(payload.documentStatus) &&
+    isOptionalJourneyStep(payload.sectionStep) &&
+    isOptionalSectionStatus(payload.sectionStatus) &&
+    isOptionalDocumentKey(payload.documentKey) &&
+    isOptionalDocumentStatus(payload.documentStatus) &&
     (payload.detail === undefined || isRecord(payload.detail))
   );
 }
 
+function hasConsistentOperationsRunEvents(value: RunReadModel) {
+  const seenEventIds = new Set<string>();
+  const seenSequences = new Set<number>();
+  for (const event of value.events) {
+    if (seenEventIds.has(event.eventId) || seenSequences.has(event.sequence) || event.sequence > value.lastSequence) return false;
+    seenEventIds.add(event.eventId);
+    seenSequences.add(event.sequence);
+  }
+  return true;
+}
+
 export function isOperationsRunReadModel(value: unknown, campaignId: string): value is RunReadModel {
   if (!isRecord(value) || value.campaignId !== campaignId) return false;
-  return (
-    isOptionalString(value.batchId) &&
-    typeof value.status === "string" &&
-    OPERATIONS_RUN_STATUSES.has(value.status) &&
-    isNonNegativeInteger(value.stateVersion) &&
-    isNonNegativeInteger(value.lastSequence) &&
-    Array.isArray(value.events) &&
-    value.events.every((event) => isOperationsFactoryEvent(event, campaignId))
-  );
+  if (
+    !isOptionalString(value.batchId) ||
+    typeof value.status !== "string" ||
+    !OPERATIONS_RUN_STATUSES.has(value.status) ||
+    !isNonNegativeInteger(value.stateVersion) ||
+    !isNonNegativeInteger(value.lastSequence) ||
+    !Array.isArray(value.events) ||
+    !value.events.every((event) => isOperationsFactoryEvent(event, campaignId))
+  ) {
+    return false;
+  }
+  return hasConsistentOperationsRunEvents(value as unknown as RunReadModel);
 }
 
 export function isOperationsCompiledDocument(value: unknown): value is CompiledDocument {
