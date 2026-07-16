@@ -477,6 +477,97 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toHaveCount(0);
 });
 
+test("operations workbench: all real campaign routes export source-specific local packs", async ({ page }) => {
+  const campaigns = {
+    "69f257b6-9913-4395-94f7-5c25b4b5fe95": {
+      title: "Keep KFC Out of Ormskirk",
+      place: "Ormskirk, Lancashire",
+      status: "partial",
+      unresolved: 34,
+      next: "Check the Planning Inspectorate appeals database before public escalation",
+      slug: "keep-kfc-out-of-ormskirk",
+    },
+    "57678ae0-29fd-4b4b-8a53-5c711cdb21cf": {
+      title: "Build 5,000 affordable houses in Tower Hamlets in the next 3 years",
+      place: "Tower Hamlets, London",
+      status: "partial",
+      unresolved: 22,
+      next: "Verify the exact affordable housing targets from council papers",
+      slug: "build-5-000-affordable-houses-in-tower-hamlets-in-the-next",
+    },
+    "6b54225d-afa3-41d1-b053-89741094f153": {
+      title: "Stop the leisure park redevelopment in Barnet",
+      place: "Barnet, London",
+      status: "completed",
+      unresolved: 17,
+      next: "Retrieve the GLA decision report and Barnet committee minutes",
+      slug: "stop-the-leisure-park-redevelopment-in-barnet",
+    },
+  } as const;
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] as keyof typeof campaigns;
+    const campaign = campaigns[id];
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: campaign.status, stateVersion: 7, lastSequence: 21, events: [] },
+        documents: [
+          { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-specific export fixture for ${campaign.title}.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+          { key: "objective_theory_of_change", num: 2, name: "Objective and Theory of Change", status: "ready", html: "", plainText: `OBJECTIVE AND THEORY OF CHANGE\n\nDecision-maker: Local decision route for ${campaign.title}\n\nMinimum viable win: Verified public evidence boundary before any local operations work is approved.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+          { key: "organising_plan", num: 3, name: "Organising Plan", status: "ready", html: "", plainText: `ORGANISING PLAN\n\nResidents and campaign supporters for ${campaign.place} are source audience clues only.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+          { key: "digital_pack", num: 4, name: "Digital Campaign Pack", status: "ready", html: "", plainText: `DIGITAL CAMPAIGN PACK\n\nSupporter email — ${campaign.title}\n\nSubject: Source update for ${campaign.place}\n\nUse verified source boundaries before outreach.`, isPack: true, sectionKeys: [], resourceCount: 1, flags: [] },
+        ],
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: campaign.next, reason: "Export should carry source-specific evidence gates", claimIds: ["C1"], affectedSections: ["evidence"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 30, loadBearing: 24, verifiedLoadBearing: 24 - campaign.unresolved, unresolvedLoadBearing: campaign.unresolved },
+        },
+      }),
+    });
+  });
+
+  for (const [id, campaign] of Object.entries(campaigns)) {
+    await page.goto(`/operations?campaignId=${id}&view=outbox`);
+    await expect(page.getByText(`${campaign.title} · ${campaign.place}`)).toBeVisible();
+    await expect(page.getByLabel("Export operations pack")).toContainText("Client-side download");
+    await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+
+    const [jsonDownload] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "Download JSON" }).click(),
+    ]);
+    expect(jsonDownload.suggestedFilename()).toMatch(new RegExp(`${campaign.slug}-operations-pack-\\d{4}-\\d{2}-\\d{2}\\.json`));
+    const jsonPath = await jsonDownload.path();
+    expect(jsonPath).toBeTruthy();
+    const pack = JSON.parse(await readFile(jsonPath!, "utf8")) as {
+      campaign: { id: string; title: string; place: string; sourceOrigin: string; runStatus: string };
+      boundary: { sourceWriteBack: string; contactImport: string; providerSending: string; responsesOrResults: string };
+      evidence: { totals: { unresolvedLoadBearing: number }; nextChecks: Array<{ description: string }> };
+    };
+
+    expect(pack.campaign).toMatchObject({
+      id,
+      title: campaign.title,
+      place: campaign.place,
+      sourceOrigin: "https://campaign-factory.vercel.app",
+      runStatus: campaign.status,
+    });
+    expect(pack.boundary.sourceWriteBack).toBe("Not connected");
+    expect(pack.boundary.contactImport).toBe("No real contacts imported for this campaign");
+    expect(pack.boundary.providerSending).toBe("Not connected");
+    expect(pack.boundary.responsesOrResults).toContain("no delivery or outcome is claimed");
+    expect(pack.evidence.totals.unresolvedLoadBearing).toBe(campaign.unresolved);
+    expect(pack.evidence.nextChecks[0].description).toBe(campaign.next);
+    expect(JSON.stringify(pack)).not.toContain("St John the Baptist");
+    expect(JSON.stringify(pack)).not.toContain("demo-fixture");
+  }
+});
+
 test("operations workbench: campaignId route loads a read-only public campaign source", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const documents = [
