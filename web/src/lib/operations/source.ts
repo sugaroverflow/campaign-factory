@@ -236,7 +236,7 @@ function isOperationsEvidenceClaimView(value: unknown) {
     OPERATIONS_CLAIM_CONFIDENCES.has(value.confidence) &&
     isOptionalString(value.excerpt) &&
     isNonNegativeInteger(value.sourceCount) &&
-    isStringArray(value.affectedOutputs) &&
+    isOperationsAffectedSectionArray(value.affectedOutputs) &&
     isOptionalStringArray(value.contradictsClaimIds)
   );
 }

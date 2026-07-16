@@ -1843,6 +1843,70 @@ test("operations workbench: malformed source evidence entries do not hydrate a r
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
+test("operations workbench: source evidence claims must reference canonical affected outputs", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 10, lastSequence: 100, events: [] },
+        documents: [
+          {
+            key: "campaign_brief",
+            num: 1,
+            name: "Campaign Brief",
+            status: "ready",
+            html: "<p>Invalid claim affected output should not hydrate Ormskirk</p>",
+            plainText: "Invalid claim affected output should not hydrate Ormskirk",
+            isPack: false,
+            sectionKeys: ["problem", "evidence", "objective", "decision_route", "power", "pressure", "strategy", "tactics", "organising"],
+            resourceCount: 0,
+            flags: [],
+          },
+        ],
+        evidence: {
+          groups: [
+            {
+              label: "Verification incomplete",
+              count: 1,
+              claims: [
+                {
+                  id: "claim-1",
+                  text: "Fixture-shaped affected output should stay hidden",
+                  type: "other",
+                  label: "Verification incomplete",
+                  loadBearing: true,
+                  confidence: "medium",
+                  sourceCount: 1,
+                  affectedOutputs: ["fixture_section"],
+                },
+              ],
+            },
+          ],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Affected output regression", reason: "Contract validation", claimIds: ["claim-1"], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 1, loadBearing: 1, verifiedLoadBearing: 0, unresolvedLoadBearing: 1 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/typed public document contract/i)).toBeVisible();
+  await expect(page.getByText("Invalid claim affected output should not hydrate Ormskirk")).toHaveCount(0);
+  await expect(page.getByText("Fixture-shaped affected output should stay hidden")).toHaveCount(0);
+  await expect(page.getByText("Affected output regression")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
 test("operations workbench: duplicate source evidence references do not hydrate a real workspace", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 
