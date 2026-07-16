@@ -327,6 +327,14 @@ function hasConsistentOperationsEvidenceReferences(value: EvidenceAndNextChecks)
     }
   }
 
+  if (seenClaimIds.size > 0) {
+    for (const group of value.groups) {
+      for (const claim of group.claims) {
+        if (claim.contradictsClaimIds?.some((claimId) => claimId === claim.id || !seenClaimIds.has(claimId))) return false;
+      }
+    }
+  }
+
   const seenConflictIds = new Set<string>();
   for (const conflict of value.conflicts) {
     if (seenConflictIds.has(conflict.id)) return false;
@@ -336,6 +344,7 @@ function hasConsistentOperationsEvidenceReferences(value: EvidenceAndNextChecks)
   const seenNextCheckIds = new Set<string>();
   for (const check of value.nextChecks) {
     if (seenNextCheckIds.has(check.id)) return false;
+    if (seenClaimIds.size > 0 && check.claimIds?.some((claimId) => !seenClaimIds.has(claimId))) return false;
     seenNextCheckIds.add(check.id);
   }
 
