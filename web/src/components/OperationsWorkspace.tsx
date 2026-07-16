@@ -138,6 +138,12 @@ type SourceResource = {
   preview: string;
 };
 
+type SourceAudienceSignal = {
+  label: string;
+  detail: string;
+  status: string;
+};
+
 type CampaignSource = {
   campaignId: string;
   title: string;
@@ -775,18 +781,85 @@ function sourceSectionValue(doc: CompiledDocument | undefined, label: string, ma
 
 function sourceLinesAfterHeading(doc: CompiledDocument | undefined, heading: string, maxItems = 4) {
   const lines = doc?.plainText?.split(/\r?\n/).map((line) => line.trim()) ?? [];
-  const start = lines.findIndex((line) => line.toLowerCase() === heading.toLowerCase());
+  const start = lines.findIndex((line) => line.replace(/:$/, "").toLowerCase() === heading.toLowerCase());
   if (start < 0) return [];
   const items: string[] = [];
   for (const line of lines.slice(start + 1)) {
     if (!line) continue;
-    if (items.length && /^[A-Z][A-Za-z /&-]{2,60}$/.test(line) && !/^\d+\./.test(line) && !/^(P\d+|Phase\s+\d+)/i.test(line)) break;
+    if (items.length && /^[A-Z][A-Za-z /&-]{2,60}:?$/.test(line) && !/^\d+\./.test(line) && !/^(P\d+|Phase\s+\d+)/i.test(line)) break;
     if (/^[-•]\s+/.test(line) || /^\d+\.\s+/.test(line) || /^(P\d+|Phase\s+\d+)/i.test(line)) {
       items.push(line.replace(/^[-•]\s+/, ""));
       if (items.length >= maxItems) break;
     }
   }
   return items;
+}
+
+function sourceFirstParagraph(doc: CompiledDocument | undefined, max = 220) {
+  const lines = doc?.plainText?.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) ?? [];
+  const paragraph = lines.find((line, index) => index > 0 && !/^[A-Z][A-Z /&-]{3,}:?$/.test(line) && !SOURCE_SECTION_BOUNDARY.test(line));
+  return paragraph ? shortText(paragraph, max) : null;
+}
+
+function cleanAudienceLabel(value: string, max = 64) {
+  return shortText(
+    value
+      .replace(/^\d+\.\s*/, "")
+      .replace(/^[-•]\s*/, "")
+      .replace(/\s+\([^)]*\)$/g, "")
+      .replace(/\s+—\s+.*$/g, "")
+      .replace(/\s+/g, " ")
+      .trim(),
+    max,
+  );
+}
+
+function audiencePhrasesFromBase(value: string | null, maxItems = 3) {
+  if (!value) return [];
+  const firstSentence = value.split(/\.\s+/)[0] ?? value;
+  return firstSentence
+    .replace(/^A small(?:,|\s+core)?\s+(?:resident-led\s+)?(?:group|core group|base)\s+(?:anchored|centred|centered)?\s*(?:in|on)?\s*/i, "")
+    .split(/,\s+|;\s+|\s+plus\s+|\s+supported by\s+|\s+and\s+(?=(?:the\s+)?(?:pre-existing|followers|parents|trade|local|ward|planning|residents|tenants|opposition|cross-party|MPs?|councillors))/i)
+    .map((item) => cleanAudienceLabel(item))
+    .filter((item) => item.length > 8 && !/^connected to\b/i.test(item))
+    .slice(0, maxItems);
+}
+
+function buildSourceAudienceSignals(source: CampaignSource): SourceAudienceSignal[] {
+  const byKey = new Map(source.documents.map((doc) => [doc.key, doc]));
+  const strategy = byKey.get("campaign_strategy");
+  const organising = byKey.get("organising_plan");
+  const digital = byKey.get("digital_pack");
+  const priorityAudiences = sourceLinesAfterHeading(strategy, "Priority audiences", 4);
+  const organisingBase = sourceFirstParagraph(organising, 260);
+  const organisingAsks = sourceLinesAfterHeading(organising, "The asks", 3);
+  const digitalActions = sourceLinesAfterHeading(digital, "WHAT YOU CAN DO", 3);
+  const signals: SourceAudienceSignal[] = [];
+
+  if (priorityAudiences.length) {
+    signals.push({
+      label: "Priority audience sequence",
+      detail: priorityAudiences.map((item) => cleanAudienceLabel(item, 90)).join(" · "),
+      status: strategy?.status === "ready" ? "Ready source" : `${strategy?.status ?? "Missing"} source`,
+    });
+  }
+  if (organisingBase) {
+    signals.push({
+      label: "Organising base",
+      detail: organisingBase,
+      status: organising?.status === "ready" ? "Ready source" : `${organising?.status ?? "Missing"} source`,
+    });
+  }
+  const asks = organisingAsks.length ? organisingAsks : digitalActions;
+  if (asks.length) {
+    signals.push({
+      label: organisingAsks.length ? "Campaign asks" : "Digital action asks",
+      detail: asks.map((item) => cleanAudienceLabel(item, 96)).join(" · "),
+      status: (organisingAsks.length ? organising : digital)?.status === "ready" ? "Ready source" : "Source note",
+    });
+  }
+
+  return signals.slice(0, 4);
 }
 
 function extractSourceStakeholders(doc: CompiledDocument | undefined, maxItems = 5): SourceStakeholder[] {
@@ -918,36 +991,43 @@ function sourcePrimaryCheckButton(source: CampaignSource) {
 }
 
 function buildSourceAudienceSegments(source: CampaignSource): Segment[] {
+  const byKey = new Map(source.documents.map((doc) => [doc.key, doc]));
+  const strategy = byKey.get("campaign_strategy");
+  const organising = byKey.get("organising_plan");
+  const priorityAudiences = sourceLinesAfterHeading(strategy, "Priority audiences", 4).map((item) => cleanAudienceLabel(item));
+  const baseAudiences = audiencePhrasesFromBase(sourceFirstParagraph(organising, 260));
+  const audienceNames = [...priorityAudiences, ...baseAudiences].filter(Boolean);
+  const asks = sourceLinesAfterHeading(organising, "The asks", 3);
   const place = source.place || "this place";
   return [
     {
       id: "school_gates",
-      name: "Core campaign supporters",
-      role: "Browser-local audience intent",
+      name: audienceNames[0] ?? "Core campaign supporters",
+      role: "Source audience · browser-local intent",
       contacts: 0,
       ready: 0,
-      readiness: `No imported contacts are counted for ${source.title}; this is only a planning label.`,
-      ask: `Prepare a careful update for people already close to ${source.title}, with unresolved checks still visible.`,
+      readiness: `No imported contacts are counted for ${source.title}; this is only a planning label from the public source.`,
+      ask: asks[0] ? cleanAudienceLabel(asks[0], 180) : `Prepare a careful update for people already close to ${source.title}, with unresolved checks still visible.`,
       caveat: "No live consent source, CRM import, or provider list is connected for this real campaign.",
     },
     {
       id: "ward_parents",
-      name: "Decision-route watchers",
-      role: "Evidence and process reviewers",
+      name: audienceNames[1] ?? "Decision-route watchers",
+      role: "Source audience · evidence/process reviewers",
       contacts: 0,
       ready: 0,
       readiness: `Use source documents to plan who should check the route in ${place}; do not infer reachable contacts.`,
-      ask: source.nextGate ?? "Ask a campaigner to verify the next public decision-route check before stronger copy is used.",
+      ask: asks[1] ? cleanAudienceLabel(asks[1], 180) : source.nextGate ?? "Ask a campaigner to verify the next public decision-route check before stronger copy is used.",
       caveat: "This local audience intent does not create, import, or message a real person.",
     },
     {
       id: "local_allies",
-      name: "Allies and validators",
-      role: "Later escalation planning",
+      name: audienceNames[2] ?? "Allies and validators",
+      role: "Source audience · later escalation planning",
       contacts: 0,
       ready: 0,
       readiness: "Source stakeholder clues can shape planning, but Operations has no permissioned ally list yet.",
-      ask: "Hold ally, media, or decision-maker escalation until source warnings and human approval are understood.",
+      ask: asks[2] ? cleanAudienceLabel(asks[2], 180) : "Hold ally, media, or decision-maker escalation until source warnings and human approval are understood.",
       caveat: "External action remains blocked; provider setup and contact consent are coming soon.",
     },
   ];
@@ -1565,15 +1645,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const sourceResources = useMemo(() => (source ? extractSourceResources(source) : []), [source]);
   const audienceSegments = useMemo(() => (source ? buildSourceAudienceSegments(source) : segments), [source]);
   const workspaceDraftLibrary = useMemo(() => (source ? buildSourceDraftLibrary(source) : draftLibrary), [source]);
-  const sourceAudienceSignals = useMemo(() => {
-    if (!source) return [];
-    const docs = source.documents.filter((doc) => ["organising_plan", "digital_pack", "power_stakeholder_map"].includes(doc.key));
-    return docs.map((doc) => ({
-      label: doc.name,
-      detail: documentExcerpt(doc, 180),
-      status: doc.status === "ready" ? "Ready source" : `${doc.status} source`,
-    }));
-  }, [source]);
+  const sourceAudienceSignals = useMemo(() => (source ? buildSourceAudienceSignals(source) : []), [source]);
 
   const selected = useMemo(
     () => audienceSegments.find((segment) => segment.id === state.selectedSegment) ?? audienceSegments[0],

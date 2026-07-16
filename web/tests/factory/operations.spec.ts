@@ -376,6 +376,14 @@ test("operations portfolio: source labels carry through workspace switching with
   await expect(page.getByLabel("Campaign switcher")).toContainText("Stop the leisure park redevelopment in Barnet");
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 
+  await page.getByRole("button", { name: /Audiences/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Plan audiences from this campaign source" })).toBeVisible();
+  await expect(page.getByLabel("Source audience signals")).toContainText("Organising base");
+  await expect(page.getByLabel("Audience segments")).toContainText("Residents");
+  await expect(page.getByLabel("Audience segments")).toContainText("ward councillors");
+  await expect(page.getByLabel("Audience segments")).toContainText("No imported contacts are counted");
+
+  await page.getByRole("button", { name: /Contacts/ }).first().click();
   await page.getByRole("link", { name: /Stop the leisure park redevelopment in Barnet/ }).click();
   await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Contact import boundary for this campaign" })).toBeVisible();
@@ -531,4 +539,8 @@ test("operations workbench: campaignId route loads a read-only public campaign s
   await page.getByRole("button", { name: /Strategy & tactics/ }).first().click();
   await expect(page.getByText(/Private\/formal first: confirm appeal status/i)).toBeVisible();
   await expect(page.getByText(/P0 Official status verification of appeal\/decision/i)).toBeVisible();
+  await page.getByRole("button", { name: /Audiences/ }).first().click();
+  await expect(page.getByLabel("Source audience signals")).toContainText("Priority audience sequence");
+  await expect(page.getByLabel("Source audience signals")).toContainText("Residents directly affected by amenity and noise");
+  await expect(page.getByLabel("Audience segments")).toContainText("Parents linked to the school route");
 });
