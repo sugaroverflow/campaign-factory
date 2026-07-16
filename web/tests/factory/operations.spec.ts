@@ -18,19 +18,26 @@ test("operations source API: invalid and non-curated ids are allow-list misses w
   }
 });
 
-test("operations source API: write methods are blocked as read-only no-store responses", async ({ request }) => {
+test("operations source API: non-GET methods are blocked as read-only no-store responses", async ({ request }) => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 
-  for (const makeRequest of [
-    () => request.post(`/api/operations/sources/${curatedId}`, { data: { campaignId: curatedId } }),
-    () => request.put(`/api/operations/sources/${curatedId}`, { data: { campaignId: curatedId } }),
-    () => request.patch(`/api/operations/sources/${curatedId}`, { data: { campaignId: curatedId } }),
-    () => request.delete(`/api/operations/sources/${curatedId}`),
+  for (const { method, makeRequest } of [
+    { method: "HEAD", makeRequest: () => request.fetch(`/api/operations/sources/${curatedId}`, { method: "HEAD" }) },
+    { method: "OPTIONS", makeRequest: () => request.fetch(`/api/operations/sources/${curatedId}`, { method: "OPTIONS" }) },
+    { method: "POST", makeRequest: () => request.post(`/api/operations/sources/${curatedId}`, { data: { campaignId: curatedId } }) },
+    { method: "PUT", makeRequest: () => request.put(`/api/operations/sources/${curatedId}`, { data: { campaignId: curatedId } }) },
+    { method: "PATCH", makeRequest: () => request.patch(`/api/operations/sources/${curatedId}`, { data: { campaignId: curatedId } }) },
+    { method: "DELETE", makeRequest: () => request.delete(`/api/operations/sources/${curatedId}`) },
   ]) {
     const response = await makeRequest();
     expect(response.status()).toBe(405);
     expect(response.headers()["cache-control"]).toBe("no-store");
     expect(response.headers().allow).toBe("GET");
+
+    if (method === "HEAD") {
+      expect(await response.body()).toHaveLength(0);
+      continue;
+    }
 
     const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string };
     expect(body.error).toBe("Operations source is read-only");

@@ -20,6 +20,8 @@ function sourceMethodNotAllowed() {
   );
 }
 
+export const HEAD = sourceMethodNotAllowed;
+export const OPTIONS = sourceMethodNotAllowed;
 export const POST = sourceMethodNotAllowed;
 export const PUT = sourceMethodNotAllowed;
 export const PATCH = sourceMethodNotAllowed;
