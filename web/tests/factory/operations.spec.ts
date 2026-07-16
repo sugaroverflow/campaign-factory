@@ -1334,6 +1334,27 @@ test("operations workbench: failed or not-yet-usable real source loads do not fa
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText("A. Patel")).toHaveCount(0);
+
+  await page.unroute(`**/api/operations/sources/${campaignId}`);
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 2, lastSequence: 2, events: [] },
+        documents: null,
+        evidence: null,
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/typed public document contract/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
 test("operations workbench: invalid or non-curated campaign IDs are blocked without fixture fallback", async ({ page }) => {
