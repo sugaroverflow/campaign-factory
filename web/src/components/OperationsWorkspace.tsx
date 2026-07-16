@@ -729,6 +729,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     ? state.activeWorkingDraftId
     : workingDrafts[0]?.id ?? null;
   const sourceWorkingCopy = state.sourceWorkingCopy?.campaignId === expectedWorkspaceKey ? state.sourceWorkingCopy : null;
+  const removedMismatchedTopLevelSourceCopy = Boolean(state.sourceWorkingCopy && !sourceWorkingCopy);
 
   if (
     workingDrafts.length === state.workingDrafts.length &&
@@ -740,6 +741,13 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
 
   return {
     ...state,
+    subject: removedMismatchedTopLevelSourceCopy ? "Local source draft reset" : state.subject,
+    body: removedMismatchedTopLevelSourceCopy
+      ? "This browser-local draft was reset because its stored source provenance belonged to another campaign. Use a source resource from this campaign before review or local queueing."
+      : state.body,
+    reviewerNote: removedMismatchedTopLevelSourceCopy ? "" : state.reviewerNote,
+    status: removedMismatchedTopLevelSourceCopy ? "draft" : state.status,
+    queuedAt: removedMismatchedTopLevelSourceCopy ? null : state.queuedAt,
     workingDrafts,
     activeWorkingDraftId,
     sourceWorkingCopy,

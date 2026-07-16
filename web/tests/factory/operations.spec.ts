@@ -1074,6 +1074,95 @@ test("operations workbench ignores source working drafts whose provenance belong
   await expect(page.locator("main")).not.toContainText("Stale Ormskirk reviewer note");
 });
 
+test("operations workbench resets legacy top-level source drafts from another campaign", async ({ page }) => {
+  const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    const isBarnet = id === barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: isBarnet ? "completed" : "partial", stateVersion: 13, lastSequence: 24, events: [] },
+        documents: [
+          { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${isBarnet ? "Stop the leisure park redevelopment in Barnet" : "Keep KFC Out of Ormskirk"}\n\nPlace: ${isBarnet ? "Barnet, London" : "Ormskirk, Lancashire"}\n\nTHE PROBLEM\nLegacy top-level source copy isolation fixture.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+        ],
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: isBarnet ? "Check Barnet decision records" : "Check Ormskirk appeal records", reason: "Legacy source-copy guard", claimIds: ["C1"], affectedSections: ["brief"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 8, loadBearing: 6, verifiedLoadBearing: 3, unresolvedLoadBearing: 3 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate(
+    ({ ormskirkId, barnetId }) => {
+      const staleCopy = {
+        id: "legacy-ormskirk-source-copy",
+        campaignId: ormskirkId,
+        title: "Legacy Ormskirk source copy must not queue in Barnet",
+        channel: "Email",
+        sourceDocument: "Digital Campaign Pack",
+        sourceDocumentKey: "digital_pack",
+        createdAt: "2026-07-16T17:39:00.000Z",
+        warnings: ["Legacy Ormskirk warning"],
+        provenance: `Copied from Digital Campaign Pack in campaign ${ormskirkId}; legacy top-level regression fixture.`,
+      };
+      localStorage.setItem(
+        `cf_operations_demo_v3:${barnetId}`,
+        JSON.stringify({
+          workspaceKey: barnetId,
+          sourceStateVersion: 13,
+          sourceLastSequence: 24,
+          sourceDocumentSignature: "legacy-stale-source-copy",
+          selectedSegment: "school_gates",
+          subject: "Legacy Ormskirk queued source subject",
+          body: "This legacy top-level source draft belongs to Ormskirk and must not appear or stay queued in Barnet.",
+          reviewerNote: "Legacy Ormskirk reviewer note",
+          status: "queued",
+          mode: "compose",
+          activeDraft: "supporter_email",
+          activeView: "outbox",
+          contactFilter: "all",
+          contactReadinessFilter: "all",
+          scheduleIntent: "after_approval",
+          queuedAt: "2026-07-16T17:39:30.000Z",
+          localActions: [],
+          workingDrafts: [],
+          activeWorkingDraftId: null,
+          sourceWorkingCopy: staleCopy,
+          activity: [{ id: "legacy", label: "Legacy top-level stale source copy seeded." }],
+        }),
+      );
+    },
+    { ormskirkId, barnetId },
+  );
+
+  await page.goto("/operations");
+  const portfolio = page.getByLabel("Campaign operations portfolio");
+  const barnetRow = portfolio.locator("article", { hasText: "Stop the leisure park redevelopment" });
+  await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
+  await expect(barnetRow).not.toContainText("Legacy Ormskirk queued source subject");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Legacy Ormskirk queued source subject");
+  await expect(page.locator("main")).not.toContainText("Legacy Ormskirk reviewer note");
+
+  await page.getByRole("button", { name: /Drafts/ }).first().click();
+  await expect(page.getByLabel("Subject")).toHaveValue("Local source draft reset");
+  await expect(page.locator("main")).not.toContainText("Legacy Ormskirk queued source subject");
+  await expect(page.locator("main")).not.toContainText("Legacy Ormskirk reviewer note");
+});
+
 test("operations workbench: failed or not-yet-usable real source loads do not fall back to the fixture", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
