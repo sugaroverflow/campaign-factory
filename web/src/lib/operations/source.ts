@@ -67,6 +67,12 @@ function isOptionalNonNegativeInteger(value: unknown): value is number | undefin
   return value === undefined || isNonNegativeInteger(value);
 }
 
+function isIsoDateTimeString(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return false;
+  return Number.isFinite(Date.parse(value));
+}
+
 function isOptionalStringArray(value: unknown): value is string[] | undefined {
   return value === undefined || isStringArray(value);
 }
@@ -84,7 +90,7 @@ function isOperationsFactoryEvent(value: unknown, campaignId: string): value is 
     isOptionalNonNegativeInteger(value.journeyStep) &&
     typeof value.type === "string" &&
     OPERATIONS_EVENT_TYPES.has(value.type) &&
-    typeof value.at === "string" &&
+    isIsoDateTimeString(value.at) &&
     isOptionalNonNegativeInteger(value.stateVersion) &&
     typeof value.visibility === "string" &&
     OPERATIONS_EVENT_VISIBILITIES.has(value.visibility) &&
@@ -220,7 +226,7 @@ function isOperationsTerminalGap(value: unknown) {
     typeof value.description === "string" &&
     isOptionalString(value.agentRunId) &&
     isOptionalNonNegativeInteger(value.step) &&
-    typeof value.at === "string"
+    isIsoDateTimeString(value.at)
   );
 }
 
