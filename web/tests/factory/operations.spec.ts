@@ -1735,7 +1735,7 @@ test("operations workbench: compiled source documents must match canonical metad
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
-test("operations workbench: compiled source documents must use canonical section keys", async ({ page }) => {
+test("operations workbench: compiled source documents must use each document's canonical section set", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 
   await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
@@ -1750,10 +1750,10 @@ test("operations workbench: compiled source documents must use canonical section
             num: 1,
             name: "Campaign Brief",
             status: "ready",
-            html: "<p>Fixture section key should not hydrate Ormskirk</p>",
-            plainText: "Fixture section key should not hydrate Ormskirk",
+            html: "<p>Partial canonical section set should not hydrate Ormskirk</p>",
+            plainText: "Partial canonical section set should not hydrate Ormskirk",
             isPack: false,
-            sectionKeys: ["fixture_section"],
+            sectionKeys: ["problem"],
             resourceCount: 0,
             flags: [],
           },
@@ -1761,7 +1761,7 @@ test("operations workbench: compiled source documents must use canonical section
         evidence: {
           groups: [],
           conflicts: [],
-          nextChecks: [{ id: "next", description: "Canonical section-key regression", reason: "Contract validation", claimIds: [], affectedSections: [] }],
+          nextChecks: [{ id: "next", description: "Canonical section-set regression", reason: "Contract validation", claimIds: [], affectedSections: [] }],
           terminalGaps: [],
           draftNotes: [],
           totals: { claims: 1, loadBearing: 1, verifiedLoadBearing: 0, unresolvedLoadBearing: 1 },
@@ -1775,7 +1775,7 @@ test("operations workbench: compiled source documents must use canonical section
   await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByText(/typed public document contract/i)).toBeVisible();
-  await expect(page.getByText("Fixture section key should not hydrate Ormskirk")).toHaveCount(0);
+  await expect(page.getByText("Partial canonical section set should not hydrate Ormskirk")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });

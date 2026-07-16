@@ -1,7 +1,7 @@
 import type { RunReadModel } from "@/lib/factory/contracts/api";
 import { FACTORY_EVENT_TYPES, type FactoryEvent } from "@/lib/factory/contracts/core";
 import { CANONICAL_DOCUMENTS, DOCUMENT_STATUSES } from "@/lib/factory/contracts/documents";
-import type { CompiledDocument, EvidenceAndNextChecks } from "@/lib/factory/documents";
+import { DOC_SECTIONS, type CompiledDocument, type EvidenceAndNextChecks } from "@/lib/factory/documents";
 import { UNRESOLVED_LABELS } from "@/lib/factory/documents/render";
 import { JOURNEY_STEPS } from "@/lib/factory/contracts/journey";
 import { VERIFICATION_LABELS } from "@/lib/pipeline/labels";
@@ -107,6 +107,12 @@ function isJourneySectionKeyArray(value: unknown): value is string[] {
   return true;
 }
 
+function matchesCanonicalDocumentSections(key: string, isPack: boolean, sectionKeys: string[]) {
+  if (isPack) return sectionKeys.length === 0;
+  const expected = DOC_SECTIONS[key as keyof typeof DOC_SECTIONS];
+  return Boolean(expected) && sectionKeys.length === expected.length && expected.every((sectionKey, index) => sectionKeys[index] === sectionKey);
+}
+
 function isOperationsFactoryEvent(value: unknown, campaignId: string): value is FactoryEvent {
   if (!isRecord(value) || !isRecord(value.payload)) return false;
   const payload = value.payload;
@@ -182,8 +188,7 @@ export function isOperationsCompiledDocument(value: unknown): value is CompiledD
     typeof value.plainText === "string" &&
     value.isPack === shouldBePack &&
     isJourneySectionKeyArray(value.sectionKeys) &&
-    (shouldBePack || value.sectionKeys.length > 0) &&
-    (!shouldBePack || value.sectionKeys.length === 0) &&
+    matchesCanonicalDocumentSections(value.key, value.isPack, value.sectionKeys) &&
     isNonNegativeInteger(value.resourceCount) &&
     isStringArray(value.flags)
   );
