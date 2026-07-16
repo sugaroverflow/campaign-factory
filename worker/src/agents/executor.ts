@@ -121,10 +121,15 @@ const FALLBACK_MODEL = "claude-opus-4-8";
 const MIN_FALLBACK_HEADROOM_MS = 45_000;
 
 function isOverloadError(e: unknown): boolean {
-  const err = e as { status?: unknown; error?: { type?: unknown } } | null;
+  const err = e as { status?: unknown; error?: { type?: unknown }; message?: unknown } | null;
   const status = typeof err?.status === "number" ? err.status : undefined;
   const type = err?.error && typeof err.error === "object" ? (err.error as { type?: unknown }).type : undefined;
-  return status === 429 || status === 529 || type === "rate_limit_error" || type === "overloaded_error";
+  if (status === 429 || status === 529 || type === "rate_limit_error" || type === "overloaded_error") return true;
+  // Observed 16 Jul (Sonnet incident): the client wrapper rethrows a plain
+  // Error whose MESSAGE is the raw JSON body ({"type":"overloaded_error",...},
+  // status undefined) — detect that shape too.
+  const msg = typeof err?.message === "string" ? err.message : "";
+  return msg.includes('"overloaded_error"') || msg.includes('"rate_limit_error"');
 }
 
 function overloadWaitMs(e: unknown): number {
