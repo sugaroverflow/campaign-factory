@@ -1480,7 +1480,7 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
     readyCount,
     incompleteDocuments,
     nextGate: priorityGate?.description ?? body.evidence.nextChecks[0]?.description,
-    sourceHref: `/factory/c/${campaignId}`,
+    sourceHref: `${sourceBody.sourceOrigin}/factory/c/${campaignId}`,
     sourceOrigin: sourceBody.sourceOrigin,
   };
 }
@@ -1626,7 +1626,7 @@ function OperationsPortfolio() {
                     <Link href={`/operations?campaignId=${item.campaign.id}`} className="rounded-full bg-ops-ink px-4 py-2 text-center text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                       Open workspace
                     </Link>
-                    <Link href={item.campaign.sourceHref} className="rounded-full border border-ops-line bg-background px-4 py-2 text-center text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                    <Link href={source?.sourceHref ?? item.campaign.sourceHref} className="rounded-full border border-ops-line bg-background px-4 py-2 text-center text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                       View source brief
                     </Link>
                   </div>
@@ -2356,7 +2356,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         `# ${campaign.title} — Campaign Operations pack`,
         "",
         `Exported: ${pack.exportedAt}`,
-        `Source: ${campaign.sourceOrigin}${campaign.sourceHref ? ` · ${campaign.sourceHref}` : ""}`,
+        campaign.sourceHref ? `Source brief: ${campaign.sourceHref}` : `Source: ${campaign.sourceOrigin}`,
         `Status: ${campaign.runStatus}`,
         ...(campaign.sourceBaselineChanged
           ? ["Source update warning: read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing."]

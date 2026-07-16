@@ -333,6 +333,10 @@ test("operations portfolio: three curated public campaigns load independently", 
   await expect(page.getByText(/Complete/).first()).toBeVisible();
   await expect(page.getByText(/no browser-local operations work yet for this campaign/i).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Open workspace" }).first()).toHaveAttribute("href", "/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95");
+  await expect(page.getByRole("link", { name: "View source brief" }).first()).toHaveAttribute(
+    "href",
+    "https://campaign-factory.vercel.app/factory/c/69f257b6-9913-4395-94f7-5c25b4b5fe95",
+  );
 });
 
 test("operations portfolio: local signals reflect only genuine campaign-local work", async ({ page }) => {
@@ -1617,7 +1621,7 @@ test("operations workbench: campaignId route loads a read-only public campaign s
   await expect(page.getByLabel(/Status for Confirm Planning Inspectorate appeal status/)).toHaveValue("in_progress");
   await expect(page.getByRole("link", { name: /Back to source brief|View original brief/ }).first()).toHaveAttribute(
     "href",
-    `/factory/c/${campaignId}`,
+    `https://campaign-factory.vercel.app/factory/c/${campaignId}`,
   );
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText(/School-gate families|Nearby ward parents|Clean Air Leicester|St John the Baptist/)).toHaveCount(0);
