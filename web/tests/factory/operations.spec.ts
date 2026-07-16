@@ -574,7 +574,12 @@ test("operations workbench: campaignId route loads a read-only public campaign s
   await expect(page.getByLabel("Source-backed stakeholder lanes")).toContainText("Appeal decision-maker whose current decision status is unverified");
   await page.getByRole("button", { name: /Strategy & tactics/ }).first().click();
   await expect(page.getByText(/Private\/formal first: confirm appeal status/i)).toBeVisible();
-  await expect(page.getByText(/P0 Official status verification of appeal\/decision/i)).toBeVisible();
+  await expect(page.getByText("P0 Official status verification of appeal/decision", { exact: true }).first()).toBeVisible();
+  await expect(page.getByLabel("Source tactic action candidates")).toContainText("target: Planning Inspectorate appeals database");
+  await page.getByLabel("Source tactic action candidates").getByRole("button", { name: "Create local action" }).first().click();
+  await expect(page.getByRole("heading", { name: "Owned local work from source checks" })).toBeVisible();
+  await expect(page.getByText("P0 Official status verification of appeal/decision", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/Campaign source · Tactics and Timeline · research\/administrative/)).toBeVisible();
   await page.getByRole("button", { name: /Audiences/ }).first().click();
   await expect(page.getByLabel("Source audience signals")).toContainText("Priority audience sequence");
   await expect(page.getByLabel("Source audience signals")).toContainText("Residents directly affected by amenity and noise");

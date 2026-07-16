@@ -138,6 +138,17 @@ type SourceResource = {
   preview: string;
 };
 
+type SourceTactic = {
+  id: string;
+  title: string;
+  type: string;
+  target: string;
+  owner: string;
+  timing: string;
+  detail: string;
+  priority: LocalAction["priority"];
+};
+
 type SourceAudienceSignal = {
   label: string;
   detail: string;
@@ -980,6 +991,40 @@ function extractSourceResources(source: CampaignSource): SourceResource[] {
     }));
 }
 
+function sourceTacticField(lines: string[], label: string) {
+  return lines.find((line) => line.trim().toLowerCase().startsWith(`${label.toLowerCase()}:`))?.replace(new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:\\s*`, "i"), "").trim();
+}
+
+function extractSourceTactics(source: CampaignSource): SourceTactic[] {
+  const doc = source.documents.find((item) => item.key === "tactics_timeline");
+  if (!doc?.plainText || doc.status !== "ready") return [];
+  const lines = doc.plainText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const starts = lines
+    .map((line, index) => ({ line, index }))
+    .filter((item) => /^(P\d+|Phase\s+\d+)\b/i.test(item.line));
+
+  return starts.slice(0, 6).map((start, tacticIndex) => {
+    const end = starts[tacticIndex + 1]?.index ?? lines.length;
+    const block = lines.slice(start.index + 1, end);
+    const type = sourceTacticField(block, "Type") || "Campaign tactic";
+    const target = sourceTacticField(block, "Target") || source.title;
+    const owner = sourceTacticField(block, "Owner") || (/media|press/i.test(type) ? "Local organiser" : "Reviewer");
+    const timing = sourceTacticField(block, "Timing") || sourceTacticField(block, "Dependencies") || "After source checks are understood";
+    const purpose = sourceTacticField(block, "Purpose") || sourceTacticField(block, "Expected effect") || block.find((line) => !SOURCE_SECTION_BOUNDARY.test(line));
+    const priority: LocalAction["priority"] = /^(P0|Phase\s+0)|urgent|before|immediate/i.test(`${start.line} ${timing}`) ? "High" : tacticIndex < 3 ? "Medium" : "Low";
+    return {
+      id: `source:${source.campaignId}:tactic:${tacticIndex + 1}-${start.line.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48)}`,
+      title: start.line,
+      type,
+      target,
+      owner,
+      timing,
+      detail: shortText(purpose || `${type} aimed at ${target}`, 170),
+      priority,
+    };
+  });
+}
+
 function statusPhrase(status: RunReadModel["status"]) {
   if (status === "partial") return "Partial but usable";
   if (status === "completed") return "Complete";
@@ -1671,7 +1716,15 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     () => (source ? extractSourceStakeholders(source.documents.find((doc) => doc.key === "power_stakeholder_map"), 5) : []),
     [source],
   );
+  const sourceTactics = useMemo(() => (source ? extractSourceTactics(source) : []), [source]);
   const sourceResources = useMemo(() => (source ? extractSourceResources(source) : []), [source]);
+  const sourceResourceGroups = useMemo(() => {
+    const groups = new Map<string, SourceResource[]>();
+    sourceResources.forEach((resource) => {
+      groups.set(resource.sourceDocument, [...(groups.get(resource.sourceDocument) ?? []), resource]);
+    });
+    return Array.from(groups.entries()).map(([sourceDocument, resources]) => ({ sourceDocument, resources }));
+  }, [sourceResources]);
   const audienceSegments = useMemo(() => (source ? buildSourceAudienceSegments(source) : segments), [source]);
   const workspaceDraftLibrary = useMemo(() => (source ? buildSourceDraftLibrary(source) : draftLibrary), [source]);
   const sourceAudienceSignals = useMemo(() => (source ? buildSourceAudienceSignals(source) : []), [source]);
@@ -2014,6 +2067,20 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     });
   };
 
+  const createSourceTacticAction = (tactic: SourceTactic) => {
+    if (!source) return;
+    createLocalAction({
+      id: tactic.id,
+      title: tactic.title,
+      source: `Campaign source · Tactics and Timeline · ${tactic.type}`,
+      owner: tactic.owner,
+      timing: tactic.timing,
+      priority: tactic.priority,
+      status: tactic.priority === "High" ? "next" : "blocked",
+      provenance: `Source campaign ${source.campaignId}; tactic target: ${tactic.target}. This creates browser-local owned work only and does not change the public tactics document.`,
+    });
+  };
+
   const createMediaPackAction = () => {
     if (source && incompleteSourceDocument) {
       createIncompleteDocumentAction(incompleteSourceDocument);
@@ -2130,6 +2197,14 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             create: () => createIncompleteDocumentAction(doc),
           };
         }),
+        ...sourceTactics.slice(0, 3).map((tactic) => ({
+          id: tactic.id,
+          title: tactic.title,
+          detail: `${tactic.type} · ${tactic.target}. ${tactic.detail}`,
+          priority: tactic.priority,
+          disabled: state.localActions.some((action) => action.id === tactic.id),
+          create: () => createSourceTacticAction(tactic),
+        })),
       ]
     : [
         {
@@ -2352,24 +2427,34 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                 {sourceResources.length} ready candidate{sourceResources.length === 1 ? "" : "s"}
               </span>
             </div>
-            <div className="mt-3 space-y-3" aria-label="Source pack resources">
-              {sourceResources.map((resource) => (
-                <div key={resource.id} className="rounded-[var(--r-xl)] border border-white/15 bg-white/[0.07] p-3 text-sm text-white">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-medium">{resource.title}</p>
-                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-white/45">{resource.channel} · {resource.sourceDocument}</p>
-                    </div>
-                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">Source</span>
+            <div className="mt-3 space-y-4" aria-label="Source pack resources">
+              {sourceResourceGroups.map((group) => (
+                <div key={group.sourceDocument} className="rounded-[var(--r-xl)] border border-white/15 bg-white/[0.05] p-2">
+                  <div className="flex items-center justify-between gap-2 px-1 pb-2 text-xs font-semibold uppercase tracking-[0.1em] text-white/45">
+                    <span>{group.sourceDocument}</span>
+                    <span>{group.resources.length} candidate{group.resources.length === 1 ? "" : "s"}</span>
                   </div>
-                  <p className="mt-2 line-clamp-3 text-xs text-white/60">{resource.preview}</p>
-                  <button
-                    type="button"
-                    onClick={() => createSourceWorkingCopy(resource)}
-                    className="mt-3 rounded-full border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ops-yellow"
-                  >
-                    {state.workingDrafts.some((draft) => draft.id === resource.id) ? "Open working copy" : "Use in editable draft"}
-                  </button>
+                  <div className="space-y-3">
+                    {group.resources.map((resource) => (
+                      <div key={resource.id} className="rounded-[var(--r-xl)] border border-white/15 bg-white/[0.07] p-3 text-sm text-white">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-medium">{resource.title}</p>
+                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-white/45">{resource.channel} · {resource.sourceDocument}</p>
+                          </div>
+                          <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">Source</span>
+                        </div>
+                        <p className="mt-2 line-clamp-3 text-xs text-white/60">{resource.preview}</p>
+                        <button
+                          type="button"
+                          onClick={() => createSourceWorkingCopy(resource)}
+                          className="mt-3 rounded-full border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ops-yellow"
+                        >
+                          {state.workingDrafts.some((draft) => draft.id === resource.id) ? "Open working copy" : "Use in editable draft"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -3010,6 +3095,34 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                 <div className="px-4 py-5 text-sm text-muted-foreground">All compiled documents exposed by this source route are ready.</div>
               )}
             </div>
+          </div>
+        ) : null}
+        {source && section.title === "Strategy & tactics" ? (
+          <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-ops-line bg-background" aria-label="Source tactic action candidates">
+            <div className="border-b border-border bg-ops-mint/60 px-4 py-3">
+              <p className="text-sm font-semibold">Tactic actions from the source timeline</p>
+              <p className="mt-1 text-xs text-muted-foreground">Tactics can become browser-local owned work; the public campaign source remains read-only.</p>
+            </div>
+            {sourceTactics.length ? sourceTactics.map((tactic) => {
+              const actionExists = state.localActions.some((action) => action.id === tactic.id);
+              return (
+                <div key={tactic.id} className="grid gap-3 border-b border-border px-4 py-4 text-sm last:border-0 lg:grid-cols-[minmax(0,1fr)_170px] lg:items-start">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{tactic.title}</p>
+                      <span className="rounded-full bg-ops-yellow px-2 py-0.5 text-xs text-ops-ink">{tactic.priority}</span>
+                    </div>
+                    <p className="mt-1 text-muted-foreground">{tactic.type} · target: {tactic.target}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Owner: {tactic.owner}; timing: {tactic.timing}. {tactic.detail}</p>
+                  </div>
+                  <Button type="button" variant="outline" onClick={() => createSourceTacticAction(tactic)} disabled={actionExists}>
+                    {actionExists ? "Action created" : "Create local action"}
+                  </Button>
+                </div>
+              );
+            }) : (
+              <div className="px-4 py-5 text-sm text-muted-foreground">No parseable tactic rows were exposed by the source timeline; use the source excerpt above instead of inventing actions.</div>
+            )}
           </div>
         ) : null}
       </Panel>
