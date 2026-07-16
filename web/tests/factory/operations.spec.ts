@@ -279,12 +279,14 @@ test("operations portfolio: three curated public campaigns load independently", 
     },
   } as const;
 
-  await page.route(/\/api\/factory\/runs\/([^/]+)\/documents$/, async (route) => {
-    const id = route.request().url().match(/runs\/([^/]+)\/documents$/)?.[1] as keyof typeof campaigns;
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] as keyof typeof campaigns;
     const campaign = campaigns[id];
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: campaign.status, stateVersion: 1, lastSequence: 1, events: [] },
         documents: [
           { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
           { key: "media_pack", num: 2, name: "Media Pack", status: campaign.mediaStatus, html: "", plainText: "MEDIA PACK", isPack: true, sectionKeys: [], resourceCount: 0, flags: [] },
@@ -298,13 +300,6 @@ test("operations portfolio: three curated public campaigns load independently", 
           totals: { claims: 90, loadBearing: 70, verifiedLoadBearing: 70 - campaign.unresolved, unresolvedLoadBearing: campaign.unresolved },
         },
       }),
-    });
-  });
-  await page.route(/\/api\/factory\/runs\/([^/]+)$/, async (route) => {
-    const id = route.request().url().match(/runs\/([^/]+)$/)?.[1] as keyof typeof campaigns;
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ campaignId: id, status: campaigns[id].status, stateVersion: 1, lastSequence: 1, events: [] }),
     });
   });
 
@@ -346,12 +341,14 @@ test("operations portfolio: source labels carry through workspace switching with
     },
   } as const;
 
-  await page.route(/\/api\/factory\/runs\/([^/]+)\/documents$/, async (route) => {
-    const id = route.request().url().match(/runs\/([^/]+)\/documents$/)?.[1] as keyof typeof campaigns;
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] as keyof typeof campaigns;
     const campaign = campaigns[id];
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: campaign.status, stateVersion: 1, lastSequence: 1, events: [] },
         documents: [
           { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
           { key: "power_stakeholder_map", num: 2, name: "Power and Stakeholder Map", status: "ready", html: "", plainText: `POWER MAP\n\n${campaign.title} stakeholder clues.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
@@ -370,13 +367,6 @@ test("operations portfolio: source labels carry through workspace switching with
       }),
     });
   });
-  await page.route(/\/api\/factory\/runs\/([^/]+)$/, async (route) => {
-    const id = route.request().url().match(/runs\/([^/]+)$/)?.[1] as keyof typeof campaigns;
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ campaignId: id, status: campaigns[id].status, stateVersion: 1, lastSequence: 1, events: [] }),
-    });
-  });
 
   await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95&view=contacts");
 
@@ -392,6 +382,25 @@ test("operations portfolio: source labels carry through workspace switching with
   await expect(page.getByText("No imported contacts for Stop the leisure park redevelopment in Barnet")).toBeVisible();
   await expect(page.getByLabel("Campaign switcher")).toContainText("Current: Stop the leisure park redevelopment in Barnet");
   await expect(page.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "/operations");
+});
+
+test("operations workbench: failed real source load does not fall back to the fixture", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 500." }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Preview source returned HTTP 500/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
 test("operations workbench: campaignId route loads a read-only public campaign source", async ({ page }) => {
@@ -444,16 +453,12 @@ test("operations workbench: campaignId route loads a read-only public campaign s
     flags: [],
   }));
 
-  await page.route(`**/api/factory/runs/${campaignId}`, async (route) => {
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ campaignId, status: "partial", stateVersion: 44, lastSequence: 1909, events: [] }),
-    });
-  });
-  await page.route(`**/api/factory/runs/${campaignId}/documents`, async (route) => {
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 44, lastSequence: 1909, events: [] },
         documents,
         evidence: {
           groups: [],
@@ -496,6 +501,7 @@ test("operations workbench: campaignId route loads a read-only public campaign s
     `/factory/c/${campaignId}`,
   );
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText(/School-gate families|Nearby ward parents|Clean Air Leicester|St John the Baptist/)).toHaveCount(0);
 
   await page.getByRole("button", { name: /Drafts/ }).first().click();
   await expect(page.getByLabel("Source pack resources")).toContainText("Supporter email — status update");

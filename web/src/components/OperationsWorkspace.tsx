@@ -9,16 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { foldEvents } from "@/lib/factory/client/fold";
 import type { RunReadModel } from "@/lib/factory/contracts/api";
 import type { CompiledDocument, EvidenceAndNextChecks } from "@/lib/factory/documents";
+import { OPERATIONS_PUBLIC_CAMPAIGNS, type OperationsSourcePayload } from "@/lib/operations/source";
 
 const STORAGE_KEY = "cf_operations_demo_v3";
 const LEGACY_STORAGE_KEYS = ["cf_operations_demo_v2", "cf_operations_demo_v1"];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const PORTFOLIO_CAMPAIGNS: PortfolioCampaign[] = [
-  { id: "69f257b6-9913-4395-94f7-5c25b4b5fe95", sourceHref: "/factory/c/69f257b6-9913-4395-94f7-5c25b4b5fe95", conferenceHero: true },
-  { id: "57678ae0-29fd-4b4b-8a53-5c711cdb21cf", sourceHref: "/factory/c/57678ae0-29fd-4b4b-8a53-5c711cdb21cf" },
-  { id: "6b54225d-afa3-41d1-b053-89741094f153", sourceHref: "/factory/c/6b54225d-afa3-41d1-b053-89741094f153" },
-];
+const PORTFOLIO_CAMPAIGNS: PortfolioCampaign[] = [...OPERATIONS_PUBLIC_CAMPAIGNS];
 
 type SegmentId = "school_gates" | "ward_parents" | "local_allies";
 type DraftId = "supporter_email" | "decision_maker_letter" | "press_pitch";
@@ -84,6 +81,7 @@ type WorkingDraft = {
 };
 
 type DemoState = {
+  workspaceKey: string;
   selectedSegment: SegmentId;
   subject: string;
   body: string;
@@ -154,6 +152,7 @@ type CampaignSource = {
   incompleteDocuments: CompiledDocument[];
   nextGate?: string;
   sourceHref: string;
+  sourceOrigin: string;
 };
 
 type SourceState =
@@ -488,6 +487,7 @@ const viewIds: ViewId[] = [
 ];
 
 const initialState: DemoState = {
+  workspaceKey: "fixture",
   selectedSegment: "school_gates",
   subject: "Make the St John the Baptist school street permanent",
   body:
@@ -641,6 +641,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     activeDraft: draftLibrary.some((draft) => draft.id === parsed.activeDraft)
       ? (parsed.activeDraft as DraftId)
       : initialState.activeDraft,
+    workspaceKey: typeof parsed.workspaceKey === "string" ? parsed.workspaceKey : initialState.workspaceKey,
     activeView: viewIds.includes(parsed.activeView as ViewId) ? (parsed.activeView as ViewId) : "overview",
     contactFilter:
       parsed.contactFilter === "all" || segments.some((segment) => segment.id === parsed.contactFilter)
@@ -672,6 +673,11 @@ function loadState(storageKey = STORAGE_KEY): DemoState {
   } catch {
     return initialState;
   }
+}
+
+function hasStoredState(storageKey = STORAGE_KEY) {
+  if (typeof window === "undefined") return false;
+  return Boolean(localStorage.getItem(storageKey) || (storageKey === STORAGE_KEY ? LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean) : null));
 }
 
 function portfolioLocalCounts(campaignId: string): PortfolioLocalCounts {
@@ -721,52 +727,77 @@ function compactCampaignLabel(value: string) {
     .trim();
 }
 
-const SOURCE_RESOURCE_DEFS = [
-  { title: "Meeting Request Email — Council Planning Officers", channel: "Council email", docKey: "lobbying_pack" },
-  { title: "Decision-Maker Briefing: Ormskirk KFC (former Tile Giant unit)", channel: "Briefing note", docKey: "lobbying_pack" },
-  { title: "Supporter email — status update", channel: "Supporter email", docKey: "digital_pack" },
-  { title: "Volunteer recruitment message", channel: "Volunteer email", docKey: "digital_pack" },
-  { title: "Social media post set", channel: "Social posts", docKey: "digital_pack" },
-  { title: "Landing page copy — Keep KFC Out of Ormskirk", channel: "Landing page", docKey: "digital_pack" },
-  { title: "Action page copy — Add your name", channel: "Action page", docKey: "digital_pack" },
+const SOURCE_RESOURCE_DOC_KEYS = new Set(["lobbying_pack", "digital_pack", "media_pack"]);
+
+const SOURCE_RESOURCE_PATTERNS = [
+  { pattern: /supporter email/i, channel: "Supporter email", priority: 1 },
+  { pattern: /meeting request email/i, channel: "Council email", priority: 2 },
+  { pattern: /pitch email/i, channel: "Media pitch", priority: 3 },
+  { pattern: /volunteer (recruitment|call-out|message)/i, channel: "Volunteer email", priority: 4 },
+  { pattern: /press release/i, channel: "Press release", priority: 5 },
+  { pattern: /decision-maker briefing/i, channel: "Briefing note", priority: 6 },
+  { pattern: /(landing page|campaign landing page)/i, channel: "Landing page", priority: 7 },
+  { pattern: /(action page|take action page)/i, channel: "Action page", priority: 8 },
+  { pattern: /social media (post set|posts)/i, channel: "Social posts", priority: 9 },
 ] as const;
 
+function matchSourceResourceHeading(line: string) {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.length > 120 || /[.!?]$/.test(trimmed)) return null;
+  return SOURCE_RESOURCE_PATTERNS.find((candidate) => candidate.pattern.test(trimmed)) ?? null;
+}
+
 function extractSourceResources(source: CampaignSource): SourceResource[] {
-  const resourceTitles: Set<string> = new Set(SOURCE_RESOURCE_DEFS.map((def) => def.title));
-  return SOURCE_RESOURCE_DEFS.flatMap((def) => {
-    const doc = source.documents.find((item) => item.key === def.docKey);
-    if (!doc || doc.status !== "ready" || !doc.plainText) return [];
+  const resources = source.documents.flatMap((doc) => {
+    if (!SOURCE_RESOURCE_DOC_KEYS.has(doc.key) || doc.status !== "ready" || !doc.plainText) return [];
     const lines = doc.plainText.split(/\r?\n/);
-    const start = lines.findIndex((line) => line.trim() === def.title);
-    if (start < 0) return [];
-    const end = lines.findIndex((line, index) => index > start && resourceTitles.has(line.trim()));
-    const block = lines.slice(start + 1, end > start ? end : undefined);
-    const checkIndex = block.findIndex((line) => /^Before you send this, check$/i.test(line.trim()));
-    const bodyLines = (checkIndex >= 0 ? block.slice(0, checkIndex) : block).map((line) => line.trimEnd());
-    const warningLines = (checkIndex >= 0 ? block.slice(checkIndex + 1) : [])
-      .map((line) => line.trim().replace(/^-\s*/, ""))
-      .filter(Boolean);
-    const subjectLine = bodyLines.find((line) => /^Subject:/i.test(line.trim()));
-    const subject = subjectLine?.replace(/^Subject:\s*/i, "").trim() || def.title;
-    const body = bodyLines
-      .filter((line) => line.trim() && line !== subjectLine)
-      .join("\n\n")
-      .trim();
-    if (!body) return [];
-    return [
-      {
-        id: `${source.campaignId}:${def.docKey}:${def.title}`,
-        title: def.title,
-        channel: def.channel,
-        sourceDocument: doc.name,
-        sourceDocumentKey: doc.key,
-        subject,
-        body,
-        warnings: warningLines,
-        preview: body.length > 220 ? `${body.slice(0, 219).trimEnd()}…` : body,
-      },
-    ];
+    const starts = lines
+      .map((line, index) => ({ index, line: line.trim(), match: matchSourceResourceHeading(line) }))
+      .filter((item): item is { index: number; line: string; match: NonNullable<ReturnType<typeof matchSourceResourceHeading>> } => Boolean(item.match));
+    return starts.flatMap((start, startIndex) => {
+      const end = starts[startIndex + 1]?.index;
+      const block = lines.slice(start.index + 1, end);
+      const checkIndex = block.findIndex((line) => /^Before you send this, check$/i.test(line.trim()));
+      const bodyLines = (checkIndex >= 0 ? block.slice(0, checkIndex) : block).map((line) => line.trimEnd());
+      const warningLines = (checkIndex >= 0 ? block.slice(checkIndex + 1) : [])
+        .map((line) => line.trim().replace(/^-\s*/, ""))
+        .filter(Boolean);
+      const subjectLine = bodyLines.find((line) => /^Subject:/i.test(line.trim()));
+      const subject = subjectLine?.replace(/^Subject:\s*/i, "").trim() || start.line;
+      const body = bodyLines
+        .filter((line) => line.trim() && line !== subjectLine)
+        .join("\n\n")
+        .trim();
+      if (!body) return [];
+      return [
+        {
+          id: `${source.campaignId}:${doc.key}:${start.line}`,
+          title: start.line,
+          channel: start.match.channel,
+          sourceDocument: doc.name,
+          sourceDocumentKey: doc.key,
+          subject,
+          body,
+          warnings: warningLines,
+          preview: body.length > 220 ? `${body.slice(0, 219).trimEnd()}…` : body,
+          priority: start.match.priority,
+        },
+      ];
+    });
   });
+  return resources
+    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99) || a.title.localeCompare(b.title))
+    .map((resource) => ({
+      id: resource.id,
+      title: resource.title,
+      channel: resource.channel,
+      sourceDocument: resource.sourceDocument,
+      sourceDocumentKey: resource.sourceDocumentKey,
+      subject: resource.subject,
+      body: resource.body,
+      warnings: resource.warnings,
+      preview: resource.preview,
+    }));
 }
 
 function statusPhrase(status: RunReadModel["status"]) {
@@ -776,6 +807,128 @@ function statusPhrase(status: RunReadModel["status"]) {
   if (status === "queued") return "Queued";
   if (status === "failed") return "Failed";
   return "Cancelled";
+}
+
+function shortText(value: string, max = 88) {
+  return value.length > max ? `${value.slice(0, max - 1).trimEnd()}…` : value;
+}
+
+function sourcePrimaryCheckTitle(source: CampaignSource) {
+  const gate = source.nextGate ?? source.evidence.nextChecks[0]?.description ?? "";
+  if (/appeal|planning inspectorate/i.test(gate)) return "Confirm Planning Inspectorate appeal status";
+  if (/housing|affordable/i.test(`${source.title} ${gate}`)) return "Verify housing delivery evidence";
+  if (/gla|s106|section 106|committee|minutes|planning/i.test(gate)) return "Verify planning decision record";
+  return "Confirm next source check";
+}
+
+function sourcePrimaryCheckButton(source: CampaignSource) {
+  return /appeal|planning inspectorate/i.test(source.nextGate ?? "") ? "Create appeal-status action" : "Create source-check action";
+}
+
+function buildSourceAudienceSegments(source: CampaignSource): Segment[] {
+  const place = source.place || "this place";
+  return [
+    {
+      id: "school_gates",
+      name: "Core campaign supporters",
+      role: "Browser-local audience intent",
+      contacts: 0,
+      ready: 0,
+      readiness: `No imported contacts are counted for ${source.title}; this is only a planning label.`,
+      ask: `Prepare a careful update for people already close to ${source.title}, with unresolved checks still visible.`,
+      caveat: "No live consent source, CRM import, or provider list is connected for this real campaign.",
+    },
+    {
+      id: "ward_parents",
+      name: "Decision-route watchers",
+      role: "Evidence and process reviewers",
+      contacts: 0,
+      ready: 0,
+      readiness: `Use source documents to plan who should check the route in ${place}; do not infer reachable contacts.`,
+      ask: source.nextGate ?? "Ask a campaigner to verify the next public decision-route check before stronger copy is used.",
+      caveat: "This local audience intent does not create, import, or message a real person.",
+    },
+    {
+      id: "local_allies",
+      name: "Allies and validators",
+      role: "Later escalation planning",
+      contacts: 0,
+      ready: 0,
+      readiness: "Source stakeholder clues can shape planning, but Operations has no permissioned ally list yet.",
+      ask: "Hold ally, media, or decision-maker escalation until source warnings and human approval are understood.",
+      caveat: "External action remains blocked; provider setup and contact consent are coming soon.",
+    },
+  ];
+}
+
+function buildSourceDraftLibrary(source: CampaignSource): DraftLibraryItem[] {
+  const check = source.nextGate ?? "the next source evidence check";
+  return [
+    {
+      id: "supporter_email",
+      title: "Source supporter update",
+      channel: "Email",
+      state: "Editable local draft",
+      detail: "Browser-local working copy seeded from the real campaign source, with review and queueing still disabled until approval.",
+      audience: "Selected local audience intent",
+      requires: "Human message review, source warnings understood, contact consent confirmed, and explicit approval before local queueing.",
+      outline: [`Name the campaign as ${source.title}.`, `Keep the next check visible: ${shortText(check)}.`, "Do not claim a contact list, provider, or delivery has been connected."],
+    },
+    {
+      id: "decision_maker_letter",
+      title: "Decision-maker request",
+      channel: "Letter",
+      state: "Staged source outline",
+      detail: "Structured prompt for a later formal route; not editable until the decision-maker path and contact are confirmed.",
+      audience: "Formal decision route, exact recipient not imported",
+      requires: "Confirm the current source route, named recipient, evidence status, and sign-off path.",
+      outline: ["Name the narrow source-backed ask.", "Show only verified public facts and reviewed local evidence.", "Request the next documented step without overstating authority."],
+    },
+    {
+      id: "press_pitch",
+      title: "Media or public update",
+      channel: "Media",
+      state: "Staged source outline",
+      detail: "Media prompt for later escalation; no newsroom contact list, spokesperson consent, or provider is connected.",
+      audience: "Local or specialist media, not imported",
+      requires: "Verify public claims, decide whether escalation helps the strategy, and confirm any real media contacts.",
+      outline: ["Lead with the verified campaign decision moment.", "Use role-attributed spokesperson placeholders only until consent exists.", "Avoid implying delivery, media contact, or campaign outcome."],
+    },
+  ];
+}
+
+function buildInitialStateForSource(source: CampaignSource): DemoState {
+  const nextCheck = source.nextGate ?? source.evidence.nextChecks[0]?.description ?? "Review the unresolved source checks before stronger campaign claims are used.";
+  return {
+    ...initialState,
+    workspaceKey: source.campaignId,
+    subject: `${source.title}: update for review`,
+    body: [
+      "Hello,",
+      "",
+      `This is a browser-local working draft for ${source.title}${source.place ? ` in ${source.place}` : ""}. No provider action, scheduling, contact import, or public source write-back has happened.`,
+      "",
+      `Current source status: ${statusPhrase(source.runStatus)}; ${source.readyCount}/${source.documents.length} compiled documents are ready.`,
+      "",
+      `Next source check: ${nextCheck}`,
+      "",
+      "Before any real outreach, a campaigner must confirm the evidence boundary, contact consent, recipient list, and human approval route.",
+      "",
+      "Thank you,",
+      "Campaign Factory operations workspace",
+    ].join("\n"),
+    activeDraft: "supporter_email",
+    selectedSegment: "school_gates",
+    contactFilter: "all",
+    status: "draft",
+    mode: "compose",
+    queuedAt: null,
+    localActions: [],
+    workingDrafts: [],
+    activeWorkingDraftId: null,
+    sourceWorkingCopy: null,
+    activity: [{ id: `source-${source.campaignId}`, label: `Real campaign source loaded read-only for ${source.title}; local operations state is separate.` }],
+  };
 }
 
 function buildSourceContext(source: CampaignSource): typeof campaignContext {
@@ -803,7 +956,7 @@ function buildSourceContext(source: CampaignSource): typeof campaignContext {
         {
           label: "Place",
           detail: source.place || "Place was not exposed by the source read model.",
-          use: "Keeps the operations workspace tied back to the real public brief rather than the school-street fixture.",
+          use: "Keeps the operations workspace tied back to the real public brief rather than a demo fixture.",
           owner: "Campaign source",
         },
         {
@@ -891,7 +1044,7 @@ function buildSourceContext(source: CampaignSource): typeof campaignContext {
           owner: "Campaign source",
         },
         {
-          label: "Appeal-status gate",
+          label: "Next source check",
           detail: nextGate,
           use: "This is the most important next operational check before the campaign changes phase.",
           owner: "Reviewer",
@@ -908,14 +1061,18 @@ function buildSourceContext(source: CampaignSource): typeof campaignContext {
 }
 
 async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Promise<CampaignSource> {
-  const runRes = await fetch(`/api/factory/runs/${encodeURIComponent(campaignId)}`, {
+  const sourceRes = await fetch(`/api/operations/sources/${encodeURIComponent(campaignId)}`, {
     headers: { accept: "application/json" },
     cache: "no-store",
     signal,
   });
-  if (runRes.status === 404) throw new Error("No public campaign run was found for that campaign ID.");
-  if (!runRes.ok) throw new Error(`The public campaign run could not be loaded (HTTP ${runRes.status}).`);
-  const run = (await runRes.json()) as RunReadModel;
+  if (sourceRes.status === 404) throw new Error("No curated public campaign source was found for that campaign ID.");
+  if (!sourceRes.ok) {
+    const errorBody = (await sourceRes.json().catch(() => null)) as { error?: string; detail?: string } | null;
+    throw new Error(errorBody?.detail || errorBody?.error || `The public campaign source could not be loaded (HTTP ${sourceRes.status}).`);
+  }
+  const sourceBody = (await sourceRes.json()) as OperationsSourcePayload;
+  const run = sourceBody.run;
   const folded = foldEvents(campaignId, Array.isArray(run.events) ? run.events : []);
   if (run.status !== "completed" && run.status !== "partial") {
     const err = new Error(`This campaign is ${statusPhrase(run.status).toLowerCase()}, so compiled operations source material is not available yet.`);
@@ -923,13 +1080,7 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
     throw err;
   }
 
-  const docsRes = await fetch(`/api/factory/runs/${encodeURIComponent(campaignId)}/documents`, {
-    headers: { accept: "application/json" },
-    cache: "no-store",
-    signal,
-  });
-  if (!docsRes.ok) throw new Error(`The compiled campaign documents could not be loaded (HTTP ${docsRes.status}).`);
-  const body = (await docsRes.json()) as { documents?: CompiledDocument[]; evidence?: EvidenceAndNextChecks };
+  const body = { documents: sourceBody.documents, evidence: sourceBody.evidence };
   if (!Array.isArray(body.documents) || !body.evidence?.totals || !Array.isArray(body.evidence.nextChecks)) {
     throw new Error("The compiled campaign response did not match the typed public document contract.");
   }
@@ -938,7 +1089,7 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
   const place = folded.place || extractPlaceFromBrief(brief?.plainText);
   const readyCount = body.documents.filter((doc) => doc.status === "ready").length;
   const incompleteDocuments = body.documents.filter((doc) => doc.status !== "ready");
-  const appealGate = body.evidence.nextChecks.find((check) => /appeal|inspectorate|decision status/i.test(`${check.description} ${check.reason}`));
+  const priorityGate = body.evidence.nextChecks.find((check) => /appeal|inspectorate|decision status|housing|gla|s106|section 106|committee|minutes/i.test(`${check.description} ${check.reason}`));
 
   return {
     campaignId,
@@ -953,8 +1104,9 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
     evidence: body.evidence,
     readyCount,
     incompleteDocuments,
-    nextGate: appealGate?.description,
+    nextGate: priorityGate?.description ?? body.evidence.nextChecks[0]?.description,
     sourceHref: `/factory/c/${campaignId}`,
+    sourceOrigin: sourceBody.sourceOrigin,
   };
 }
 
@@ -1191,15 +1343,20 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     campaignId ? { status: UUID_RE.test(campaignId) ? "loading" : "invalid", campaignId } : { status: "fixture" },
   );
   const [switcherItems, setSwitcherItems] = useState<CampaignSwitcherItem[]>(initialCampaignSwitcherItems);
+  const [hasStoredLocalState, setHasStoredLocalState] = useState(false);
   const storageKey = useMemo(() => localStorageKeyFor(campaignId), [campaignId]);
+  const source = sourceState.status === "ready" ? sourceState.source : null;
 
   useEffect(() => {
     queueMicrotask(() => {
+      const stored = hasStoredState(storageKey);
       const loaded = loadState(storageKey);
+      const storedMatchesWorkspace = campaignId ? loaded.workspaceKey === campaignId : loaded.workspaceKey === "fixture";
+      setHasStoredLocalState(stored && storedMatchesWorkspace);
       setState(viewIds.includes(initialView as ViewId) ? { ...loaded, activeView: initialView as ViewId } : loaded);
       setHydrated(true);
     });
-  }, [initialView, storageKey]);
+  }, [campaignId, initialView, storageKey]);
 
   useEffect(() => {
     if (!campaignId) {
@@ -1228,10 +1385,25 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   }, [campaignId]);
 
   useEffect(() => {
+    if (!hydrated || !source || hasStoredLocalState) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setState((current) => ({ ...buildInitialStateForSource(source), activeView: current.activeView }));
+      setHasStoredLocalState(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasStoredLocalState, hydrated, source]);
+
+  useEffect(() => {
     if (!hydrated) return;
+    if (campaignId && !hasStoredLocalState && sourceState.status !== "ready") return;
+    if (campaignId && source && !hasStoredLocalState && state.activity[0]?.id !== `source-${source.campaignId}`) return;
     localStorage.setItem(storageKey, JSON.stringify(state));
     if (!campaignId) LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
-  }, [campaignId, hydrated, state, storageKey]);
+  }, [campaignId, hasStoredLocalState, hydrated, source, sourceState.status, state, storageKey]);
 
   useEffect(() => {
     if (!campaignId || !UUID_RE.test(campaignId)) return;
@@ -1256,10 +1428,11 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     return () => controllers.forEach((controller) => controller.abort());
   }, [campaignId]);
 
-  const source = sourceState.status === "ready" ? sourceState.source : null;
   const sourceLoaded = Boolean(source);
   const sourceContext = useMemo(() => (source ? buildSourceContext(source) : campaignContext), [source]);
   const sourceResources = useMemo(() => (source ? extractSourceResources(source) : []), [source]);
+  const audienceSegments = useMemo(() => (source ? buildSourceAudienceSegments(source) : segments), [source]);
+  const workspaceDraftLibrary = useMemo(() => (source ? buildSourceDraftLibrary(source) : draftLibrary), [source]);
   const sourceAudienceSignals = useMemo(() => {
     if (!source) return [];
     const docs = source.documents.filter((doc) => ["organising_plan", "digital_pack", "power_stakeholder_map"].includes(doc.key));
@@ -1271,11 +1444,11 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   }, [source]);
 
   const selected = useMemo(
-    () => segments.find((segment) => segment.id === state.selectedSegment) ?? segments[0],
-    [state.selectedSegment],
+    () => audienceSegments.find((segment) => segment.id === state.selectedSegment) ?? audienceSegments[0],
+    [audienceSegments, state.selectedSegment],
   );
 
-  const activeDraft = draftLibrary.find((draft) => draft.id === state.activeDraft) ?? draftLibrary[0];
+  const activeDraft = workspaceDraftLibrary.find((draft) => draft.id === state.activeDraft) ?? workspaceDraftLibrary[0];
   const activeWorkingDraft = state.workingDrafts.find((draft) => draft.id === state.activeWorkingDraftId) ?? null;
   const activeDraftEditable = Boolean(activeWorkingDraft) || activeDraft.id === "supporter_email";
   const activeSourceWorkingCopy = activeWorkingDraft?.sourceWorkingCopy ?? (activeDraft.id === "supporter_email" ? state.sourceWorkingCopy : null);
@@ -1298,19 +1471,26 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const filteredContacts = contacts.filter(
     (contact) => (state.contactFilter === "all" || contact.segmentId === state.contactFilter) && readinessMatches(contact),
   );
-  const appealActionId = source ? `source:${source.campaignId}:appeal-status` : "fixture:council-timing-check";
-  const mediaActionId = source ? `source:${source.campaignId}:media-pack` : "fixture:media-boundary";
+  const incompleteSourceDocument = source?.incompleteDocuments[0] ?? null;
+  const appealActionId = source ? `source:${source.campaignId}:primary-source-check` : "fixture:council-timing-check";
+  const mediaActionId = source ? `source:${source.campaignId}:incomplete:${incompleteSourceDocument?.key ?? "escalation-boundary"}` : "fixture:media-boundary";
   const hasAppealAction = state.localActions.some((action) => action.id === appealActionId);
   const hasMediaAction = state.localActions.some((action) => action.id === mediaActionId);
   const selectedSegmentContacts = contacts.filter((contact) => contact.segmentId === selected.id);
   const readyContactCount = contacts.filter((contact) => contact.readiness === "Ready fixture").length;
   const reviewContactCount = contacts.filter((contact) => contact.readiness === "Review first").length;
   const blockedContactCount = contacts.filter((contact) => contact.readiness === "Blocked").length;
-  const scheduleCopy: Record<DemoState["scheduleIntent"], string> = {
-    after_approval: "Hold until a campaigner connects a provider after review",
-    tomorrow_morning: "Demo intent: next school-run morning after provider setup",
-    school_run: "Demo intent: school-run reminder window after consent import",
-  };
+  const scheduleCopy: Record<DemoState["scheduleIntent"], string> = source
+    ? {
+        after_approval: "Hold until a campaigner connects a provider after review",
+        tomorrow_morning: "Demo intent: next campaign review window after provider setup",
+        school_run: "Demo intent: after the next source check and consent import",
+      }
+    : {
+        after_approval: "Hold until a campaigner connects a provider after review",
+        tomorrow_morning: "Demo intent: next school-run morning after provider setup",
+        school_run: "Demo intent: school-run reminder window after consent import",
+      };
   const runwayStages: RunwayStage[] = [
     {
       label: "Brief",
@@ -1331,8 +1511,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     {
       label: "Audience",
       view: "audiences",
-      status: selected.ready > 0 ? "complete" : "blocked",
-      statusLabel: `${selected.name}: ${selected.ready}/${selected.contacts} ready fixtures`,
+      status: source ? "complete" : selected.ready > 0 ? "complete" : "blocked",
+      statusLabel: source ? `${selected.name}: local intent only` : `${selected.name}: ${selected.ready}/${selected.contacts} ready fixtures`,
       detail: source ? "Audience planning remains local/demo-only until real contact import exists." : "The selected segment follows Drafts, Reviews, and the local queue.",
     },
     {
@@ -1340,7 +1520,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
       view: "drafts",
       status: !canRequestReview ? "blocked" : communicationStatus === "draft" ? "current" : "complete",
       statusLabel: !canRequestReview ? "Needs copy" : status.label,
-      detail: activeDraftEditable ? "Supporter email is editable and saved in this browser." : "Staged fixture; not available for approval.",
+      detail: activeDraftEditable ? "Supporter email is editable and saved in this browser." : source ? "Staged source outline; not available for approval." : "Staged fixture; not available for approval.",
     },
     {
       label: "Human approval",
@@ -1375,7 +1555,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
       title: "People",
       items: [
         { id: "audiences", label: "Audiences", note: "Segments and readiness" },
-        { id: "contacts", label: "Contacts", note: "Fixture contact list" },
+        { id: "contacts", label: "Contacts", note: source ? "Import boundary" : "Fixture contact list" },
       ],
     },
     {
@@ -1401,7 +1581,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
       activity:
         current.activeDraft === activeDraft
           ? current.activity
-          : [record(`Opened draft library item: ${draftLibrary.find((draft) => draft.id === activeDraft)?.title ?? "Draft"}.`), ...current.activity].slice(0, 7),
+          : [record(`Opened draft library item: ${workspaceDraftLibrary.find((draft) => draft.id === activeDraft)?.title ?? "Draft"}.`), ...current.activity].slice(0, 7),
     }));
   };
 
@@ -1558,14 +1738,14 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const createAppealStatusAction = () => {
     createLocalAction({
       id: appealActionId,
-      title: source ? "Confirm Planning Inspectorate appeal status" : "Verify council order status",
+      title: source ? sourcePrimaryCheckTitle(source) : "Verify council order status",
       source: source ? "Campaign source · Evidence & checks" : "Fixture evidence check",
       owner: "Reviewer",
       timing: "Before phase change or stronger public claims",
       priority: "High",
       status: "next",
       provenance: source
-        ? `Source campaign ${source.campaignId}; derived from the unresolved appeal-status gate and stored only in this browser.`
+        ? `Source campaign ${source.campaignId}; derived from the unresolved source check and stored only in this browser.`
         : "Derived from the fixture timing check and stored only in this browser.",
     });
   };
@@ -1573,14 +1753,14 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const createMediaPackAction = () => {
     createLocalAction({
       id: mediaActionId,
-      title: source ? "Create action for incomplete Media Pack" : "Keep media escalation blocked until checked",
-      source: source ? "Campaign source · Media Pack incomplete" : "Fixture media boundary",
+      title: source ? (incompleteSourceDocument ? `Follow up incomplete ${incompleteSourceDocument.name}` : "Keep escalation blocked until checked") : "Keep media escalation blocked until checked",
+      source: source ? `Campaign source · ${incompleteSourceDocument ? `${incompleteSourceDocument.name} incomplete` : "Escalation boundary"}` : "Fixture media boundary",
       owner: "Local organiser",
-      timing: "After appeal status and evidence checks are understood",
+      timing: source ? "After the primary source check and evidence warnings are understood" : "After appeal status and evidence checks are understood",
       priority: "Medium",
       status: "blocked",
       provenance: source
-        ? `Source campaign ${source.campaignId}; Media Pack remains incomplete, so this is a local work item rather than a false ready state.`
+        ? `Source campaign ${source.campaignId}; ${incompleteSourceDocument ? `${incompleteSourceDocument.name} remains ${incompleteSourceDocument.status}` : "source escalation still needs human judgement"}, so this is a local work item rather than a false ready state.`
         : "Fixture media action stored locally; no newsroom or provider list exists.",
     });
   };
@@ -1597,9 +1777,11 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     localStorage.removeItem(storageKey);
     if (storageKey !== STORAGE_KEY) localStorage.removeItem(STORAGE_KEY);
     LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    const resetState = source ? buildInitialStateForSource(source) : initialState;
+    setHasStoredLocalState(true);
     setState({
-      ...initialState,
-      activity: [record("Demo state reset to the seeded campaign workspace."), ...initialState.activity],
+      ...resetState,
+      activity: [record(source ? "Local source workspace state reset; public campaign data was not changed." : "Demo state reset to the seeded campaign workspace."), ...resetState.activity],
     });
   };
 
@@ -1659,7 +1841,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const recommendedActions = [
     {
       id: appealActionId,
-      title: source ? "Confirm Planning Inspectorate appeal status" : "Verify council order status",
+      title: source ? sourcePrimaryCheckTitle(source) : "Verify council order status",
       detail: source?.nextGate ?? "Check the current decision route before any stronger campaign claims are used.",
       priority: "High" as const,
       disabled: hasAppealAction,
@@ -1667,9 +1849,9 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     },
     {
       id: mediaActionId,
-      title: source ? "Create action for incomplete Media Pack" : "Keep media escalation blocked until checked",
-      detail: source?.incompleteDocuments.find((doc) => doc.key === "media_pack")
-        ? "Media Pack is still assembling, so the useful operation is a local follow-up action, not a ready-state claim."
+      title: source ? (incompleteSourceDocument ? `Follow up incomplete ${incompleteSourceDocument.name}` : "Keep escalation blocked until checked") : "Keep media escalation blocked until checked",
+      detail: source && incompleteSourceDocument
+        ? `${incompleteSourceDocument.name} is ${incompleteSourceDocument.status}, so the useful operation is a local follow-up action, not a ready-state claim.`
         : "Media escalation should wait until evidence, contact, and provider boundaries are understood.",
       priority: "Medium" as const,
       disabled: hasMediaAction,
@@ -1732,7 +1914,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             </div>
           )) : (
             <div className="px-4 py-6 text-sm text-muted-foreground">
-              No local actions yet. Create the appeal-status check action to turn the real campaign boundary into owned work.
+              No local actions yet. Create the primary source-check action to turn the campaign boundary into owned work.
             </div>
           )}
         </div>
@@ -1785,7 +1967,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         ) : null}
       </Panel>
       <div className="space-y-3" role="list" aria-label="Audience segments">
-        {segments.map((segment) => {
+        {audienceSegments.map((segment) => {
           const active = segment.id === selected.id;
           return (
             <button
@@ -1824,7 +2006,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           An editorial desk for the outreach sequence. Source pack resources can be copied into a browser-local editable working draft.
         </p>
         <div className="mt-5 space-y-3">
-          {draftLibrary.map((draft, index) => (
+          {workspaceDraftLibrary.map((draft, index) => (
             <button
               key={draft.id}
               type="button"
@@ -1898,7 +2080,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           </div>
         ) : source ? (
           <div className="mt-6 rounded-[var(--r-xl)] border border-white/15 bg-white/[0.07] p-3 text-sm text-white/65">
-            No ready Lobbying/Digital Pack resources were exposed as editable candidates. Media Pack is still incomplete.
+            No ready source pack resources were exposed as editable candidates. Keep drafting local and conservative rather than substituting fixture copy.
           </div>
         ) : null}
       </Panel>
@@ -1932,7 +2114,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         </div>
 
         <div className="mt-6 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-ops-yellow/45 p-4 text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Review warning:</span> {activeSourceWorkingCopy ? `This copy came from ${activeSourceWorkingCopy.sourceDocument}; keep its source warnings attached before approval.` : activeDraft.requires} {activeDraftEditable && !activeSourceWorkingCopy ? selected.caveat : !activeDraftEditable ? "This staged fixture is not available for approval or queueing." : null}
+          <span className="font-medium text-foreground">Review warning:</span> {activeSourceWorkingCopy ? `This copy came from ${activeSourceWorkingCopy.sourceDocument}; keep its source warnings attached before approval.` : activeDraft.requires} {activeDraftEditable && !activeSourceWorkingCopy ? selected.caveat : !activeDraftEditable ? (source ? "This staged source outline is not available for approval or queueing." : "This staged fixture is not available for approval or queueing.") : null}
         </div>
         {activeSourceWorkingCopy ? (
           <div className="mt-4 rounded-[var(--r-2xl)] border border-ops-line bg-background/85 p-4 text-sm">
@@ -1997,7 +2179,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         ) : (
           <article className="mt-6 rounded-[var(--r-2xl)] border border-border bg-white p-6 shadow-sm">
             <div className="border-b border-border pb-4 text-sm text-muted-foreground">
-              <p><span className="font-medium text-foreground">To:</span> {selected.name} · {selected.ready} ready fixture contacts</p>
+              <p><span className="font-medium text-foreground">To:</span> {source ? `${selected.name} · local audience intent only` : `${selected.name} · ${selected.ready} ready fixture contacts`}</p>
               <p><span className="font-medium text-foreground">Status:</span> {status.label}</p>
             </div>
             <h3 className="mt-5 text-2xl font-medium">{communicationSubject || "Untitled campaign email"}</h3>
@@ -2018,7 +2200,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         <div className="mt-5 space-y-4 text-sm">
           <div className="rounded-[var(--r-xl)] border border-ops-line bg-background/75 p-3">
             <p className="font-medium">Audience</p>
-            <p className="mt-1 text-muted-foreground">{selected.name}: {selected.ready}/{selected.contacts} ready fixtures.</p>
+            <p className="mt-1 text-muted-foreground">{source ? `${selected.name}: local intent only; no imported contacts are claimed.` : `${selected.name}: ${selected.ready}/${selected.contacts} ready fixtures.`}</p>
           </div>
           <div className="rounded-[var(--r-xl)] border border-ops-line bg-background/75 p-3">
             <p className="font-medium">Approval state</p>
@@ -2072,7 +2254,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         <div className="mt-6 grid gap-3 md:grid-cols-2" aria-label="Approval gates">
           {[
             { label: "Message has enough substance to review", ok: canRequestReview, detail: canRequestReview ? "Subject and body are long enough for a meaningful check." : "Add a clear subject and message before requesting review." },
-            { label: "Audience readiness understood", ok: selected.ready > 0, detail: `${selected.ready}/${selected.contacts} selected fixture contacts are marked ready.` },
+            { label: "Audience readiness understood", ok: source ? true : selected.ready > 0, detail: source ? "No imported contacts are claimed; the selected audience is a browser-local planning label only." : `${selected.ready}/${selected.contacts} selected fixture contacts are marked ready.` },
             { label: "Evidence checks still visible", ok: true, detail: "Council timing, legal-order wording, and consent remain called out before any real provider use." },
             { label: "External action blocked", ok: true, detail: "Provider connection is not active; approval only unlocks the local demo queue." },
           ].map((item) => (
@@ -2201,8 +2383,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             className="h-11 w-full rounded-full border border-border bg-background px-4 text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           >
             <option value="after_approval">Hold after approval</option>
-            <option value="tomorrow_morning">Next school-run morning</option>
-            <option value="school_run">School-run reminder window</option>
+            <option value="tomorrow_morning">{source ? "Next campaign review window" : "Next school-run morning"}</option>
+            <option value="school_run">{source ? "After next source check" : "School-run reminder window"}</option>
           </select>
           <p className="text-sm text-muted-foreground">{scheduleCopy[state.scheduleIntent]}</p>
         </div>
@@ -2226,7 +2408,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           </h2>
         </div>
         <p className="max-w-md text-sm text-white/65">
-          Every node is derived from source, fixture, or local browser state. Select a stage to work there; no provider action is connected.
+          {source ? "Every node is derived from this source campaign or local browser state." : "Every node is derived from source, fixture, or local browser state."} Select a stage to work there; no provider action is connected.
         </p>
       </div>
       <div className="ops-runway" role="list" aria-label="Six-stage campaign runway">
@@ -2290,7 +2472,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           </div>
           <div className="rounded-[var(--r-2xl)] border border-ops-line bg-background/80 p-4">
             <SmallLabel>Next human decision</SmallLabel>
-            <h2 className="mt-2 text-2xl font-medium">{source ? "Confirm the appeal status before the campaign changes phase." : "Approve only after the claim checks are understood."}</h2>
+            <h2 className="mt-2 text-2xl font-medium">{source ? `${sourcePrimaryCheckTitle(source)} before the campaign changes phase.` : "Approve only after the claim checks are understood."}</h2>
             <p className="mt-3 text-sm text-muted-foreground">
               {source?.nextGate ?? "Council timing, legal-order wording, and contact consent are the key checks before any real provider connection is considered."}
             </p>
@@ -2479,7 +2661,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         <div className="mt-5 flex flex-col gap-3">
           {section.title === "Evidence & checks" ? (
             <Button type="button" onClick={createAppealStatusAction} disabled={hasAppealAction}>
-              {hasAppealAction ? "Appeal-status action created" : "Create appeal-status action"}
+              {hasAppealAction ? (source ? "Source-check action created" : "Appeal-status action created") : source ? sourcePrimaryCheckButton(source) : "Create appeal-status action"}
             </Button>
           ) : null}
           {section.title === "Strategy & tactics" ? goButton("actions", "Open Action plan") : null}
