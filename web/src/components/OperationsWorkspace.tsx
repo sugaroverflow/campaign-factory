@@ -2262,8 +2262,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
 
   const reset = () => {
     localStorage.removeItem(storageKey);
-    if (storageKey !== STORAGE_KEY) localStorage.removeItem(STORAGE_KEY);
-    LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    if (storageKey === STORAGE_KEY) LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
     const resetState = source ? buildInitialStateForSource(source) : initialState;
     setHasStoredLocalState(true);
     setState({

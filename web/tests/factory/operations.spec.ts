@@ -407,6 +407,10 @@ test("operations portfolio: local signals reflect only genuine campaign-local wo
 });
 
 test("operations workbench: resetting one real campaign leaves other campaign-local work intact", async ({ page }) => {
+  await page.goto("/operations?demo=fixture&view=evidence");
+  await page.getByRole("button", { name: "Create appeal-status action" }).click();
+  await expect(page.getByText("Verify council order status", { exact: true }).first()).toBeVisible();
+
   const campaigns = {
     "69f257b6-9913-4395-94f7-5c25b4b5fe95": {
       title: "Keep KFC Out of Ormskirk",
@@ -478,6 +482,10 @@ test("operations workbench: resetting one real campaign leaves other campaign-lo
 
   await expect(ormskirkRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
   await expect(barnetRow).toContainText("Local signals: 1 action.");
+
+  await page.goto("/operations?demo=fixture&view=actions");
+  await expect(page.getByText("Verify council order status", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Actions: 1 local item")).toBeVisible();
 });
 
 test("operations portfolio: one failed source does not blank usable campaigns", async ({ page }) => {
