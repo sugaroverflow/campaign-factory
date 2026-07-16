@@ -1448,7 +1448,10 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
   }
   const sourceBody = (await sourceRes.json()) as OperationsSourcePayload;
   const run = sourceBody.run;
-  const folded = foldEvents(campaignId, Array.isArray(run.events) ? run.events : []);
+  if (run.campaignId !== campaignId || !Array.isArray(run.events)) {
+    throw new Error("The public campaign source did not match the requested campaign.");
+  }
+  const folded = foldEvents(campaignId, run.events);
   if (run.status !== "completed" && run.status !== "partial") {
     const err = new Error(`This campaign is ${statusPhrase(run.status).toLowerCase()}, so compiled operations source material is not available yet.`);
     (err as Error & { runStatus?: RunReadModel["status"] }).runStatus = run.status;
