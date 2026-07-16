@@ -380,6 +380,103 @@ test("operations portfolio: three curated public campaigns load independently", 
   );
 });
 
+test("operations portfolio: manual refresh ignores stale source responses", async ({ page }) => {
+  const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const fallbackCampaigns = {
+    "57678ae0-29fd-4b4b-8a53-5c711cdb21cf": {
+      title: "Build 5,000 affordable houses in Tower Hamlets in the next 3 years",
+      place: "Tower Hamlets, London",
+      status: "partial",
+      unresolved: 22,
+      next: "Verify the exact affordable housing targets from council papers",
+    },
+    "6b54225d-afa3-41d1-b053-89741094f153": {
+      title: "Stop the leisure park redevelopment in Barnet",
+      place: "Barnet, London",
+      status: "completed",
+      unresolved: 17,
+      next: "Retrieve the GLA decision report and Barnet committee minutes",
+    },
+  } as const;
+  let ormskirkRequests = 0;
+  let fulfillStaleOrmskirk: (() => Promise<void>) | null = null;
+
+  const payloadFor = (id: string, campaign: { title: string; place: string; status: string; unresolved: number; next: string }, sequence = 1) => ({
+    sourceOrigin: "https://campaign-factory.vercel.app",
+    run: { campaignId: id, status: campaign.status, stateVersion: sequence, lastSequence: sequence, events: [] },
+    documents: [
+      { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nPortfolio refresh race fixture.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+      { key: "media_pack", num: 2, name: "Media Pack", status: "ready", html: "", plainText: "MEDIA PACK", isPack: true, sectionKeys: [], resourceCount: 0, flags: [] },
+    ],
+    evidence: {
+      groups: [],
+      conflicts: [],
+      nextChecks: [{ id: "next", description: campaign.next, reason: "Portfolio refresh race", claimIds: [], affectedSections: [] }],
+      terminalGaps: [],
+      draftNotes: [],
+      totals: { claims: 30, loadBearing: 24, verifiedLoadBearing: 24 - campaign.unresolved, unresolvedLoadBearing: campaign.unresolved },
+    },
+  });
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1];
+    if (id === ormskirkId) {
+      ormskirkRequests += 1;
+      if (ormskirkRequests === 1) {
+        await new Promise<void>((resolve) => {
+          fulfillStaleOrmskirk = async () => {
+            await route.fulfill({
+              contentType: "application/json",
+              body: JSON.stringify(
+                payloadFor(
+                  id,
+                  {
+                    title: "Stale Ormskirk source response",
+                    place: "Old Ormskirk",
+                    status: "partial",
+                    unresolved: 34,
+                    next: "This older source response must not win the refresh race",
+                  },
+                  1,
+                ),
+              ),
+            }).catch(() => undefined);
+            resolve();
+          };
+        });
+        return;
+      }
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify(
+          payloadFor(
+            id,
+            {
+              title: "Fresh Ormskirk source response",
+              place: "Ormskirk, Lancashire",
+              status: "partial",
+              unresolved: 33,
+              next: "Fresh refresh response wins before the stale source returns",
+            },
+            2,
+          ),
+        ),
+      });
+      return;
+    }
+
+    const campaign = fallbackCampaigns[id as keyof typeof fallbackCampaigns];
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(payloadFor(id!, campaign)) });
+  });
+
+  await page.goto("/operations");
+  await page.getByRole("button", { name: "Refresh portfolio" }).click();
+  await expect(page.getByText("Fresh Ormskirk source response", { exact: true })).toBeVisible();
+  await fulfillStaleOrmskirk?.();
+  await expect(page.getByText("Stale Ormskirk source response", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Fresh refresh response wins before the stale source returns")).toBeVisible();
+});
+
 test("operations portfolio: local signals reflect only genuine campaign-local work", async ({ page }) => {
   const campaigns = {
     "69f257b6-9913-4395-94f7-5c25b4b5fe95": {

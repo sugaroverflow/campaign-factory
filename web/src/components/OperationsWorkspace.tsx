@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1523,8 +1523,14 @@ function OperationsPortfolio() {
     }));
   const [items, setItems] = useState<PortfolioItem[]>(initialItems);
   const [lastLoaded, setLastLoaded] = useState<string | null>(null);
+  const portfolioRefreshId = useRef(0);
+  const portfolioControllers = useRef<AbortController[]>([]);
 
   const refresh = () => {
+    portfolioRefreshId.current += 1;
+    const currentRefreshId = portfolioRefreshId.current;
+    portfolioControllers.current.forEach((controller) => controller.abort());
+    portfolioControllers.current = [];
     setItems(
       PORTFOLIO_CAMPAIGNS.map((campaign) => ({
         campaign,
@@ -1534,8 +1540,10 @@ function OperationsPortfolio() {
     );
     PORTFOLIO_CAMPAIGNS.forEach((campaign) => {
       const controller = new AbortController();
+      portfolioControllers.current.push(controller);
       fetchCampaignSource(campaign.id, controller.signal)
         .then((source) => {
+          if (controller.signal.aborted || currentRefreshId !== portfolioRefreshId.current) return;
           setItems((current) =>
             current.map((item) =>
               item.campaign.id === campaign.id
@@ -1546,6 +1554,7 @@ function OperationsPortfolio() {
           setLastLoaded(new Date().toISOString());
         })
         .catch((error: unknown) => {
+          if (controller.signal.aborted || currentRefreshId !== portfolioRefreshId.current) return;
           const message = error instanceof Error ? error.message : "This campaign source could not be loaded.";
           setItems((current) =>
             current.map((item) =>
@@ -1561,6 +1570,11 @@ function OperationsPortfolio() {
 
   useEffect(() => {
     queueMicrotask(refresh);
+    return () => {
+      portfolioRefreshId.current += 1;
+      portfolioControllers.current.forEach((controller) => controller.abort());
+      portfolioControllers.current = [];
+    };
   }, []);
 
   return (
