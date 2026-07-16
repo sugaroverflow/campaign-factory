@@ -116,6 +116,16 @@ function isJourneySectionKeyArray(value: unknown): value is string[] {
   return true;
 }
 
+function isOperationsAffectedSectionArray(value: unknown): value is string[] {
+  if (!Array.isArray(value)) return false;
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string" || seen.has(item) || (!OPERATIONS_JOURNEY_SECTION_KEYS.has(item) && !OPERATIONS_DOCUMENT_KEYS.has(item))) return false;
+    seen.add(item);
+  }
+  return true;
+}
+
 function matchesCanonicalDocumentSections(key: string, isPack: boolean, sectionKeys: string[]) {
   if (isPack) return sectionKeys.length === 0;
   const expected = DOC_SECTIONS[key as keyof typeof DOC_SECTIONS];
@@ -269,14 +279,16 @@ function hasConsistentOperationsEvidenceTotals(value: EvidenceAndNextChecks) {
   );
 }
 
-function isOperationsNextCheck(value: unknown) {
+function isOperationsNextCheck(value: unknown, knownClaimIds: Set<string>) {
+  const claimIds = isRecord(value) ? value.claimIds : undefined;
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
     typeof value.description === "string" &&
     typeof value.reason === "string" &&
-    isOptionalUniqueStringArray(value.claimIds) &&
-    isUniqueStringArray(value.affectedSections)
+    isOptionalUniqueStringArray(claimIds) &&
+    (claimIds === undefined || knownClaimIds.size === 0 || claimIds.every((claimId) => knownClaimIds.has(claimId))) &&
+    isOperationsAffectedSectionArray(value.affectedSections)
   );
 }
 
@@ -340,13 +352,25 @@ export function isOperationsEvidenceAndNextChecks(value: unknown): value is Evid
     return false;
   }
 
+  if (
+    !Array.isArray(value.groups) ||
+    !value.groups.every(isOperationsSourceLedgerGroup) ||
+    !Array.isArray(value.conflicts) ||
+    !value.conflicts.every(isOperationsEvidenceClaimView)
+  ) {
+    return false;
+  }
+
+  const evidence = value as unknown as EvidenceAndNextChecks;
+  const knownClaimIds = new Set<string>();
+  for (const group of evidence.groups) {
+    for (const claim of group.claims) knownClaimIds.add(claim.id);
+  }
+  for (const conflict of evidence.conflicts) knownClaimIds.add(conflict.id);
+
   return (
-    Array.isArray(value.groups) &&
-    value.groups.every(isOperationsSourceLedgerGroup) &&
-    Array.isArray(value.conflicts) &&
-    value.conflicts.every(isOperationsEvidenceClaimView) &&
     Array.isArray(value.nextChecks) &&
-    value.nextChecks.every(isOperationsNextCheck) &&
+    value.nextChecks.every((check) => isOperationsNextCheck(check, knownClaimIds)) &&
     Array.isArray(value.terminalGaps) &&
     value.terminalGaps.every(isOperationsTerminalGap) &&
     Array.isArray(value.draftNotes) &&
