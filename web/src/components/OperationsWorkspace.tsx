@@ -6,9 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { foldEvents } from "@/lib/factory/client/fold";
+import type { RunReadModel } from "@/lib/factory/contracts/api";
+import type { CompiledDocument, EvidenceAndNextChecks } from "@/lib/factory/documents";
 
 const STORAGE_KEY = "cf_operations_demo_v3";
 const LEGACY_STORAGE_KEYS = ["cf_operations_demo_v2", "cf_operations_demo_v1"];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type SegmentId = "school_gates" | "ward_parents" | "local_allies";
 type DraftId = "supporter_email" | "decision_maker_letter" | "press_pitch";
@@ -73,6 +77,31 @@ type DraftLibraryItem = {
   requires: string;
   outline: string[];
 };
+
+type CampaignSource = {
+  campaignId: string;
+  title: string;
+  problem?: string;
+  place?: string;
+  runStatus: RunReadModel["status"];
+  stateVersion: number;
+  lastSequence: number;
+  loadedAt: string;
+  documents: CompiledDocument[];
+  evidence: EvidenceAndNextChecks;
+  readyCount: number;
+  incompleteDocuments: CompiledDocument[];
+  nextGate?: string;
+  sourceHref: string;
+};
+
+type SourceState =
+  | { status: "fixture" }
+  | { status: "invalid"; campaignId: string }
+  | { status: "loading"; campaignId: string }
+  | { status: "error"; campaignId: string; title: string; message: string }
+  | { status: "unavailable"; campaignId: string; title: string; message: string; runStatus?: RunReadModel["status"] }
+  | { status: "ready"; source: CampaignSource };
 
 type ContactFixture = {
   id: string;
@@ -451,10 +480,10 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
   };
 }
 
-function loadState(): DemoState {
+function loadState(storageKey = STORAGE_KEY): DemoState {
   if (typeof window === "undefined") return initialState;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY) || LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
+    const raw = localStorage.getItem(storageKey) || (storageKey === STORAGE_KEY ? LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean) : null);
     if (!raw) return initialState;
     const parsed = JSON.parse(raw) as Partial<DemoState>;
     if (!parsed.subject || !parsed.body || !parsed.selectedSegment) return initialState;
@@ -462,6 +491,218 @@ function loadState(): DemoState {
   } catch {
     return initialState;
   }
+}
+
+function localStorageKeyFor(campaignId?: string) {
+  return campaignId ? `${STORAGE_KEY}:${campaignId}` : STORAGE_KEY;
+}
+
+function firstNonEmptyLine(value?: string) {
+  return value?.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+}
+
+function extractPlaceFromBrief(value?: string) {
+  return value?.match(/^Place:\s*(.+)$/im)?.[1]?.trim();
+}
+
+function documentExcerpt(doc: CompiledDocument | undefined, max = 260) {
+  const text = doc?.plainText
+    ?.split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(1)
+    .join(" ");
+  if (!text) return "This source document is present, but no readable excerpt was exposed by the typed document route.";
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+function statusPhrase(status: RunReadModel["status"]) {
+  if (status === "partial") return "Partial but usable";
+  if (status === "completed") return "Complete";
+  if (status === "running") return "Still running";
+  if (status === "queued") return "Queued";
+  if (status === "failed") return "Failed";
+  return "Cancelled";
+}
+
+function buildSourceContext(source: CampaignSource): typeof campaignContext {
+  const byKey = new Map(source.documents.map((doc) => [doc.key, doc]));
+  const brief = byKey.get("campaign_brief");
+  const objective = byKey.get("objective_theory_of_change");
+  const power = byKey.get("power_stakeholder_map");
+  const strategy = byKey.get("campaign_strategy");
+  const tactics = byKey.get("tactics_timeline");
+  const media = byKey.get("media_pack");
+  const evidenceTotals = source.evidence.totals;
+  const nextGate = source.nextGate ?? source.evidence.nextChecks[0]?.description ?? "Review unresolved load-bearing checks before the campaign changes phase.";
+
+  return {
+    brief: {
+      title: "Campaign brief",
+      intro: "Read-only public campaign source loaded through the typed Campaign Factory run and documents routes. Local operations work is layered on top; the source brief is not edited here.",
+      rows: [
+        {
+          label: "Campaign",
+          detail: source.title,
+          use: "This is the canonical conference demo source for the Operations workspace.",
+          owner: "Campaign source",
+        },
+        {
+          label: "Place",
+          detail: source.place || "Place was not exposed by the source read model.",
+          use: "Keeps the operations workspace tied back to the real public brief rather than the school-street fixture.",
+          owner: "Campaign source",
+        },
+        {
+          label: "Source status",
+          detail: `${statusPhrase(source.runStatus)} · ${source.readyCount}/${source.documents.length} documents ready; ${source.incompleteDocuments.map((doc) => `${doc.name} ${doc.status}`).join(", ") || "no incomplete documents"}.`,
+          use: "Partial is usable, but incomplete documents remain visible rather than silently filled.",
+          owner: "Workbench",
+        },
+        {
+          label: "Brief excerpt",
+          detail: documentExcerpt(brief),
+          use: "Use source documents for campaign context; do not paste rendered-page snapshots into operations.",
+          owner: "Campaign source",
+        },
+      ],
+    },
+    objectives: {
+      title: "Objective & targets",
+      intro: "The objective is read from the compiled public campaign documents, with unresolved official-decision checks kept prominent.",
+      rows: [
+        {
+          label: "Objective source",
+          detail: documentExcerpt(objective),
+          use: "Ground the next operational decision in the actual accepted objective/theory-of-change document.",
+          owner: "Campaign source",
+        },
+        {
+          label: "Current gate",
+          detail: nextGate,
+          use: "Confirm appeal or decision status before stronger claims, phase changes, or external-facing copy.",
+          owner: "Reviewer",
+        },
+        {
+          label: "Evidence boundary",
+          detail: `${evidenceTotals.verifiedLoadBearing}/${evidenceTotals.loadBearing} load-bearing claims verified; ${evidenceTotals.unresolvedLoadBearing} still unresolved.`,
+          use: "Keep approval and local queueing conservative until a human understands the unresolved checks.",
+          owner: "Reviewer",
+        },
+      ],
+    },
+    power: {
+      title: "Power map",
+      intro: "The first slice exposes the real power-map source document and its provenance without inferring imported contacts or owners.",
+      rows: [
+        {
+          label: "Source map",
+          detail: documentExcerpt(power),
+          use: "Use the accepted stakeholder map as the source for later audience and target actions.",
+          owner: "Campaign source",
+        },
+        {
+          label: "Contact boundary",
+          detail: "No CRM, consent register, or imported contact list is connected to this operations view.",
+          use: "Audience work can be planned locally, but real contact import remains disconnected.",
+          owner: "Workbench",
+        },
+      ],
+    },
+    strategy: {
+      title: "Strategy & tactics",
+      intro: "Strategy and tactics are loaded from the source campaign documents; local action creation comes after this read-only routing slice.",
+      rows: [
+        {
+          label: "Campaign strategy",
+          detail: documentExcerpt(strategy),
+          use: "Keeps the operational runway anchored to the real strategic sequence.",
+          owner: "Campaign source",
+        },
+        {
+          label: "Tactics timeline",
+          detail: documentExcerpt(tactics),
+          use: "Seed actions from real tactics in the next deep-dive slice, without writing back to the source campaign.",
+          owner: "Campaign source",
+        },
+      ],
+    },
+    evidence: {
+      title: "Evidence & checks",
+      intro: "The evidence ledger comes from the typed compiled campaign bundle and keeps unresolved load-bearing facts visible.",
+      rows: [
+        {
+          label: "Fact totals",
+          detail: `${evidenceTotals.claims} claims · ${evidenceTotals.loadBearing} load-bearing · ${evidenceTotals.verifiedLoadBearing} verified load-bearing · ${evidenceTotals.unresolvedLoadBearing} unresolved load-bearing.`,
+          use: "Shows the public evidence boundary before a local reviewer approves any communication.",
+          owner: "Campaign source",
+        },
+        {
+          label: "Appeal-status gate",
+          detail: nextGate,
+          use: "This is the most important next operational check before the campaign changes phase.",
+          owner: "Reviewer",
+        },
+        {
+          label: "Media Pack",
+          detail: media ? `${media.name} is ${media.status}.` : "Media Pack was not returned by the typed source route.",
+          use: "Incomplete source work remains visible; it should become an action, not a false ready state.",
+          owner: "Workbench",
+        },
+      ],
+    },
+  };
+}
+
+async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Promise<CampaignSource> {
+  const runRes = await fetch(`/api/factory/runs/${encodeURIComponent(campaignId)}`, {
+    headers: { accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (runRes.status === 404) throw new Error("No public campaign run was found for that campaign ID.");
+  if (!runRes.ok) throw new Error(`The public campaign run could not be loaded (HTTP ${runRes.status}).`);
+  const run = (await runRes.json()) as RunReadModel;
+  const folded = foldEvents(campaignId, Array.isArray(run.events) ? run.events : []);
+  if (run.status !== "completed" && run.status !== "partial") {
+    const err = new Error(`This campaign is ${statusPhrase(run.status).toLowerCase()}, so compiled operations source material is not available yet.`);
+    (err as Error & { runStatus?: RunReadModel["status"] }).runStatus = run.status;
+    throw err;
+  }
+
+  const docsRes = await fetch(`/api/factory/runs/${encodeURIComponent(campaignId)}/documents`, {
+    headers: { accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+  if (!docsRes.ok) throw new Error(`The compiled campaign documents could not be loaded (HTTP ${docsRes.status}).`);
+  const body = (await docsRes.json()) as { documents?: CompiledDocument[]; evidence?: EvidenceAndNextChecks };
+  if (!Array.isArray(body.documents) || !body.evidence?.totals || !Array.isArray(body.evidence.nextChecks)) {
+    throw new Error("The compiled campaign response did not match the typed public document contract.");
+  }
+  const brief = body.documents.find((doc) => doc.key === "campaign_brief");
+  const title = folded.campaignName || firstNonEmptyLine(brief?.plainText) || folded.problem || "Untitled campaign";
+  const place = folded.place || extractPlaceFromBrief(brief?.plainText);
+  const readyCount = body.documents.filter((doc) => doc.status === "ready").length;
+  const incompleteDocuments = body.documents.filter((doc) => doc.status !== "ready");
+  const appealGate = body.evidence.nextChecks.find((check) => /appeal|inspectorate|decision status/i.test(`${check.description} ${check.reason}`));
+
+  return {
+    campaignId,
+    title,
+    problem: folded.problem,
+    place,
+    runStatus: run.status,
+    stateVersion: run.stateVersion,
+    lastSequence: run.lastSequence,
+    loadedAt: new Date().toISOString(),
+    documents: body.documents,
+    evidence: body.evidence,
+    readyCount,
+    incompleteDocuments,
+    nextGate: appealGate?.description,
+    sourceHref: `/factory/c/${campaignId}`,
+  };
 }
 
 function record(label: string): Activity {
@@ -486,22 +727,120 @@ function SmallLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">{children}</p>;
 }
 
-export function OperationsWorkspace() {
+function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fixture" } | { status: "ready" }> }) {
+  const campaignId = state.campaignId;
+  const sourceHref = UUID_RE.test(campaignId) ? `/factory/c/${campaignId}` : "/factory";
+  const title =
+    state.status === "loading"
+      ? "Loading campaign source"
+      : state.status === "invalid"
+        ? "Campaign ID not recognised"
+        : state.title;
+  const detail =
+    state.status === "loading"
+      ? "Reading the public run header and compiled campaign documents. The operations workspace will not fall back to fixture content if this load fails."
+      : state.status === "invalid"
+        ? "Operations accepts a Campaign Factory UUID in the campaignId query parameter. No fixture campaign has been substituted."
+        : state.message;
+
+  return (
+    <div className="min-h-screen bg-ops-paper text-foreground">
+      <header className="border-b border-ops-line bg-ops-paper/96">
+        <div className="mx-auto flex max-w-[1100px] flex-wrap items-center justify-between gap-3 px-4 py-4 lg:px-6">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <Link href="/" className="rounded-full text-sm font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              Campaign Factory
+            </Link>
+            <span className="text-muted-foreground" aria-hidden="true">/</span>
+            <span className="rounded-full bg-ops-ink px-3 py-1 text-sm font-medium text-white">Campaign Operations</span>
+            <span className="rounded-full border border-ops-line bg-background/70 px-3 py-1 text-xs text-muted-foreground">Read-only source load</span>
+          </div>
+          <Link href={sourceHref} className="rounded-full border border-ops-line bg-background/70 px-3 py-1.5 text-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+            {UUID_RE.test(campaignId) ? "Back to source brief" : "Back to Factory"}
+          </Link>
+        </div>
+      </header>
+      <main className="mx-auto max-w-[1100px] px-4 py-10 lg:px-6">
+        <Panel className="bg-background">
+          <SmallLabel>{state.status === "loading" ? "Campaign source" : "Cannot open operations"}</SmallLabel>
+          <h1 className="mt-2 max-w-3xl text-4xl font-medium tracking-tight">{title}</h1>
+          <p className="mt-4 max-w-3xl text-muted-foreground">{detail}</p>
+          {state.status === "loading" ? (
+            <div className="mt-6 rounded-[var(--r-2xl)] border border-ops-line bg-ops-blue/60 p-4 text-sm text-ops-ink" role="status">
+              Loading public campaign data…
+            </div>
+          ) : (
+            <div className="mt-6 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-secondary p-4 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">No fixture fallback used</p>
+              <p className="mt-1">Fix the campaign ID or return to the source brief. External sending, imports, scheduling, and source write-back remain disconnected.</p>
+            </div>
+          )}
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/operations" className="rounded-full border border-ops-line bg-background px-4 py-2 text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              Open labelled fixture demo
+            </Link>
+            {UUID_RE.test(campaignId) ? (
+              <Link href={sourceHref} className="rounded-full bg-ops-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                View source brief
+              </Link>
+            ) : null}
+          </div>
+        </Panel>
+      </main>
+    </div>
+  );
+}
+
+export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
   const [state, setState] = useState<DemoState>(initialState);
   const [hydrated, setHydrated] = useState(false);
+  const [sourceState, setSourceState] = useState<SourceState>(() =>
+    campaignId ? { status: UUID_RE.test(campaignId) ? "loading" : "invalid", campaignId } : { status: "fixture" },
+  );
+  const storageKey = useMemo(() => localStorageKeyFor(campaignId), [campaignId]);
 
   useEffect(() => {
     queueMicrotask(() => {
-      setState(loadState());
+      setState(loadState(storageKey));
       setHydrated(true);
     });
-  }, []);
+  }, [storageKey]);
+
+  useEffect(() => {
+    if (!campaignId) {
+      queueMicrotask(() => setSourceState({ status: "fixture" }));
+      return;
+    }
+    if (!UUID_RE.test(campaignId)) {
+      queueMicrotask(() => setSourceState({ status: "invalid", campaignId }));
+      return;
+    }
+    const controller = new AbortController();
+    queueMicrotask(() => setSourceState({ status: "loading", campaignId }));
+    fetchCampaignSource(campaignId, controller.signal)
+      .then((source) => setSourceState({ status: "ready", source }))
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        const message = error instanceof Error ? error.message : "The public campaign source could not be loaded.";
+        const runStatus = (error as { runStatus?: RunReadModel["status"] } | null)?.runStatus;
+        if (runStatus && runStatus !== "completed" && runStatus !== "partial") {
+          setSourceState({ status: "unavailable", campaignId, title: "Campaign not usable yet", message, runStatus });
+          return;
+        }
+        setSourceState({ status: "error", campaignId, title: "Campaign source unavailable", message });
+      });
+    return () => controller.abort();
+  }, [campaignId]);
 
   useEffect(() => {
     if (!hydrated) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
-  }, [hydrated, state]);
+    localStorage.setItem(storageKey, JSON.stringify(state));
+    if (!campaignId) LEGACY_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  }, [campaignId, hydrated, state, storageKey]);
+
+  const source = sourceState.status === "ready" ? sourceState.source : null;
+  const sourceLoaded = Boolean(source);
+  const sourceContext = useMemo(() => (source ? buildSourceContext(source) : campaignContext), [source]);
 
   const selected = useMemo(
     () => segments.find((segment) => segment.id === state.selectedSegment) ?? segments[0],
@@ -538,22 +877,24 @@ export function OperationsWorkspace() {
       label: "Brief",
       view: "brief",
       status: "complete",
-      statusLabel: "Fixture brief loaded",
-      detail: "Outcome, place, and provenance are visible before any communication work starts.",
+      statusLabel: source ? `${statusPhrase(source.runStatus)} source loaded` : "Fixture brief loaded",
+      detail: source
+        ? `${source.readyCount}/${source.documents.length} public campaign documents ready; source stays read-only.`
+        : "Outcome, place, and provenance are visible before any communication work starts.",
     },
     {
       label: "Evidence",
       view: "evidence",
       status: state.status === "review" || state.status === "approved" || state.status === "queued" ? "complete" : "current",
-      statusLabel: state.status === "draft" ? "Checks in view" : "Checks understood",
-      detail: "Council timing, legal wording, and contact consent stay attached to review.",
+      statusLabel: source ? `${source.evidence.totals.unresolvedLoadBearing} unresolved key facts` : state.status === "draft" ? "Checks in view" : "Checks understood",
+      detail: source?.nextGate ?? "Council timing, legal wording, and contact consent stay attached to review.",
     },
     {
       label: "Audience",
       view: "audiences",
       status: selected.ready > 0 ? "complete" : "blocked",
       statusLabel: `${selected.name}: ${selected.ready}/${selected.contacts} ready fixtures`,
-      detail: "The selected segment follows Drafts, Reviews, and the local queue.",
+      detail: source ? "Audience planning remains local/demo-only until real contact import exists." : "The selected segment follows Drafts, Reviews, and the local queue.",
     },
     {
       label: "Draft",
@@ -1116,14 +1457,29 @@ export function OperationsWorkspace() {
       <Panel className="bg-ops-paper">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div>
-          <SmallLabel>Today</SmallLabel>
+          <SmallLabel>{source ? "Real campaign source" : "Today"}</SmallLabel>
           <h1 className="mt-2 max-w-3xl text-4xl font-medium tracking-tight sm:text-5xl">
-            Make the St John the Baptist school street <span className="font-serif font-normal italic">permanent</span> before the order lapses.
+            {source ? (
+              <>
+                {source.title} <span className="font-serif font-normal italic">into operations</span>.
+              </>
+            ) : (
+              <>
+                Make the St John the Baptist school street <span className="font-serif font-normal italic">permanent</span> before the order lapses.
+              </>
+            )}
           </h1>
           <p className="mt-4 max-w-3xl text-muted-foreground">
-            The workbench keeps the campaign brief, audience choice, draft copy, review gate, and local queue in one place. Fixture data is labelled; real provider and import steps remain off.
+            {source
+              ? `Loaded from the public Campaign Factory read model for ${source.place || "this campaign"}. The source is read-only; local operations can plan work without sending, importing, scheduling, or writing back.`
+              : "The workbench keeps the campaign brief, audience choice, draft copy, review gate, and local queue in one place. Fixture data is labelled; real provider and import steps remain off."}
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
+            {source ? (
+              <Link href={source.sourceHref} className="rounded-full border border-ops-line bg-background px-4 py-2 text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                Return to source brief
+              </Link>
+            ) : null}
             {goButton("audiences", `Audience: ${selected.name}`)}
             {goButton("drafts", `Draft: ${status.label}`)}
             {goButton("reviews", state.status === "review" ? "Approve now" : "Open approval gate")}
@@ -1132,14 +1488,50 @@ export function OperationsWorkspace() {
           </div>
           <div className="rounded-[var(--r-2xl)] border border-ops-line bg-background/80 p-4">
             <SmallLabel>Next human decision</SmallLabel>
-            <h2 className="mt-2 text-2xl font-medium">Approve only after the claim checks are understood.</h2>
+            <h2 className="mt-2 text-2xl font-medium">{source ? "Confirm the appeal status before the campaign changes phase." : "Approve only after the claim checks are understood."}</h2>
             <p className="mt-3 text-sm text-muted-foreground">
-              Council timing, legal-order wording, and contact consent are the key checks before any real provider connection is considered.
+              {source?.nextGate ?? "Council timing, legal-order wording, and contact consent are the key checks before any real provider connection is considered."}
             </p>
             <div className="mt-5 flex flex-wrap gap-3">{goButton("reviews", "Open reviews")}{goButton("evidence", "See checks")}</div>
           </div>
         </div>
       </Panel>
+      {source ? (
+        <Panel className="bg-ops-blue/65" >
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div>
+              <SmallLabel>Source identity & provenance</SmallLabel>
+              <h2 className="mt-2 text-2xl font-medium">{statusPhrase(source.runStatus)} · loaded from public Campaign Factory data</h2>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Campaign ID <span className="font-mono text-xs text-foreground">{source.campaignId}</span> · state v{source.stateVersion} · event #{source.lastSequence} · loaded {formatQueuedTime(source.loadedAt)}.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link href={source.sourceHref} className="rounded-full bg-ops-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                  View original brief
+                </Link>
+                {goButton("brief", "Inspect source mapping")}
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[var(--r-xl)] border border-ops-line bg-background/70 p-3">
+                <p className="text-2xl font-medium">{source.readyCount}/{source.documents.length}</p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Documents ready</p>
+              </div>
+              <div className="rounded-[var(--r-xl)] border border-ops-line bg-background/70 p-3">
+                <p className="text-2xl font-medium">{source.evidence.totals.unresolvedLoadBearing}</p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Unresolved key facts</p>
+              </div>
+              <div className="rounded-[var(--r-xl)] border border-ops-line bg-background/70 p-3">
+                <p className="text-2xl font-medium">{source.incompleteDocuments.length}</p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Incomplete packs</p>
+              </div>
+              <p className="text-sm text-muted-foreground sm:col-span-3">
+                {source.incompleteDocuments.map((doc) => `${doc.name}: ${doc.status}`).join(" · ") || "All compiled documents are ready."}
+              </p>
+            </div>
+          </div>
+        </Panel>
+      ) : null}
       {renderRunway()}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
         <Panel className="bg-ops-blue/70">
@@ -1174,48 +1566,60 @@ export function OperationsWorkspace() {
         <SmallLabel>Influence map</SmallLabel>
         <h2 className="mt-2 text-3xl font-medium tracking-tight">Power map</h2>
         <p className="mt-3 max-w-3xl text-muted-foreground">
-          A spatial influence board for allies, persuadables, blockers, and the decision target. It is fixture-grounded and uses text labels as well as colour.
+          {sourceLoaded
+            ? "The source-backed stakeholder document is loaded read-only; this first slice keeps contact inference and CRM import explicitly disconnected."
+            : "A spatial influence board for allies, persuadables, blockers, and the decision target. It is fixture-grounded and uses text labels as well as colour."}
         </p>
-        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.65fr)_minmax(0,1fr)] lg:items-stretch">
-          <div className="space-y-4">
-            <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-mint p-4">
-              <SmallLabel>Allies · ready to validate</SmallLabel>
-              <h3 className="mt-2 text-xl font-medium">School-gate families</h3>
-              <p className="mt-2 text-sm text-ops-ink/72">Primary supporter base; selected audience can move directly into the supporter email after review.</p>
+        {sourceLoaded ? (
+          <div className="mt-6 rounded-[var(--r-2xl)] border border-ops-line bg-background p-5">
+            <SmallLabel>Read-only source document</SmallLabel>
+            <h3 className="mt-2 text-2xl font-medium">Stakeholder map loaded from the public campaign bundle</h3>
+            <p className="mt-3 text-sm text-muted-foreground">
+              The next slice can turn this source into local actions and communications. This slice deliberately avoids inventing a contact graph, imported list, or delivery target.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,0.65fr)_minmax(0,1fr)] lg:items-stretch">
+            <div className="space-y-4">
+              <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-mint p-4">
+                <SmallLabel>Allies · ready to validate</SmallLabel>
+                <h3 className="mt-2 text-xl font-medium">School-gate families</h3>
+                <p className="mt-2 text-sm text-ops-ink/72">Primary supporter base; selected audience can move directly into the supporter email after review.</p>
+              </div>
+              <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-mint/[0.70] p-4">
+                <SmallLabel>Allies · process check</SmallLabel>
+                <h3 className="mt-2 text-xl font-medium">Clean-air supporters</h3>
+                <p className="mt-2 text-sm text-ops-ink/72">Useful for spotting escalation risks before a public-facing press prompt exists.</p>
+              </div>
             </div>
-            <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-mint/[0.70] p-4">
-              <SmallLabel>Allies · process check</SmallLabel>
-              <h3 className="mt-2 text-xl font-medium">Clean-air supporters</h3>
-              <p className="mt-2 text-sm text-ops-ink/72">Useful for spotting escalation risks before a public-facing press prompt exists.</p>
+            <div className="flex flex-col justify-between rounded-[var(--r-2xl)] border-2 border-ops-ink bg-background p-5 text-center shadow-sm">
+              <SmallLabel>Decision target</SmallLabel>
+              <h3 className="mt-3 text-2xl font-medium">Leicester transport decision route</h3>
+              <p className="mt-3 text-sm text-muted-foreground">Exact committee/officer path must be verified before formal decision-maker copy is unlocked.</p>
+              <div className="mt-5 rounded-full bg-ops-coral px-3 py-2 text-sm font-medium text-ops-ink">Current blocker: route verification</div>
+            </div>
+            <div className="space-y-4">
+              <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-yellow p-4">
+                <SmallLabel>Persuadables · broaden pressure</SmallLabel>
+                <h3 className="mt-2 text-xl font-medium">Nearby ward parents</h3>
+                <p className="mt-2 text-sm text-ops-ink/72">Neighbourhood framing makes the safety issue wider than one school gate.</p>
+              </div>
+              <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-coral p-4">
+                <SmallLabel>Potential blockers · answer carefully</SmallLabel>
+                <h3 className="mt-2 text-xl font-medium">Cost, enforcement, traffic objections</h3>
+                <p className="mt-2 text-sm text-ops-ink/72">Keep public claims conservative until evidence checks and local consent are clear.</p>
+              </div>
             </div>
           </div>
-          <div className="flex flex-col justify-between rounded-[var(--r-2xl)] border-2 border-ops-ink bg-background p-5 text-center shadow-sm">
-            <SmallLabel>Decision target</SmallLabel>
-            <h3 className="mt-3 text-2xl font-medium">Leicester transport decision route</h3>
-            <p className="mt-3 text-sm text-muted-foreground">Exact committee/officer path must be verified before formal decision-maker copy is unlocked.</p>
-            <div className="mt-5 rounded-full bg-ops-coral px-3 py-2 text-sm font-medium text-ops-ink">Current blocker: route verification</div>
-          </div>
-          <div className="space-y-4">
-            <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-yellow p-4">
-              <SmallLabel>Persuadables · broaden pressure</SmallLabel>
-              <h3 className="mt-2 text-xl font-medium">Nearby ward parents</h3>
-              <p className="mt-2 text-sm text-ops-ink/72">Neighbourhood framing makes the safety issue wider than one school gate.</p>
-            </div>
-            <div className="rounded-[var(--r-2xl)] border border-ops-line bg-ops-coral p-4">
-              <SmallLabel>Potential blockers · answer carefully</SmallLabel>
-              <h3 className="mt-2 text-xl font-medium">Cost, enforcement, traffic objections</h3>
-              <p className="mt-2 text-sm text-ops-ink/72">Keep public claims conservative until evidence checks and local consent are clear.</p>
-            </div>
-          </div>
-        </div>
+        )}
         <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-border bg-background">
           <div className="hidden gap-3 border-b border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground md:grid md:grid-cols-[0.75fr_minmax(0,1.15fr)_minmax(0,1fr)_0.55fr]">
-            <span>Group</span><span>What the fixture says</span><span>Operational use</span><span>Owner</span>
+            <span>Group</span><span>{sourceLoaded ? "What the source says" : "What the fixture says"}</span><span>Operational use</span><span>Owner</span>
           </div>
-          {campaignContext.power.rows.map((row) => (
+          {sourceContext.power.rows.map((row) => (
             <div key={row.label} className="grid gap-2 border-b border-border px-4 py-4 text-sm last:border-0 md:grid-cols-[0.75fr_minmax(0,1.15fr)_minmax(0,1fr)_0.55fr]">
               <div><span className="font-medium md:hidden">Group: </span><span className="font-medium">{row.label}</span></div>
-              <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">What the fixture says: </span>{row.detail}</div>
+              <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">{sourceLoaded ? "What the source says: " : "What the fixture says: "}</span>{row.detail}</div>
               <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">Operational use: </span>{row.use}</div>
               <div><span className="font-medium md:hidden">Owner: </span>{row.owner}</div>
             </div>
@@ -1244,14 +1648,14 @@ export function OperationsWorkspace() {
         <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-border">
           <div className="hidden grid-cols-[0.75fr_minmax(0,1.15fr)_minmax(0,1fr)_0.55fr] gap-3 border-b border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground md:grid">
             <span>Brief item</span>
-            <span>What the fixture says</span>
+            <span>{sourceLoaded ? "What the source says" : "What the fixture says"}</span>
             <span>Operational use</span>
             <span>Owner</span>
           </div>
           {section.rows.map((row) => (
             <div key={row.label} className="grid gap-2 border-b border-border px-4 py-4 text-sm last:border-0 md:grid-cols-[0.75fr_minmax(0,1.15fr)_minmax(0,1fr)_0.55fr]">
               <div><span className="font-medium md:hidden">Brief item: </span><span className="font-medium">{row.label}</span></div>
-              <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">What the fixture says: </span>{row.detail}</div>
+              <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">{sourceLoaded ? "What the source says: " : "What the fixture says: "}</span>{row.detail}</div>
               <div className="text-muted-foreground"><span className="font-medium text-foreground md:hidden">Operational use: </span>{row.use}</div>
               <div><span className="font-medium md:hidden">Owner: </span>{row.owner}</div>
             </div>
@@ -1424,11 +1828,11 @@ export function OperationsWorkspace() {
 
   const viewContent: Record<ViewId, React.ReactNode> = {
     overview: renderOverview(),
-    brief: renderCampaignContextView(campaignContext.brief),
-    objectives: renderCampaignContextView(campaignContext.objectives),
+    brief: renderCampaignContextView(sourceContext.brief),
+    objectives: renderCampaignContextView(sourceContext.objectives),
     power: renderPowerMapView(),
-    strategy: renderCampaignContextView(campaignContext.strategy),
-    evidence: renderCampaignContextView(campaignContext.evidence),
+    strategy: renderCampaignContextView(sourceContext.strategy),
+    evidence: renderCampaignContextView(sourceContext.evidence),
     audiences: renderAudienceView(),
     contacts: renderContacts(),
     drafts: renderDraftsView(),
@@ -1436,6 +1840,10 @@ export function OperationsWorkspace() {
     outbox: renderOutboxView(),
     responses: renderResponses(),
   };
+
+  if (sourceState.status !== "fixture" && sourceState.status !== "ready") {
+    return <SourceStateShell state={sourceState} />;
+  }
 
   return (
     <div className="min-h-screen bg-ops-paper text-foreground">
@@ -1447,16 +1855,21 @@ export function OperationsWorkspace() {
             </Link>
             <span className="text-muted-foreground" aria-hidden="true">/</span>
             <span className="rounded-full bg-ops-ink px-3 py-1 text-sm font-medium text-white">Campaign Operations</span>
-            <span className="rounded-full bg-ops-yellow px-3 py-1 text-xs font-semibold uppercase tracking-[0.09em] text-ops-ink">Demo workspace</span>
-            <span className="rounded-full border border-ops-line bg-background/70 px-3 py-1 text-xs text-muted-foreground">Local fixture state</span>
+            <span className="rounded-full bg-ops-yellow px-3 py-1 text-xs font-semibold uppercase tracking-[0.09em] text-ops-ink">{source ? "Real campaign source" : "Demo workspace"}</span>
+            <span className="rounded-full border border-ops-line bg-background/70 px-3 py-1 text-xs text-muted-foreground">{source ? "Read-only public data" : "Local fixture state"}</span>
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="text-muted-foreground">St John the Baptist school street · Leicester</span>
+            <span className="text-muted-foreground">{source ? `${source.title}${source.place ? ` · ${source.place}` : ""}` : "St John the Baptist school street · Leicester"}</span>
+            {source ? (
+              <span className="rounded-full bg-ops-blue px-3 py-1 text-xs text-ops-ink">
+                {statusPhrase(source.runStatus)} · {source.readyCount}/{source.documents.length} docs ready
+              </span>
+            ) : null}
             <span className="rounded-full bg-ops-mint px-3 py-1 text-xs text-ops-ink">
               {hydrated ? "Saved in this browser" : "Loading local state"}
             </span>
-            <Link href="/factory" className="rounded-full border border-ops-line bg-background/70 px-3 py-1.5 text-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-              Back to Factory
+            <Link href={source?.sourceHref ?? "/factory"} className="rounded-full border border-ops-line bg-background/70 px-3 py-1.5 text-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              {source ? "Back to source brief" : "Back to Factory"}
             </Link>
           </div>
         </div>
@@ -1489,7 +1902,7 @@ export function OperationsWorkspace() {
       <footer className="border-t border-ops-line bg-ops-paper">
         <div className="mx-auto flex max-w-[1500px] flex-col gap-2 px-4 py-3 text-sm text-muted-foreground lg:flex-row lg:items-center lg:justify-between lg:px-6">
           <p>
-            Local demo storage · Email provider not connected · Human approval required before local queueing.
+            {source ? `Source ${source.campaignId} read-only · Local demo storage · Provider/import/schedule write-back not connected.` : "Local demo storage · Email provider not connected · Human approval required before local queueing."}
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <Link href="/how" className="hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-full">How it works</Link>

@@ -19,6 +19,7 @@
 // preview supplies `run`. The page never auto-jumps between sections.
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   JOURNEY_STEPS,
   type JourneyStepKey,
@@ -293,6 +294,19 @@ export function AssemblyView({
                 · {acceptedCount} of {ACCEPTABLE_STEPS.length} sections built
               </span>
             ) : null}
+          </p>
+        ) : null}
+        {terminal && !isFixture ? (
+          <p style={{ marginTop: "1rem", display: "flex", flexWrap: "wrap", gap: ".75rem", alignItems: "center" }}>
+            <Link
+              href={`/operations?campaignId=${encodeURIComponent(run.campaignId)}`}
+              style={{ border: "1px solid #111827", borderRadius: 999, background: "#111827", color: "white", padding: ".72rem 1rem", fontWeight: 700, textDecoration: "none" }}
+            >
+              Open in Operations
+            </Link>
+            <span style={{ color: "var(--muted)", fontSize: ".95rem" }}>
+              Opens a read-only source-backed workspace; provider sending and source write-back stay off.
+            </span>
           </p>
         ) : null}
         {isFixture ? (

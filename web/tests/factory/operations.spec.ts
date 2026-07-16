@@ -244,3 +244,79 @@ test("operations workbench: navigation focus and reduced motion remain accessibl
   expect(reducedMotion.transitionDuration).toBe("0s");
   expect(reducedMotion.transform).toBe("none");
 });
+
+test("operations workbench: campaignId route loads a read-only public campaign source", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const documents = [
+    ["campaign_brief", "Campaign Brief", "ready", "Keep KFC Out of Ormskirk\n\nPlace: Ormskirk, Lancashire\n\nTHE PROBLEM\nThe source brief says the campaign must defend the council refusal against appeal risk."],
+    ["objective_theory_of_change", "Objective and Theory of Change", "ready", "OBJECTIVE AND THEORY OF CHANGE\n\nDismiss any appeal and uphold West Lancashire Borough Council's refusal."],
+    ["power_stakeholder_map", "Power and Stakeholder Map", "ready", "POWER AND STAKEHOLDER MAP\n\nPlanning Inspectorate, council officers, ward councillors, residents and applicant."],
+    ["campaign_strategy", "Campaign Strategy", "ready", "CAMPAIGN STRATEGY\n\nVerify the official appeal position before escalating."],
+    ["tactics_timeline", "Tactics and Timeline", "ready", "TACTICS AND TIMELINE\n\nPhase 0: retrieve the official appeal record."],
+    ["organising_plan", "Organising Plan", "ready", "ORGANISING PLAN\n\nCoordinate residents without implying a connected CRM."],
+    ["lobbying_pack", "Lobbying Pack", "ready", "LOBBYING PACK\n\nMeeting request email and briefing drafts are available for later local working copies."],
+    ["media_pack", "Media Pack", "assembling", "MEDIA PACK\n\nNothing in this pack yet."],
+    ["digital_pack", "Digital Campaign Pack", "ready", "DIGITAL CAMPAIGN PACK\n\nSupporter email and social post source drafts are available."],
+  ].map(([key, name, status, plainText], index) => ({
+    key,
+    num: index + 1,
+    name,
+    status,
+    html: `<p>${plainText}</p>`,
+    plainText,
+    isPack: index >= 6,
+    sectionKeys: [],
+    resourceCount: key === "media_pack" ? 0 : index >= 6 ? 2 : 0,
+    flags: [],
+  }));
+
+  await page.route(`**/api/factory/runs/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ campaignId, status: "partial", stateVersion: 44, lastSequence: 1909, events: [] }),
+    });
+  });
+  await page.route(`**/api/factory/runs/${campaignId}/documents`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        documents,
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [
+            {
+              id: "appeal-check",
+              description: "Check the Planning Inspectorate appeals database for any live or decided appeal on this site",
+              reason: "Determines whether the campaign is defending a refusal on appeal, which changes tactics and timeline entirely",
+              claimIds: ["C3"],
+              affectedSections: ["decision_route", "strategy"],
+            },
+          ],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 77, loadBearing: 66, verifiedLoadBearing: 32, unresolvedLoadBearing: 34 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: /Keep KFC Out of Ormskirk into operations/i })).toBeVisible();
+  await expect(page.getByText("Real campaign source", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Read-only public data", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Partial but usable · 8\/9 docs ready/)).toBeVisible();
+  await expect(page.getByText(/34 unresolved key facts/i).first()).toBeVisible();
+  await expect(page.getByText(/Check the Planning Inspectorate appeals database/i).first()).toBeVisible();
+  await expect(page.getByText(/Media Pack: assembling/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: /Back to source brief|View original brief/ }).first()).toHaveAttribute(
+    "href",
+    `/factory/c/${campaignId}`,
+  );
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Campaign brief/ }).first().click();
+  await expect(page.getByText("What the source says", { exact: true })).toBeVisible();
+  await expect(page.getByText(/source brief says the campaign must defend the council refusal/i)).toBeVisible();
+});
