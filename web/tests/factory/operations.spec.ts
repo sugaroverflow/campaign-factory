@@ -883,6 +883,12 @@ test("operations portfolio ignores stale local state under the wrong campaign ke
   const barnetRow = portfolio.locator("article", { hasText: "Stop the leisure park redevelopment" });
   await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
   await expect(barnetRow).not.toContainText("Stale Ormskirk local action");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Stale Ormskirk subject must not count for Barnet");
+  await expect(page.locator("main")).not.toContainText("Stale Ormskirk local action");
 });
 
 test("operations workbench: failed or not-yet-usable real source loads do not fall back to the fixture", async ({ page }) => {
