@@ -14,6 +14,12 @@ const STORAGE_KEY = "cf_operations_demo_v3";
 const LEGACY_STORAGE_KEYS = ["cf_operations_demo_v2", "cf_operations_demo_v1"];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const PORTFOLIO_CAMPAIGNS: PortfolioCampaign[] = [
+  { id: "69f257b6-9913-4395-94f7-5c25b4b5fe95", sourceHref: "/factory/c/69f257b6-9913-4395-94f7-5c25b4b5fe95", conferenceHero: true },
+  { id: "57678ae0-29fd-4b4b-8a53-5c711cdb21cf", sourceHref: "/factory/c/57678ae0-29fd-4b4b-8a53-5c711cdb21cf" },
+  { id: "6b54225d-afa3-41d1-b053-89741094f153", sourceHref: "/factory/c/6b54225d-afa3-41d1-b053-89741094f153" },
+];
+
 type SegmentId = "school_gates" | "ward_parents" | "local_allies";
 type DraftId = "supporter_email" | "decision_maker_letter" | "press_pitch";
 type DraftStatus = "draft" | "review" | "approved" | "queued";
@@ -64,6 +70,19 @@ type SourceWorkingCopy = {
   provenance: string;
 };
 
+type WorkingDraft = {
+  id: string;
+  title: string;
+  channel: string;
+  subject: string;
+  body: string;
+  status: DraftStatus;
+  queuedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  sourceWorkingCopy: SourceWorkingCopy;
+};
+
 type DemoState = {
   selectedSegment: SegmentId;
   subject: string;
@@ -77,6 +96,8 @@ type DemoState = {
   scheduleIntent: "after_approval" | "tomorrow_morning" | "school_run";
   queuedAt: string | null;
   localActions: LocalAction[];
+  workingDrafts: WorkingDraft[];
+  activeWorkingDraftId: string | null;
   sourceWorkingCopy: SourceWorkingCopy | null;
   activity: Activity[];
 };
@@ -142,6 +163,24 @@ type SourceState =
   | { status: "error"; campaignId: string; title: string; message: string }
   | { status: "unavailable"; campaignId: string; title: string; message: string; runStatus?: RunReadModel["status"] }
   | { status: "ready"; source: CampaignSource };
+
+type PortfolioCampaign = {
+  id: string;
+  sourceHref: string;
+  conferenceHero?: boolean;
+};
+
+type PortfolioLocalCounts = {
+  actions: number;
+  drafts: number;
+  reviews: number;
+  queued: number;
+};
+
+type PortfolioItem =
+  | { campaign: PortfolioCampaign; status: "loading"; local: PortfolioLocalCounts }
+  | { campaign: PortfolioCampaign; status: "ready"; source: CampaignSource; local: PortfolioLocalCounts }
+  | { campaign: PortfolioCampaign; status: "error"; title: string; message: string; local: PortfolioLocalCounts };
 
 type ContactFixture = {
   id: string;
@@ -457,6 +496,8 @@ const initialState: DemoState = {
   scheduleIntent: "after_approval",
   queuedAt: null,
   localActions: [],
+  workingDrafts: [],
+  activeWorkingDraftId: null,
   sourceWorkingCopy: null,
   activity: [{ id: "seed", label: "Demo workspace loaded with seeded campaign brief and local fixture contacts." }],
 };
@@ -534,7 +575,55 @@ function normaliseSourceWorkingCopy(value: unknown): SourceWorkingCopy | null {
   };
 }
 
+function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>): WorkingDraft[] {
+  const drafts = Array.isArray(value) ? value : [];
+  const normalised = drafts
+    .filter((draft): draft is Partial<WorkingDraft> => Boolean(draft) && typeof draft === "object")
+    .map((draft) => {
+      const sourceWorkingCopy = normaliseSourceWorkingCopy(draft.sourceWorkingCopy);
+      if (!sourceWorkingCopy || !draft.id || !draft.title) return null;
+      const createdAt = typeof draft.createdAt === "string" && draft.createdAt ? draft.createdAt : sourceWorkingCopy.createdAt;
+      return {
+        id: draft.id,
+        title: draft.title,
+        channel: draft.channel || sourceWorkingCopy.channel || "Source draft",
+        subject: typeof draft.subject === "string" && draft.subject ? draft.subject : draft.title,
+        body: typeof draft.body === "string" && draft.body ? draft.body : "",
+        status: draft.status === "draft" || draft.status === "review" || draft.status === "approved" || draft.status === "queued" ? draft.status : "draft",
+        queuedAt: typeof draft.queuedAt === "string" ? draft.queuedAt : null,
+        createdAt,
+        updatedAt: typeof draft.updatedAt === "string" && draft.updatedAt ? draft.updatedAt : createdAt,
+        sourceWorkingCopy,
+      } satisfies WorkingDraft;
+    })
+    .filter((draft): draft is WorkingDraft => Boolean(draft));
+
+  const legacyCopy = normaliseSourceWorkingCopy(legacyState.sourceWorkingCopy);
+  if (legacyCopy && !normalised.some((draft) => draft.id === legacyCopy.id)) {
+    normalised.unshift({
+      id: legacyCopy.id,
+      title: legacyCopy.title,
+      channel: legacyCopy.channel,
+      subject: typeof legacyState.subject === "string" && legacyState.subject ? legacyState.subject : legacyCopy.title,
+      body: typeof legacyState.body === "string" && legacyState.body ? legacyState.body : "",
+      status: legacyState.status === "review" || legacyState.status === "approved" || legacyState.status === "queued" ? legacyState.status : "draft",
+      queuedAt: typeof legacyState.queuedAt === "string" ? legacyState.queuedAt : null,
+      createdAt: legacyCopy.createdAt,
+      updatedAt: legacyCopy.createdAt,
+      sourceWorkingCopy: legacyCopy,
+    });
+  }
+
+  return normalised;
+}
+
 function normaliseState(parsed: Partial<DemoState>): DemoState {
+  const workingDrafts = normaliseWorkingDrafts(parsed.workingDrafts, parsed);
+  const activeWorkingDraftId = workingDrafts.some((draft) => draft.id === parsed.activeWorkingDraftId)
+    ? parsed.activeWorkingDraftId ?? null
+    : parsed.sourceWorkingCopy && workingDrafts[0]
+      ? workingDrafts[0].id
+      : null;
   return {
     ...initialState,
     ...parsed,
@@ -559,6 +648,8 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
       ? (parsed.scheduleIntent as DemoState["scheduleIntent"])
       : initialState.scheduleIntent,
     localActions: normaliseLocalActions(parsed.localActions),
+    workingDrafts,
+    activeWorkingDraftId,
     sourceWorkingCopy: normaliseSourceWorkingCopy(parsed.sourceWorkingCopy),
     activity: parsed.activity?.length ? parsed.activity : initialState.activity,
     mode: parsed.mode === "preview" ? "preview" : "compose",
@@ -576,6 +667,17 @@ function loadState(storageKey = STORAGE_KEY): DemoState {
   } catch {
     return initialState;
   }
+}
+
+function portfolioLocalCounts(campaignId: string): PortfolioLocalCounts {
+  if (typeof window === "undefined") return { actions: 0, drafts: 0, reviews: 0, queued: 0 };
+  const state = loadState(localStorageKeyFor(campaignId));
+  return {
+    actions: state.localActions.length,
+    drafts: state.workingDrafts.length,
+    reviews: (state.status === "review" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "review").length,
+    queued: (state.status === "queued" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "queued").length,
+  };
 }
 
 function localStorageKeyFor(campaignId?: string) {
@@ -860,6 +962,139 @@ function SmallLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">{children}</p>;
 }
 
+function OperationsPortfolio() {
+  const initialItems = () =>
+    PORTFOLIO_CAMPAIGNS.map((campaign) => ({
+      campaign,
+      status: "loading" as const,
+      local: { actions: 0, drafts: 0, reviews: 0, queued: 0 },
+    }));
+  const [items, setItems] = useState<PortfolioItem[]>(initialItems);
+  const [lastLoaded, setLastLoaded] = useState<string | null>(null);
+
+  const refresh = () => {
+    setItems(
+      PORTFOLIO_CAMPAIGNS.map((campaign) => ({
+        campaign,
+        status: "loading",
+        local: portfolioLocalCounts(campaign.id),
+      })),
+    );
+    PORTFOLIO_CAMPAIGNS.forEach((campaign) => {
+      const controller = new AbortController();
+      fetchCampaignSource(campaign.id, controller.signal)
+        .then((source) => {
+          setItems((current) =>
+            current.map((item) =>
+              item.campaign.id === campaign.id
+                ? { campaign, status: "ready", source, local: portfolioLocalCounts(campaign.id) }
+                : item,
+            ),
+          );
+          setLastLoaded(new Date().toISOString());
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : "This campaign source could not be loaded.";
+          setItems((current) =>
+            current.map((item) =>
+              item.campaign.id === campaign.id
+                ? { campaign, status: "error", title: "Campaign source unavailable", message, local: portfolioLocalCounts(campaign.id) }
+                : item,
+            ),
+          );
+          setLastLoaded(new Date().toISOString());
+        });
+    });
+  };
+
+  useEffect(() => {
+    queueMicrotask(refresh);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-ops-paper text-foreground">
+      <header className="border-b border-ops-line bg-ops-paper/96">
+        <div className="mx-auto flex max-w-[1280px] flex-col gap-3 px-4 py-5 lg:flex-row lg:items-center lg:justify-between lg:px-6">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
+            <Link href="/" className="rounded-full text-sm font-semibold tracking-tight focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              Campaign Factory
+            </Link>
+            <span className="text-muted-foreground" aria-hidden="true">/</span>
+            <span className="rounded-full bg-ops-ink px-3 py-1 text-sm font-medium text-white">Campaign Operations</span>
+            <span className="rounded-full border border-ops-line bg-background/75 px-3 py-1 text-xs text-muted-foreground">Three real public sources</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="text-muted-foreground">{lastLoaded ? `Last refreshed ${formatQueuedTime(lastLoaded)}` : "Loading source status"}</span>
+            <button type="button" onClick={refresh} className="rounded-full border border-ops-line bg-background px-4 py-2 text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              Refresh portfolio
+            </button>
+            <Link href="/operations?demo=fixture" className="rounded-full border border-ops-line bg-background px-4 py-2 text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              Open labelled fixture demo
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-[1280px] px-4 py-8 lg:px-6">
+        <section className="rounded-[var(--r-3xl)] border border-ops-line bg-background p-6 shadow-sm">
+          <SmallLabel>Portfolio triage</SmallLabel>
+          <h1 className="mt-2 max-w-4xl text-4xl font-medium tracking-tight sm:text-5xl">
+            Three real campaigns, one operations portfolio.
+          </h1>
+          <p className="mt-4 max-w-3xl text-muted-foreground">
+            Open Ormskirk for the conference deep dive, or switch to Tower Hamlets and Barnet to prove the workspace loads different public source material without sharing local campaign work.
+          </p>
+        </section>
+
+        <section className="mt-5 space-y-3" aria-label="Campaign operations portfolio">
+          {items.map((item) => {
+            const source = item.status === "ready" ? item.source : null;
+            const localSignals = [
+              item.local.actions ? `${item.local.actions} action${item.local.actions === 1 ? "" : "s"}` : null,
+              item.local.drafts ? `${item.local.drafts} working draft${item.local.drafts === 1 ? "" : "s"}` : null,
+              item.local.reviews ? `${item.local.reviews} review${item.local.reviews === 1 ? "" : "s"}` : null,
+              item.local.queued ? `${item.local.queued} queued locally` : null,
+            ].filter(Boolean);
+            return (
+              <article key={item.campaign.id} className={`rounded-[var(--r-2xl)] border p-4 shadow-sm ${item.campaign.conferenceHero ? "border-ops-ink bg-ops-yellow/50" : "border-ops-line bg-background"}`}>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {item.campaign.conferenceHero ? <span className="rounded-full bg-ops-ink px-2.5 py-1 text-xs font-medium text-white">Conference deep dive</span> : null}
+                      <span className="rounded-full bg-ops-blue px-2.5 py-1 text-xs text-ops-ink">{source ? statusPhrase(source.runStatus) : item.status === "loading" ? "Loading source" : "Source issue"}</span>
+                      <span className="rounded-full border border-ops-line bg-background/80 px-2.5 py-1 text-xs text-muted-foreground">Browser-local state separate</span>
+                    </div>
+                    <h2 className="mt-3 text-2xl font-medium tracking-tight">{item.status === "ready" ? item.source.title : item.status === "loading" ? "Loading campaign…" : item.title}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">{item.status === "ready" ? item.source.place : item.status === "loading" ? "Reading public run and compiled documents." : item.message}</p>
+                    {source ? (
+                      <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
+                        <p className="rounded-[var(--r-xl)] border border-ops-line bg-background/75 p-3"><span className="block font-medium">{source.readyCount}/{source.documents.length} documents ready</span><span className="text-muted-foreground">{source.incompleteDocuments.map((doc) => `${doc.name}: ${doc.status}`).join(" · ") || "All compiled documents ready"}</span></p>
+                        <p className="rounded-[var(--r-xl)] border border-ops-line bg-background/75 p-3"><span className="block font-medium">{source.evidence.totals.unresolvedLoadBearing} unresolved key facts</span><span className="text-muted-foreground">Source-derived evidence boundary</span></p>
+                        <p className="rounded-[var(--r-xl)] border border-ops-line bg-background/75 p-3"><span className="block font-medium">Next gate</span><span className="text-muted-foreground line-clamp-2">{source.nextGate ?? "Review the first unresolved evidence check before stronger claims."}</span></p>
+                      </div>
+                    ) : null}
+                    <p className="mt-3 text-sm text-muted-foreground">
+                      Local signals: {localSignals.length ? localSignals.join(" · ") : "no browser-local operations work yet for this campaign"}.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <Link href={`/operations?campaignId=${item.campaign.id}`} className="rounded-full bg-ops-ink px-4 py-2 text-center text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                      Open workspace
+                    </Link>
+                    <Link href={item.campaign.sourceHref} className="rounded-full border border-ops-line bg-background px-4 py-2 text-center text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                      View source brief
+                    </Link>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      </main>
+    </div>
+  );
+}
+
 function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fixture" } | { status: "ready" }> }) {
   const campaignId = state.campaignId;
   const sourceHref = UUID_RE.test(campaignId) ? `/factory/c/${campaignId}` : "/factory";
@@ -909,7 +1144,7 @@ function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fi
             </div>
           )}
           <div className="mt-6 flex flex-wrap gap-3">
-            <Link href="/operations" className="rounded-full border border-ops-line bg-background px-4 py-2 text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+            <Link href="/operations?demo=fixture" className="rounded-full border border-ops-line bg-background px-4 py-2 text-sm font-medium hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
               Open labelled fixture demo
             </Link>
             {UUID_RE.test(campaignId) ? (
@@ -924,7 +1159,14 @@ function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fi
   );
 }
 
-export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
+export function OperationsWorkspace({ campaignId, fixtureMode = false, initialView }: { campaignId?: string; fixtureMode?: boolean; initialView?: string }) {
+  if (!campaignId && !fixtureMode) {
+    return <OperationsPortfolio />;
+  }
+  return <OperationsCampaignWorkspace campaignId={campaignId} initialView={initialView} />;
+}
+
+function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?: string; initialView?: string }) {
   const [state, setState] = useState<DemoState>(initialState);
   const [hydrated, setHydrated] = useState(false);
   const [sourceState, setSourceState] = useState<SourceState>(() =>
@@ -934,10 +1176,11 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
 
   useEffect(() => {
     queueMicrotask(() => {
-      setState(loadState(storageKey));
+      const loaded = loadState(storageKey);
+      setState(viewIds.includes(initialView as ViewId) ? { ...loaded, activeView: initialView as ViewId } : loaded);
       setHydrated(true);
     });
-  }, [storageKey]);
+  }, [initialView, storageKey]);
 
   useEffect(() => {
     if (!campaignId) {
@@ -981,14 +1224,20 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
     [state.selectedSegment],
   );
 
-  const status = statusCopy[state.status];
   const activeDraft = draftLibrary.find((draft) => draft.id === state.activeDraft) ?? draftLibrary[0];
-  const activeDraftEditable = activeDraft.id === "supporter_email";
-  const activeSourceWorkingCopy = activeDraftEditable ? state.sourceWorkingCopy : null;
-  const canRequestReview = state.subject.trim().length > 8 && state.body.trim().length > 80;
+  const activeWorkingDraft = state.workingDrafts.find((draft) => draft.id === state.activeWorkingDraftId) ?? null;
+  const activeDraftEditable = Boolean(activeWorkingDraft) || activeDraft.id === "supporter_email";
+  const activeSourceWorkingCopy = activeWorkingDraft?.sourceWorkingCopy ?? (activeDraft.id === "supporter_email" ? state.sourceWorkingCopy : null);
+  const communicationStatus = activeWorkingDraft?.status ?? state.status;
+  const communicationSubject = activeWorkingDraft?.subject ?? state.subject;
+  const communicationBody = activeWorkingDraft?.body ?? state.body;
+  const status = statusCopy[communicationStatus];
+  const canRequestReview = communicationSubject.trim().length > 8 && communicationBody.trim().length > 80;
   const reviewBlocked = !canRequestReview;
-  const queuedCount = state.status === "queued" ? "1" : undefined;
-  const reviewBadge = state.status === "review" ? "1" : undefined;
+  const reviewItemCount = (state.status === "review" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "review").length;
+  const queuedItemCount = (state.status === "queued" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "queued").length;
+  const queuedCount = queuedItemCount ? String(queuedItemCount) : undefined;
+  const reviewBadge = reviewItemCount ? String(reviewItemCount) : undefined;
   const readinessMatches = (contact: ContactFixture) => {
     if (state.contactReadinessFilter === "all") return true;
     if (state.contactReadinessFilter === "ready") return contact.readiness === "Ready fixture";
@@ -1024,8 +1273,8 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
     {
       label: "Evidence",
       view: "evidence",
-      status: state.status === "review" || state.status === "approved" || state.status === "queued" ? "complete" : "current",
-      statusLabel: source ? `${source.evidence.totals.unresolvedLoadBearing} unresolved key facts` : state.status === "draft" ? "Checks in view" : "Checks understood",
+      status: communicationStatus === "review" || communicationStatus === "approved" || communicationStatus === "queued" ? "complete" : "current",
+      statusLabel: source ? `${source.evidence.totals.unresolvedLoadBearing} unresolved key facts` : communicationStatus === "draft" ? "Checks in view" : "Checks understood",
       detail: source?.nextGate ?? "Council timing, legal wording, and contact consent stay attached to review.",
     },
     {
@@ -1038,23 +1287,23 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
     {
       label: "Draft",
       view: "drafts",
-      status: !canRequestReview ? "blocked" : state.status === "draft" ? "current" : "complete",
+      status: !canRequestReview ? "blocked" : communicationStatus === "draft" ? "current" : "complete",
       statusLabel: !canRequestReview ? "Needs copy" : status.label,
       detail: activeDraftEditable ? "Supporter email is editable and saved in this browser." : "Staged fixture; not available for approval.",
     },
     {
       label: "Human approval",
       view: "reviews",
-      status: state.status === "approved" || state.status === "queued" ? "complete" : state.status === "review" ? "current" : "blocked",
-      statusLabel: state.status === "approved" || state.status === "queued" ? "Approved by human" : state.status === "review" ? "Waiting for approval" : "Required before queue",
+      status: communicationStatus === "approved" || communicationStatus === "queued" ? "complete" : communicationStatus === "review" ? "current" : "blocked",
+      statusLabel: communicationStatus === "approved" || communicationStatus === "queued" ? "Approved by human" : communicationStatus === "review" ? "Waiting for approval" : "Required before queue",
       detail: "A person must explicitly approve before anything enters the local demo queue.",
     },
     {
       label: "Local outbox",
       view: "outbox",
-      status: state.status === "queued" ? "complete" : state.status === "approved" ? "current" : "soon",
-      statusLabel: state.status === "queued" ? "Queued for demo" : state.status === "approved" ? "Ready to queue locally" : "Provider off",
-      detail: state.status === "queued" ? "Stored locally in this browser; no provider used." : "Local queue only; production scheduling and provider connection remain off.",
+      status: communicationStatus === "queued" ? "complete" : communicationStatus === "approved" ? "current" : "soon",
+      statusLabel: communicationStatus === "queued" ? "Queued for demo" : communicationStatus === "approved" ? "Ready to queue locally" : "Provider off",
+      detail: communicationStatus === "queued" ? "Stored locally in this browser; no provider used." : "Local queue only; production scheduling and provider connection remain off.",
     },
   ];
 
@@ -1097,6 +1346,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
     setState((current) => ({
       ...current,
       activeDraft,
+      activeWorkingDraftId: null,
       activity:
         current.activeDraft === activeDraft
           ? current.activity
@@ -1104,18 +1354,26 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
     }));
   };
 
+  const setActiveWorkingDraft = (draftId: string) => {
+    setState((current) => {
+      const draft = current.workingDrafts.find((item) => item.id === draftId);
+      return {
+        ...current,
+        activeWorkingDraftId: draft ? draft.id : current.activeWorkingDraftId,
+        activeDraft: "supporter_email",
+        activity:
+          draft && current.activeWorkingDraftId !== draft.id
+            ? [record(`Opened local working copy: ${draft.title}.`), ...current.activity].slice(0, 7)
+            : current.activity,
+      };
+    });
+  };
+
   const createSourceWorkingCopy = (resource: SourceResource) => {
     if (!source) return;
-    setState((current) => ({
-      ...current,
-      activeView: "drafts",
-      activeDraft: "supporter_email",
-      mode: "compose",
-      subject: resource.subject,
-      body: resource.body,
-      status: "draft",
-      queuedAt: null,
-      sourceWorkingCopy: {
+    setState((current) => {
+      const existing = current.workingDrafts.find((draft) => draft.id === resource.id);
+      const sourceWorkingCopy: SourceWorkingCopy = existing?.sourceWorkingCopy ?? {
         id: resource.id,
         campaignId: source.campaignId,
         title: resource.title,
@@ -1125,19 +1383,56 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
         createdAt: new Date().toISOString(),
         warnings: resource.warnings,
         provenance: `Copied from ${resource.sourceDocument} in campaign ${source.campaignId}; this editable copy is browser-local and does not change the public source document.`,
-      },
-      activity: [record(`Created editable local copy from source resource: ${resource.title}.`), ...current.activity].slice(0, 7),
-    }));
+      };
+      const newDraft: WorkingDraft = {
+        id: resource.id,
+        title: resource.title,
+        channel: resource.channel,
+        subject: resource.subject,
+        body: resource.body,
+        status: "draft",
+        queuedAt: null,
+        createdAt: sourceWorkingCopy.createdAt,
+        updatedAt: new Date().toISOString(),
+        sourceWorkingCopy,
+      };
+      return {
+        ...current,
+        activeView: "drafts",
+        activeDraft: "supporter_email",
+        activeWorkingDraftId: resource.id,
+        mode: "compose",
+        workingDrafts: existing ? current.workingDrafts : [newDraft, ...current.workingDrafts],
+        sourceWorkingCopy: null,
+        activity: [record(`${existing ? "Reopened" : "Created"} editable local copy from source resource: ${resource.title}.`), ...current.activity].slice(0, 7),
+      };
+    });
   };
 
   const updateDraft = (patch: Partial<Pick<DemoState, "subject" | "body">>) => {
     setState((current) => ({
       ...current,
-      ...patch,
-      status: current.status === "approved" || current.status === "queued" ? "draft" : current.status,
-      queuedAt: current.status === "queued" ? null : current.queuedAt,
+      ...(current.activeWorkingDraftId
+        ? {
+            workingDrafts: current.workingDrafts.map((draft) =>
+              draft.id === current.activeWorkingDraftId
+                ? {
+                    ...draft,
+                    ...patch,
+                    status: draft.status === "approved" || draft.status === "queued" ? "draft" : draft.status,
+                    queuedAt: draft.status === "queued" ? null : draft.queuedAt,
+                    updatedAt: new Date().toISOString(),
+                  }
+                : draft,
+            ),
+          }
+        : patch),
+      status: !current.activeWorkingDraftId && (current.status === "approved" || current.status === "queued") ? "draft" : current.status,
+      queuedAt: !current.activeWorkingDraftId && current.status === "queued" ? null : current.queuedAt,
       activity:
-        current.status === "approved" || current.status === "queued"
+        (current.activeWorkingDraftId
+          ? current.workingDrafts.find((draft) => draft.id === current.activeWorkingDraftId)?.status === "approved" || current.workingDrafts.find((draft) => draft.id === current.activeWorkingDraftId)?.status === "queued"
+          : current.status === "approved" || current.status === "queued")
           ? [record("Edited communication copy; approval and local queue state were cleared for re-review."), ...current.activity].slice(0, 7)
           : current.activity,
     }));
@@ -1148,8 +1443,15 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
       ...current,
       selectedSegment: segment.id,
       contactFilter: segment.id,
-      status: current.status === "approved" || current.status === "queued" ? "draft" : current.status,
-      queuedAt: current.status === "queued" ? null : current.queuedAt,
+      status: !current.activeWorkingDraftId && (current.status === "approved" || current.status === "queued") ? "draft" : current.status,
+      queuedAt: !current.activeWorkingDraftId && current.status === "queued" ? null : current.queuedAt,
+      workingDrafts: current.activeWorkingDraftId
+        ? current.workingDrafts.map((draft) =>
+            draft.id === current.activeWorkingDraftId
+              ? { ...draft, status: draft.status === "approved" || draft.status === "queued" ? "draft" : draft.status, queuedAt: draft.status === "queued" ? null : draft.queuedAt, updatedAt: new Date().toISOString() }
+              : draft,
+          )
+        : current.workingDrafts,
       activity: [record(`Selected audience segment: ${segment.name}.`), ...current.activity].slice(0, 7),
     }));
   };
@@ -1157,8 +1459,11 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
   const requestReview = () => {
     setState((current) => ({
       ...current,
-      status: "review",
+      status: current.activeWorkingDraftId ? current.status : "review",
       activeView: "reviews",
+      workingDrafts: current.activeWorkingDraftId
+        ? current.workingDrafts.map((draft) => (draft.id === current.activeWorkingDraftId ? { ...draft, status: "review", updatedAt: new Date().toISOString() } : draft))
+        : current.workingDrafts,
       activity: [record("Marked the draft ready for human review."), ...current.activity].slice(0, 7),
     }));
   };
@@ -1166,7 +1471,10 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
   const approve = () => {
     setState((current) => ({
       ...current,
-      status: "approved",
+      status: current.activeWorkingDraftId ? current.status : "approved",
+      workingDrafts: current.activeWorkingDraftId
+        ? current.workingDrafts.map((draft) => (draft.id === current.activeWorkingDraftId ? { ...draft, status: "approved", updatedAt: new Date().toISOString() } : draft))
+        : current.workingDrafts,
       activity: [record("Human approval recorded for this local demo draft."), ...current.activity].slice(0, 7),
     }));
   };
@@ -1174,9 +1482,12 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
   const queue = () => {
     setState((current) => ({
       ...current,
-      status: "queued",
+      status: current.activeWorkingDraftId ? current.status : "queued",
       activeView: "outbox",
-      queuedAt: new Date().toISOString(),
+      queuedAt: current.activeWorkingDraftId ? current.queuedAt : new Date().toISOString(),
+      workingDrafts: current.activeWorkingDraftId
+        ? current.workingDrafts.map((draft) => (draft.id === current.activeWorkingDraftId ? { ...draft, status: "queued", queuedAt: new Date().toISOString(), updatedAt: new Date().toISOString() } : draft))
+        : current.workingDrafts,
       activity: [record("Placed approved draft into the local demo queue. No provider connection used."), ...current.activity].slice(0, 7),
     }));
   };
@@ -1466,6 +1777,34 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
             </button>
           ))}
         </div>
+        {state.workingDrafts.length ? (
+          <div className="mt-6 border-t border-white/15 pt-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Local working copies</p>
+            <div className="mt-3 space-y-3" aria-label="Local working draft library">
+              {state.workingDrafts.map((draft) => {
+                const active = state.activeWorkingDraftId === draft.id;
+                return (
+                  <button
+                    key={draft.id}
+                    type="button"
+                    onClick={() => setActiveWorkingDraft(draft.id)}
+                    className={`w-full rounded-[var(--r-xl)] border p-3 text-left motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ops-yellow focus-visible:ring-0 ${
+                      active ? "border-ops-mint bg-ops-mint text-ops-ink" : "border-white/15 bg-white/[0.07] text-white hover:bg-white/[0.12]"
+                    }`}
+                    aria-pressed={active}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-medium">{draft.title}</p>
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${active ? "bg-background/70" : "bg-white/10"}`}>{statusCopy[draft.status].label}</span>
+                    </div>
+                    <p className={`mt-1 text-xs font-semibold uppercase tracking-[0.1em] ${active ? "text-ops-ink/65" : "text-white/50"}`}>{draft.channel} · {draft.sourceWorkingCopy.sourceDocument}</p>
+                    <p className={`mt-1 line-clamp-2 text-sm ${active ? "text-ops-ink/75" : "text-white/[0.62]"}`}>{draft.subject}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
         {sourceResources.length ? (
           <div className="mt-6 border-t border-white/15 pt-5">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Real source resources</p>
@@ -1485,7 +1824,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
                     onClick={() => createSourceWorkingCopy(resource)}
                     className="mt-3 rounded-full border border-white/20 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10 focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ops-yellow"
                   >
-                    Use in editable draft
+                    {state.workingDrafts.some((draft) => draft.id === resource.id) ? "Open working copy" : "Use in editable draft"}
                   </button>
                 </div>
               ))}
@@ -1500,9 +1839,9 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
       <Panel className="bg-[linear-gradient(90deg,oklch(0.96_0.012_82)_0_1px,transparent_1px),linear-gradient(oklch(0.96_0.012_82)_0_1px,transparent_1px)] bg-[size:28px_28px] shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <SmallLabel>{activeDraft.channel} draft</SmallLabel>
+            <SmallLabel>{activeWorkingDraft?.channel ?? activeDraft.channel} draft</SmallLabel>
             <h2 className="mt-1 text-3xl font-medium tracking-tight">
-              {activeSourceWorkingCopy ? `Working copy: ${activeSourceWorkingCopy.title}` : activeDraftEditable ? `Parent update for ${selected.name.toLowerCase()}` : activeDraft.title}
+              {activeWorkingDraft ? `Working copy: ${activeWorkingDraft.title}` : activeSourceWorkingCopy ? `Working copy: ${activeSourceWorkingCopy.title}` : activeDraftEditable ? `Parent update for ${selected.name.toLowerCase()}` : activeDraft.title}
             </h2>
             <p className="mt-2 max-w-2xl text-muted-foreground">
               {activeSourceWorkingCopy ? activeSourceWorkingCopy.provenance : activeDraftEditable ? selected.ask : activeDraft.detail}
@@ -1573,7 +1912,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
               <Label htmlFor="operations-subject">Subject</Label>
               <Input
                 id="operations-subject"
-                value={state.subject}
+                value={communicationSubject}
                 onChange={(event) => updateDraft({ subject: event.target.value })}
                 className="h-auto rounded-full border-[1.5px] px-4 py-2.5 text-base"
               />
@@ -1582,7 +1921,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
               <Label htmlFor="operations-body">Message</Label>
               <Textarea
                 id="operations-body"
-                value={state.body}
+                value={communicationBody}
                 onChange={(event) => updateDraft({ body: event.target.value })}
                 rows={13}
                 className="min-h-[22rem] rounded-[var(--r-2xl)] border-[1.5px] p-4 text-base leading-relaxed"
@@ -1595,13 +1934,13 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
               <p><span className="font-medium text-foreground">To:</span> {selected.name} · {selected.ready} ready fixture contacts</p>
               <p><span className="font-medium text-foreground">Status:</span> {status.label}</p>
             </div>
-            <h3 className="mt-5 text-2xl font-medium">{state.subject || "Untitled campaign email"}</h3>
-            <div className="mt-4 whitespace-pre-wrap text-base leading-relaxed">{state.body}</div>
+            <h3 className="mt-5 text-2xl font-medium">{communicationSubject || "Untitled campaign email"}</h3>
+            <div className="mt-4 whitespace-pre-wrap text-base leading-relaxed">{communicationBody}</div>
           </article>
         )}
 
         <div className="mt-6 flex flex-wrap gap-3 border-t border-border pt-5">
-          <Button type="button" size="lg" onClick={requestReview} disabled={!activeDraftEditable || !canRequestReview || state.status === "review" || state.status === "approved" || state.status === "queued"}>
+          <Button type="button" size="lg" onClick={requestReview} disabled={!activeDraftEditable || !canRequestReview || communicationStatus === "review" || communicationStatus === "approved" || communicationStatus === "queued"}>
             Mark ready for review
           </Button>
           {goButton("reviews", "Open review gate")}
@@ -1642,6 +1981,28 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
         <p className="mt-3 text-muted-foreground">
           A draft cannot enter the local queue until a person explicitly approves it. Blockers are shown in text, not just colour.
         </p>
+        {state.workingDrafts.length ? (
+          <div className="mt-5 rounded-[var(--r-2xl)] border border-border bg-background p-4" aria-label="Local working drafts for review">
+            <SmallLabel>Working draft queue</SmallLabel>
+            <div className="mt-3 grid gap-2 md:grid-cols-2">
+              {state.workingDrafts.map((draft) => (
+                <button
+                  key={draft.id}
+                  type="button"
+                  onClick={() => setActiveWorkingDraft(draft.id)}
+                  className={`rounded-[var(--r-xl)] border p-3 text-left text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${state.activeWorkingDraftId === draft.id ? "border-ops-ink bg-ops-yellow" : "border-border bg-secondary hover:bg-ops-blue/70"}`}
+                  aria-pressed={state.activeWorkingDraftId === draft.id}
+                >
+                  <span className="flex items-start justify-between gap-2">
+                    <span className="font-medium">{draft.title}</span>
+                    <span className="rounded-full bg-background/80 px-2 py-0.5 text-xs">{statusCopy[draft.status].label}</span>
+                  </span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{draft.sourceWorkingCopy.sourceDocument} · local copy only</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         <div className="mt-6 grid gap-3 md:grid-cols-2" aria-label="Approval gates">
           {[
             { label: "Message has enough substance to review", ok: canRequestReview, detail: canRequestReview ? "Subject and body are long enough for a meaningful check." : "Add a clear subject and message before requesting review." },
@@ -1661,13 +2022,13 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
           ))}
         </div>
         <div className="mt-6 flex flex-wrap gap-3 border-t border-border pt-5">
-          <Button type="button" size="lg" onClick={requestReview} disabled={!canRequestReview || state.status === "review" || state.status === "approved" || state.status === "queued"}>
+          <Button type="button" size="lg" onClick={requestReview} disabled={!canRequestReview || communicationStatus === "review" || communicationStatus === "approved" || communicationStatus === "queued"}>
             Mark ready for review
           </Button>
-          <Button type="button" size="lg" variant="outline" onClick={approve} disabled={state.status !== "review"}>
+          <Button type="button" size="lg" variant="outline" onClick={approve} disabled={communicationStatus !== "review"}>
             Approve as human reviewer
           </Button>
-          <Button type="button" size="lg" variant="secondary" onClick={queue} disabled={state.status !== "approved"}>
+          <Button type="button" size="lg" variant="secondary" onClick={queue} disabled={communicationStatus !== "approved"}>
             Queue locally for demo
           </Button>
         </div>
@@ -1682,10 +2043,10 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
           </p>
         ) : null}
         <article className="mt-5 rounded-[var(--r-xl)] border border-white/15 bg-white p-4 text-sm text-foreground shadow-sm" aria-label="Communication preview for approval">
-          <p className="font-medium">{state.subject || "Untitled campaign email"}</p>
+          <p className="font-medium">{communicationSubject || "Untitled campaign email"}</p>
           <p className="mt-1 text-muted-foreground">Audience: {selected.name}</p>
-          {state.sourceWorkingCopy ? <p className="mt-1 text-muted-foreground">Source copy: {state.sourceWorkingCopy.title} · {state.sourceWorkingCopy.sourceDocument}</p> : null}
-          <div className="mt-4 line-clamp-6 whitespace-pre-wrap border-t border-border pt-4 text-muted-foreground">{state.body}</div>
+          {activeSourceWorkingCopy ? <p className="mt-1 text-muted-foreground">Source copy: {activeSourceWorkingCopy.title} · {activeSourceWorkingCopy.sourceDocument}</p> : null}
+          <div className="mt-4 line-clamp-6 whitespace-pre-wrap border-t border-border pt-4 text-muted-foreground">{communicationBody}</div>
         </article>
         <div className="mt-5 rounded-[var(--r-xl)] border border-white/15 bg-white/[0.08] p-3 text-sm">
           <p className="font-medium">Approval desk rule</p>
@@ -1699,9 +2060,9 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
       <Panel className="bg-ops-paper">
         <SmallLabel>Outbox & schedule</SmallLabel>
-        <h2 className="mt-2 text-3xl font-medium tracking-tight">{state.status === "queued" ? "One local queue item" : "Nothing queued yet"}</h2>
+        <h2 className="mt-2 text-3xl font-medium tracking-tight">{queuedItemCount === 1 ? "One local queue item" : queuedItemCount ? `${queuedItemCount} local queue items` : "Nothing queued yet"}</h2>
         <p id="operations-provider-note" className="mt-3 text-muted-foreground">
-          {state.status === "queued"
+          {queuedItemCount
             ? "The approved draft is stored in this browser for the conference demo. It is not connected to an email provider."
             : "Approve the draft before it can enter the local demo queue. Provider outreach stays disabled."}
         </p>
@@ -1709,8 +2070,8 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
           <SmallLabel>Local dispatch runway</SmallLabel>
           <div className="mt-4 grid gap-3 md:grid-cols-4" aria-label="Local dispatch runway">
             {[
-              { label: "Human approval", state: state.status === "draft" ? "Blocked" : state.status === "review" ? "Current" : "Complete", tone: state.status === "draft" ? "bg-ops-coral" : state.status === "review" ? "bg-ops-yellow" : "bg-ops-mint", detail: status.label },
-              { label: "Local queue", state: state.status === "queued" ? "Complete" : state.status === "approved" ? "Current" : "Locked", tone: state.status === "queued" ? "bg-ops-mint" : state.status === "approved" ? "bg-ops-yellow" : "bg-ops-blue", detail: state.status === "queued" ? "Stored in this browser" : "Needs approval first" },
+              { label: "Human approval", state: communicationStatus === "draft" ? "Blocked" : communicationStatus === "review" ? "Current" : "Complete", tone: communicationStatus === "draft" ? "bg-ops-coral" : communicationStatus === "review" ? "bg-ops-yellow" : "bg-ops-mint", detail: status.label },
+              { label: "Local queue", state: communicationStatus === "queued" ? "Complete" : communicationStatus === "approved" ? "Current" : "Locked", tone: communicationStatus === "queued" ? "bg-ops-mint" : communicationStatus === "approved" ? "bg-ops-yellow" : "bg-ops-blue", detail: communicationStatus === "queued" ? "Stored in this browser" : "Needs approval first" },
               { label: "Provider", state: "Locked", tone: "bg-ops-blue", detail: "Coming soon · not connected" },
               { label: "Responses", state: "Locked", tone: "bg-ops-blue", detail: "Coming soon · no response stream" },
             ].map((step, index) => (
@@ -1729,13 +2090,20 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
           <div className="hidden grid-cols-[1.1fr_0.8fr_0.7fr_0.8fr] gap-3 border-b border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground md:grid">
             <span>Communication</span><span>Audience</span><span>State</span><span>Local timing</span>
           </div>
-          {state.status === "queued" ? (
-            <div className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_0.8fr_0.7fr_0.8fr]">
-              <div><span className="md:hidden font-medium">Communication: </span>{state.subject}{state.sourceWorkingCopy ? <p className="mt-1 text-xs text-muted-foreground">Local copy from {state.sourceWorkingCopy.sourceDocument}</p> : null}</div>
-              <div><span className="md:hidden font-medium">Audience: </span>{selected.name}</div>
-              <div><span className="md:hidden font-medium">State: </span>Queued for demo</div>
-              <div><span className="md:hidden font-medium">Local timing: </span>{formatQueuedTime(state.queuedAt)} · {scheduleCopy[state.scheduleIntent]}</div>
-            </div>
+          {queuedItemCount ? (
+            [
+              ...(state.status === "queued"
+                ? [{ id: "seeded-supporter-email", subject: state.subject, sourceDocument: state.sourceWorkingCopy?.sourceDocument, queuedAt: state.queuedAt }]
+                : []),
+              ...state.workingDrafts.filter((draft) => draft.status === "queued").map((draft) => ({ id: draft.id, subject: draft.subject, sourceDocument: draft.sourceWorkingCopy.sourceDocument, queuedAt: draft.queuedAt })),
+            ].map((item) => (
+              <div key={item.id} className="grid gap-3 border-b border-border px-4 py-4 text-sm last:border-0 md:grid-cols-[1.1fr_0.8fr_0.7fr_0.8fr]">
+                <div><span className="md:hidden font-medium">Communication: </span>{item.subject}{item.sourceDocument ? <p className="mt-1 text-xs text-muted-foreground">Local copy from {item.sourceDocument}</p> : null}</div>
+                <div><span className="md:hidden font-medium">Audience: </span>{selected.name}</div>
+                <div><span className="md:hidden font-medium">State: </span>Queued for demo</div>
+                <div><span className="md:hidden font-medium">Local timing: </span>{formatQueuedTime(item.queuedAt)} · {scheduleCopy[state.scheduleIntent]}</div>
+              </div>
+            ))
           ) : (
             <div className="px-4 py-6 text-sm text-muted-foreground">
               No local queue rows yet. Use the Reviews & approvals view to record human approval first.
@@ -1850,8 +2218,8 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
             ) : null}
             {goButton("audiences", `Audience: ${selected.name}`)}
             {goButton("drafts", `Draft: ${status.label}`)}
-            {goButton("reviews", state.status === "review" ? "Approve now" : "Open approval gate")}
-            {goButton("outbox", state.status === "queued" ? "Inspect local queue" : "Outbox locked")}
+            {goButton("reviews", communicationStatus === "review" ? "Approve now" : "Open approval gate")}
+            {goButton("outbox", queuedItemCount ? "Inspect local queue" : "Outbox locked")}
           </div>
           </div>
           <div className="rounded-[var(--r-2xl)] border border-ops-line bg-background/80 p-4">
@@ -2247,6 +2615,26 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
             <Link href={source?.sourceHref ?? "/factory"} className="rounded-full border border-ops-line bg-background/70 px-3 py-1.5 text-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
               {source ? "Back to source brief" : "Back to Factory"}
             </Link>
+            <Link href="/operations" className="rounded-full border border-ops-line bg-background/70 px-3 py-1.5 text-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              Portfolio
+            </Link>
+            {source ? (
+              <div className="flex flex-wrap items-center gap-1" aria-label="Campaign switcher">
+                {PORTFOLIO_CAMPAIGNS.map((campaign, index) => {
+                  const active = campaign.id === source.campaignId;
+                  return (
+                    <Link
+                      key={campaign.id}
+                      href={`/operations?campaignId=${campaign.id}&view=${state.activeView}`}
+                      className={`rounded-full px-2.5 py-1 text-xs focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${active ? "bg-ops-ink text-white" : "border border-ops-line bg-background/70 text-muted-foreground hover:bg-secondary"}`}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      {active ? "Current" : `Campaign ${index + 1}`}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
         </div>
       </header>
@@ -2256,7 +2644,7 @@ export function OperationsWorkspace({ campaignId }: { campaignId?: string }) {
           <div className="sticky top-[5.25rem] max-h-[calc(100vh-6rem)] overflow-auto rounded-[var(--r-2xl)] border border-ops-ink bg-ops-ink p-3 shadow-sm">
             <div className="mb-4 rounded-[var(--r-xl)] border border-white/10 bg-white/10 p-3 text-white">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/55">Runway state</p>
-              <p className="mt-1 text-sm font-medium">{runwayStages.find((stage) => stage.status === "current")?.label ?? (state.status === "queued" ? "Local outbox" : "Human approval")}</p>
+              <p className="mt-1 text-sm font-medium">{runwayStages.find((stage) => stage.status === "current")?.label ?? (communicationStatus === "queued" ? "Local outbox" : "Human approval")}</p>
               <p className="mt-1 text-xs text-white/55">{status.label} · {selected.name}</p>
             </div>
             {renderNav(false, true)}

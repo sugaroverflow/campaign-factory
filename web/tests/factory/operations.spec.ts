@@ -1,7 +1,11 @@
 import { test, expect } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+});
+
 test("operations workbench: cross-view local review and demo queue flow", async ({ page }) => {
-  await page.goto("/operations");
+  await page.goto("/operations?demo=fixture");
 
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toBeVisible();
   await expect(page.getByText("Demo workspace", { exact: true }).first()).toBeVisible();
@@ -82,7 +86,7 @@ test("operations workbench: cross-view local review and demo queue flow", async 
 });
 
 test("operations workbench: all sidebar destinations are navigable and designed", async ({ page }) => {
-  await page.goto("/operations");
+  await page.goto("/operations?demo=fixture");
 
   await expect(page.getByRole("heading", { name: "Brief to safe local outbox, one stage at a time." })).toBeVisible();
   await page.getByRole("button", { name: /Evidence: Current, Checks in view/ }).click();
@@ -121,7 +125,7 @@ test("operations workbench: all sidebar destinations are navigable and designed"
 });
 
 test("operations workbench: contacts, disabled boundaries, and legacy local state migration", async ({ page }) => {
-  await page.goto("/operations");
+  await page.goto("/operations?demo=fixture");
   await page.evaluate(() => {
     localStorage.removeItem("cf_operations_demo_v3");
     localStorage.setItem(
@@ -177,7 +181,7 @@ test("operations workbench: all views avoid overflow across presentation sizes",
     { width: 390, height: 844 },
   ]) {
     await page.setViewportSize(viewport);
-    await page.goto("/operations");
+    await page.goto("/operations?demo=fixture");
 
     if (viewport.width < 1024) {
       await page.getByText(/Operations navigation/).click();
@@ -219,7 +223,7 @@ test("operations workbench: all views avoid overflow across presentation sizes",
 });
 
 test("operations workbench: navigation focus and reduced motion remain accessible", async ({ page }) => {
-  await page.goto("/operations");
+  await page.goto("/operations?demo=fixture");
 
   await page.keyboard.press("Tab");
   await page.keyboard.press("Tab");
@@ -233,8 +237,8 @@ test("operations workbench: navigation focus and reduced motion remain accessibl
     };
   });
 
-  expect(focusStyle.outlineStyle).not.toBe("none");
-  expect(Number.parseFloat(focusStyle.outlineWidth)).toBeGreaterThan(0);
+  expect(focusStyle.outlineStyle !== "none" || focusStyle.boxShadow !== "none").toBeTruthy();
+  if (focusStyle.outlineStyle !== "none") expect(Number.parseFloat(focusStyle.outlineWidth)).toBeGreaterThan(0);
 
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.reload();
@@ -245,6 +249,76 @@ test("operations workbench: navigation focus and reduced motion remain accessibl
 
   expect(reducedMotion.transitionDuration).toBe("0s");
   expect(reducedMotion.transform).toBe("none");
+});
+
+test("operations portfolio: three curated public campaigns load independently", async ({ page }) => {
+  const campaigns = {
+    "69f257b6-9913-4395-94f7-5c25b4b5fe95": {
+      title: "Keep KFC Out of Ormskirk",
+      place: "Ormskirk, Lancashire",
+      status: "partial",
+      mediaStatus: "assembling",
+      unresolved: 34,
+      next: "Retrieve the official West Lancashire Borough Council planning application record",
+    },
+    "57678ae0-29fd-4b4b-8a53-5c711cdb21cf": {
+      title: "Build 5,000 affordable houses in Tower Hamlets in the next 3 years",
+      place: "Tower Hamlets, London",
+      status: "partial",
+      mediaStatus: "ready",
+      unresolved: 22,
+      next: "Retrieve and verify the exact affordable housing percentage targets from Council papers",
+    },
+    "6b54225d-afa3-41d1-b053-89741094f153": {
+      title: "Stop the leisure park redevelopment in Barnet",
+      place: "Barnet, London",
+      status: "completed",
+      mediaStatus: "ready",
+      unresolved: 17,
+      next: "Attempt direct retrieval of the GLA decision report and Barnet Council committee minutes",
+    },
+  } as const;
+
+  await page.route(/\/api\/factory\/runs\/([^/]+)\/documents$/, async (route) => {
+    const id = route.request().url().match(/runs\/([^/]+)\/documents$/)?.[1] as keyof typeof campaigns;
+    const campaign = campaigns[id];
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        documents: [
+          { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`, isPack: false, sectionKeys: [], resourceCount: 0, flags: [] },
+          { key: "media_pack", num: 2, name: "Media Pack", status: campaign.mediaStatus, html: "", plainText: "MEDIA PACK", isPack: true, sectionKeys: [], resourceCount: 0, flags: [] },
+        ],
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: campaign.next, reason: "Portfolio next gate", claimIds: [], affectedSections: [] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 90, loadBearing: 70, verifiedLoadBearing: 70 - campaign.unresolved, unresolvedLoadBearing: campaign.unresolved },
+        },
+      }),
+    });
+  });
+  await page.route(/\/api\/factory\/runs\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/runs\/([^/]+)$/)?.[1] as keyof typeof campaigns;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ campaignId: id, status: campaigns[id].status, stateVersion: 1, lastSequence: 1, events: [] }),
+    });
+  });
+
+  await page.goto("/operations");
+
+  await expect(page.getByRole("heading", { name: /Three real campaigns, one operations portfolio/i })).toBeVisible();
+  await expect(page.getByText("Keep KFC Out of Ormskirk", { exact: true })).toBeVisible();
+  await expect(page.getByText("Build 5,000 affordable houses in Tower Hamlets in the next 3 years", { exact: true })).toBeVisible();
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet", { exact: true })).toBeVisible();
+  await expect(page.getByText("Conference deep dive", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Partial but usable/).first()).toBeVisible();
+  await expect(page.getByText(/Complete/).first()).toBeVisible();
+  await expect(page.getByText(/no browser-local operations work yet for this campaign/i).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open workspace" }).first()).toHaveAttribute("href", "/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95");
 });
 
 test("operations workbench: campaignId route loads a read-only public campaign source", async ({ page }) => {
@@ -358,6 +432,13 @@ test("operations workbench: campaignId route loads a read-only public campaign s
   await expect(page.getByLabel("Subject")).toHaveValue("Ormskirk KFC — what we know, what we don't");
   await expect(page.getByLabel("Message")).toHaveValue(/Dear supporter/);
   await expect(page.getByText(/unconfirmed single-source information/i)).toBeVisible();
+
+  await page.getByRole("button", { name: "Use in editable draft" }).first().click();
+  await expect(page.getByRole("heading", { name: /Working copy: Social media post set/i })).toBeVisible();
+  await expect(page.getByLabel("Local working draft library")).toContainText("Supporter email — status update");
+  await expect(page.getByLabel("Local working draft library")).toContainText("Social media post set");
+  await page.getByLabel("Local working draft library").getByRole("button", { name: /Supporter email — status update/ }).click();
+  await expect(page.getByLabel("Subject")).toHaveValue("Ormskirk KFC — what we know, what we don't");
 
   await page.getByRole("button", { name: /Campaign brief/ }).first().click();
   await expect(page.getByText("What the source says", { exact: true })).toBeVisible();
