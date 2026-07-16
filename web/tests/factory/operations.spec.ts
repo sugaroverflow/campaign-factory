@@ -479,6 +479,13 @@ test("operations workbench: campaignId route loads a read-only public campaign s
               claimIds: ["C3"],
               affectedSections: ["decision_route", "strategy"],
             },
+            {
+              id: "resident-evidence-check",
+              description: "Confirm whether resident amenity evidence can be quoted beyond the planning objection bundle",
+              reason: "Public supporter copy needs consent and quotation boundaries before stronger claims are reused",
+              claimIds: ["C9", "C12"],
+              affectedSections: ["digital_pack", "organising_plan"],
+            },
           ],
           terminalGaps: [],
           draftNotes: [],
@@ -498,10 +505,16 @@ test("operations workbench: campaignId route loads a read-only public campaign s
   await expect(page.getByText(/Check the Planning Inspectorate appeals database/i).first()).toBeVisible();
   await expect(page.getByText(/Media Pack: assembling/i)).toBeVisible();
   await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
+  await expect(page.getByLabel("Source next checks ledger")).toContainText("Confirm whether resident amenity evidence can be quoted");
+  await expect(page.getByLabel("Source document readiness")).toContainText("Media Pack");
+  await page.getByLabel("Source next checks ledger").getByRole("button", { name: "Create action" }).nth(1).click();
+  await expect(page.getByRole("heading", { name: "Owned local work from source checks" })).toBeVisible();
+  await expect(page.getByLabel("Recommended source actions").getByText(/Check: Confirm whether resident amenity evidence/)).toBeVisible();
+  await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
   await page.getByRole("button", { name: "Create appeal-status action" }).click();
   await expect(page.getByRole("heading", { name: "Owned local work from source checks" })).toBeVisible();
   await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(/Source campaign 69f257b6-9913-4395-94f7-5c25b4b5fe95/)).toBeVisible();
+  await expect(page.getByText(/Source campaign 69f257b6-9913-4395-94f7-5c25b4b5fe95/).first()).toBeVisible();
   await page.getByLabel(/Status for Confirm Planning Inspectorate appeal status/).selectOption("in_progress");
   await expect(page.getByLabel(/Status for Confirm Planning Inspectorate appeal status/)).toHaveValue("in_progress");
   await expect(page.getByRole("link", { name: /Back to source brief|View original brief/ }).first()).toHaveAttribute(

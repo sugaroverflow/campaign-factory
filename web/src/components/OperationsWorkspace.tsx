@@ -144,6 +144,15 @@ type SourceAudienceSignal = {
   status: string;
 };
 
+type RecommendedLocalAction = {
+  id: string;
+  title: string;
+  detail: string;
+  priority: LocalAction["priority"];
+  disabled: boolean;
+  create: () => void;
+};
+
 type CampaignSource = {
   campaignId: string;
   title: string;
@@ -990,6 +999,20 @@ function sourcePrimaryCheckButton(source: CampaignSource) {
   return /appeal|planning inspectorate/i.test(source.nextGate ?? "") ? "Create appeal-status action" : "Create source-check action";
 }
 
+function sourceCheckActionId(source: CampaignSource, check: EvidenceAndNextChecks["nextChecks"][number], index: number) {
+  if (index === 0) return `source:${source.campaignId}:primary-source-check`;
+  return `source:${source.campaignId}:next-check:${check.id || index}`;
+}
+
+function sourceCheckActionTitle(source: CampaignSource, check: EvidenceAndNextChecks["nextChecks"][number], index: number) {
+  if (index === 0) return sourcePrimaryCheckTitle(source);
+  return `Check: ${shortText(check.description, 82)}`;
+}
+
+function incompleteDocumentActionId(source: CampaignSource, doc: CompiledDocument) {
+  return `source:${source.campaignId}:incomplete:${doc.key}`;
+}
+
 function buildSourceAudienceSegments(source: CampaignSource): Segment[] {
   const byKey = new Map(source.documents.map((doc) => [doc.key, doc]));
   const strategy = byKey.get("campaign_strategy");
@@ -1676,8 +1699,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     (contact) => (state.contactFilter === "all" || contact.segmentId === state.contactFilter) && readinessMatches(contact),
   );
   const incompleteSourceDocument = source?.incompleteDocuments[0] ?? null;
-  const appealActionId = source ? `source:${source.campaignId}:primary-source-check` : "fixture:council-timing-check";
-  const mediaActionId = source ? `source:${source.campaignId}:incomplete:${incompleteSourceDocument?.key ?? "escalation-boundary"}` : "fixture:media-boundary";
+  const appealActionId = source && source.evidence.nextChecks[0] ? sourceCheckActionId(source, source.evidence.nextChecks[0], 0) : source ? `source:${source.campaignId}:primary-source-check` : "fixture:council-timing-check";
+  const mediaActionId = source && incompleteSourceDocument ? incompleteDocumentActionId(source, incompleteSourceDocument) : source ? `source:${source.campaignId}:incomplete:escalation-boundary` : "fixture:media-boundary";
   const hasAppealAction = state.localActions.some((action) => action.id === appealActionId);
   const hasMediaAction = state.localActions.some((action) => action.id === mediaActionId);
   const selectedSegmentContacts = contacts.filter((contact) => contact.segmentId === selected.id);
@@ -1939,32 +1962,67 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     });
   };
 
+  const createSourceCheckAction = (check: EvidenceAndNextChecks["nextChecks"][number], index: number) => {
+    if (!source) return;
+    createLocalAction({
+      id: sourceCheckActionId(source, check, index),
+      title: sourceCheckActionTitle(source, check, index),
+      source: `Campaign source · Evidence & checks${check.affectedSections?.length ? ` · ${check.affectedSections.join(", ")}` : ""}`,
+      owner: "Reviewer",
+      timing: index === 0 ? "Before phase change or stronger public claims" : shortText(check.reason || "Before related copy or tactics move forward", 120),
+      priority: index === 0 ? "High" : "Medium",
+      status: "next",
+      provenance: `Source campaign ${source.campaignId}; derived from next check ${check.id || index + 1}${check.claimIds?.length ? ` touching ${check.claimIds.length} source claim${check.claimIds.length === 1 ? "" : "s"}` : ""}; stored only in this browser.`,
+    });
+  };
+
   const createAppealStatusAction = () => {
+    const primaryCheck = source?.evidence.nextChecks[0];
+    if (source && primaryCheck) {
+      createSourceCheckAction(primaryCheck, 0);
+      return;
+    }
     createLocalAction({
       id: appealActionId,
-      title: source ? sourcePrimaryCheckTitle(source) : "Verify council order status",
-      source: source ? "Campaign source · Evidence & checks" : "Fixture evidence check",
+      title: "Verify council order status",
+      source: "Fixture evidence check",
       owner: "Reviewer",
       timing: "Before phase change or stronger public claims",
       priority: "High",
       status: "next",
-      provenance: source
-        ? `Source campaign ${source.campaignId}; derived from the unresolved source check and stored only in this browser.`
-        : "Derived from the fixture timing check and stored only in this browser.",
+      provenance: "Derived from the fixture timing check and stored only in this browser.",
+    });
+  };
+
+  const createIncompleteDocumentAction = (doc: CompiledDocument) => {
+    if (!source) return;
+    createLocalAction({
+      id: incompleteDocumentActionId(source, doc),
+      title: `Follow up incomplete ${doc.name}`,
+      source: `Campaign source · ${doc.name} incomplete`,
+      owner: doc.key === "media_pack" ? "Local organiser" : "Reviewer",
+      timing: "After the primary source check and evidence warnings are understood",
+      priority: doc.key === "media_pack" ? "Medium" : "Low",
+      status: "blocked",
+      provenance: `Source campaign ${source.campaignId}; ${doc.name} remains ${doc.status}, so this is a local work item rather than a false ready state.`,
     });
   };
 
   const createMediaPackAction = () => {
+    if (source && incompleteSourceDocument) {
+      createIncompleteDocumentAction(incompleteSourceDocument);
+      return;
+    }
     createLocalAction({
       id: mediaActionId,
-      title: source ? (incompleteSourceDocument ? `Follow up incomplete ${incompleteSourceDocument.name}` : "Keep escalation blocked until checked") : "Keep media escalation blocked until checked",
-      source: source ? `Campaign source · ${incompleteSourceDocument ? `${incompleteSourceDocument.name} incomplete` : "Escalation boundary"}` : "Fixture media boundary",
+      title: source ? "Keep escalation blocked until checked" : "Keep media escalation blocked until checked",
+      source: source ? "Campaign source · Escalation boundary" : "Fixture media boundary",
       owner: "Local organiser",
       timing: source ? "After the primary source check and evidence warnings are understood" : "After appeal status and evidence checks are understood",
       priority: "Medium",
       status: "blocked",
       provenance: source
-        ? `Source campaign ${source.campaignId}; ${incompleteSourceDocument ? `${incompleteSourceDocument.name} remains ${incompleteSourceDocument.status}` : "source escalation still needs human judgement"}, so this is a local work item rather than a false ready state.`
+        ? `Source campaign ${source.campaignId}; source escalation still needs human judgement, so this is a local work item rather than a false ready state.`
         : "Fixture media action stored locally; no newsroom or provider list exists.",
     });
   };
@@ -2042,26 +2100,49 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     </Button>
   );
 
-  const recommendedActions = [
-    {
-      id: appealActionId,
-      title: source ? sourcePrimaryCheckTitle(source) : "Verify council order status",
-      detail: source?.nextGate ?? "Check the current decision route before any stronger campaign claims are used.",
-      priority: "High" as const,
-      disabled: hasAppealAction,
-      create: createAppealStatusAction,
-    },
-    {
-      id: mediaActionId,
-      title: source ? (incompleteSourceDocument ? `Follow up incomplete ${incompleteSourceDocument.name}` : "Keep escalation blocked until checked") : "Keep media escalation blocked until checked",
-      detail: source && incompleteSourceDocument
-        ? `${incompleteSourceDocument.name} is ${incompleteSourceDocument.status}, so the useful operation is a local follow-up action, not a ready-state claim.`
-        : "Media escalation should wait until evidence, contact, and provider boundaries are understood.",
-      priority: "Medium" as const,
-      disabled: hasMediaAction,
-      create: createMediaPackAction,
-    },
-  ];
+  const recommendedActions: RecommendedLocalAction[] = source
+    ? [
+        ...source.evidence.nextChecks.slice(0, 3).map((check, index) => {
+          const id = sourceCheckActionId(source, check, index);
+          return {
+            id,
+            title: sourceCheckActionTitle(source, check, index),
+            detail: index === 0 ? check.description : `${check.description}${check.reason ? ` — ${shortText(check.reason, 110)}` : ""}`,
+            priority: index === 0 ? "High" as const : "Medium" as const,
+            disabled: state.localActions.some((action) => action.id === id),
+            create: () => createSourceCheckAction(check, index),
+          };
+        }),
+        ...source.incompleteDocuments.slice(0, 3).map((doc) => {
+          const id = incompleteDocumentActionId(source, doc);
+          return {
+            id,
+            title: `Follow up incomplete ${doc.name}`,
+            detail: `${doc.name} is ${doc.status}; create owned local follow-up instead of treating the source pack as ready.`,
+            priority: doc.key === "media_pack" ? "Medium" as const : "Low" as const,
+            disabled: state.localActions.some((action) => action.id === id),
+            create: () => createIncompleteDocumentAction(doc),
+          };
+        }),
+      ]
+    : [
+        {
+          id: appealActionId,
+          title: "Verify council order status",
+          detail: "Check the current decision route before any stronger campaign claims are used.",
+          priority: "High",
+          disabled: hasAppealAction,
+          create: createAppealStatusAction,
+        },
+        {
+          id: mediaActionId,
+          title: "Keep media escalation blocked until checked",
+          detail: "Media escalation should wait until evidence, contact, and provider boundaries are understood.",
+          priority: "Medium",
+          disabled: hasMediaAction,
+          create: createMediaPackAction,
+        },
+      ];
 
   const renderActionPlanView = () => (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -2863,6 +2944,63 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             </div>
           ))}
         </div>
+        {source && section.title === "Evidence & checks" ? (
+          <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(260px,0.85fr)]">
+            <div className="overflow-hidden rounded-[var(--r-2xl)] border border-ops-line bg-background" aria-label="Source next checks ledger">
+              <div className="border-b border-border bg-ops-blue/55 px-4 py-3">
+                <p className="text-sm font-semibold">Next checks from the source bundle</p>
+                <p className="mt-1 text-xs text-muted-foreground">Each row can become browser-local work; no source claim is edited here.</p>
+              </div>
+              {source.evidence.nextChecks.length ? source.evidence.nextChecks.slice(0, 5).map((check, index) => {
+                const actionId = sourceCheckActionId(source, check, index);
+                const actionExists = state.localActions.some((action) => action.id === actionId);
+                return (
+                  <div key={check.id || index} className="grid gap-3 border-b border-border px-4 py-4 text-sm last:border-0 md:grid-cols-[minmax(0,1fr)_170px] md:items-start">
+                    <div>
+                      <p className="font-medium">{check.description}</p>
+                      {check.reason ? <p className="mt-1 text-muted-foreground">{check.reason}</p> : null}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {check.claimIds?.length ? `${check.claimIds.length} linked source claim${check.claimIds.length === 1 ? "" : "s"}` : "No individual claim IDs exposed"}
+                        {check.affectedSections?.length ? ` · ${check.affectedSections.join(", ")}` : ""}
+                      </p>
+                    </div>
+                    <Button type="button" variant="outline" onClick={() => createSourceCheckAction(check, index)} disabled={actionExists}>
+                      {actionExists ? "Action created" : "Create action"}
+                    </Button>
+                  </div>
+                );
+              }) : (
+                <div className="px-4 py-5 text-sm text-muted-foreground">No next checks were exposed by the source bundle.</div>
+              )}
+            </div>
+            <div className="overflow-hidden rounded-[var(--r-2xl)] border border-ops-line bg-background" aria-label="Source document readiness">
+              <div className="border-b border-border bg-ops-yellow/60 px-4 py-3">
+                <p className="text-sm font-semibold">Document readiness</p>
+                <p className="mt-1 text-xs text-muted-foreground">Incomplete documents become follow-up actions, not hidden fallback content.</p>
+              </div>
+              {source.incompleteDocuments.length ? source.incompleteDocuments.map((doc) => {
+                const actionId = incompleteDocumentActionId(source, doc);
+                const actionExists = state.localActions.some((action) => action.id === actionId);
+                return (
+                  <div key={doc.key} className="border-b border-border px-4 py-4 text-sm last:border-0">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium">{doc.name}</p>
+                        <p className="mt-1 text-muted-foreground">Status: {doc.status}; resource count {doc.resourceCount}.</p>
+                      </div>
+                      <span className="rounded-full bg-ops-coral px-2.5 py-1 text-xs text-ops-ink">Incomplete</span>
+                    </div>
+                    <Button type="button" variant="outline" className="mt-3" onClick={() => createIncompleteDocumentAction(doc)} disabled={actionExists}>
+                      {actionExists ? "Follow-up created" : "Create follow-up"}
+                    </Button>
+                  </div>
+                );
+              }) : (
+                <div className="px-4 py-5 text-sm text-muted-foreground">All compiled documents exposed by this source route are ready.</div>
+              )}
+            </div>
+          </div>
+        ) : null}
       </Panel>
       <Panel>
         <SmallLabel>Use this context next</SmallLabel>
