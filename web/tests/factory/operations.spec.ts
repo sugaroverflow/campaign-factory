@@ -104,6 +104,48 @@ test("operations source API: non-GET methods are blocked as read-only no-store r
   }
 });
 
+test("operations source API: configured source origin must remain the canonical allow-listed origin", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalEnv = process.env.OPERATIONS_SOURCE_ORIGIN;
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async () => {
+    throw new Error("Source reads must not run when the configured origin is outside the allow-list.");
+  }) as typeof fetch;
+
+  try {
+    for (const origin of [
+      "https://campaign-factory.vercel.app/api/factory",
+      "https://example.invalid",
+      "https://user:pass@campaign-factory.vercel.app",
+      "javascript:alert(1)",
+    ]) {
+      process.env.OPERATIONS_SOURCE_ORIGIN = origin;
+      const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+      expect(response.status).toBe(502);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+      expect(response.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+      expect(response.headers.get("expires")).toBe("0");
+      expect(response.headers.get("pragma")).toBe("no-cache");
+      expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+      expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+
+      const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string };
+      expect(body.error).toBe("Operations source origin unavailable");
+      expect(body.detail).toContain("not allow-listed");
+      expect(body.sourceOrigin).toBeUndefined();
+    }
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env.OPERATIONS_SOURCE_ORIGIN;
+    } else {
+      process.env.OPERATIONS_SOURCE_ORIGIN = originalEnv;
+    }
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: upstream run redirects fail closed before document hydration", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;
