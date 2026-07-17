@@ -304,6 +304,7 @@ type DemoState = {
   sourceLastSequence: number | null;
   sourceDocumentSignature: string | null;
   sourceAcknowledgedAt: string | null;
+  sourceRecheckVisitedViews: ViewId[];
   selectedSegment: SegmentId;
   subject: string;
   body: string;
@@ -742,6 +743,7 @@ const initialState: DemoState = {
   sourceLastSequence: null,
   sourceDocumentSignature: null,
   sourceAcknowledgedAt: null,
+  sourceRecheckVisitedViews: [],
   selectedSegment: "school_gates",
   subject: "Make the St John the Baptist school street permanent",
   body:
@@ -760,6 +762,24 @@ const initialState: DemoState = {
   activeWorkingDraftId: null,
   sourceWorkingCopy: null,
   activity: [{ id: "seed", label: "Demo workspace loaded with seeded campaign brief and local fixture contacts." }],
+};
+
+const SOURCE_RECHECK_REQUIRED_VIEWS: ViewId[] = ["evidence", "strategy", "drafts"];
+
+const sourceRecheckViewLabels: Record<ViewId, string> = {
+  overview: "Overview",
+  actions: "Action plan",
+  brief: "Campaign brief",
+  objectives: "Objective & targets",
+  power: "Power map",
+  strategy: "Strategy & tactics",
+  evidence: "Evidence & checks",
+  audiences: "Audiences",
+  contacts: "Contacts",
+  drafts: "Drafts",
+  reviews: "Reviews & approvals",
+  outbox: "Outbox & schedule",
+  responses: "Responses & results",
 };
 
 const statusCopy: Record<DraftStatus, { label: string; text: string }> = {
@@ -929,6 +949,9 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     sourceLastSequence: typeof parsed.sourceLastSequence === "number" ? parsed.sourceLastSequence : null,
     sourceDocumentSignature: typeof parsed.sourceDocumentSignature === "string" ? parsed.sourceDocumentSignature : null,
     sourceAcknowledgedAt: typeof parsed.sourceAcknowledgedAt === "string" && parsed.sourceAcknowledgedAt ? parsed.sourceAcknowledgedAt : null,
+    sourceRecheckVisitedViews: Array.isArray(parsed.sourceRecheckVisitedViews)
+      ? Array.from(new Set(parsed.sourceRecheckVisitedViews.filter((view): view is ViewId => viewIds.includes(view as ViewId))))
+      : [],
     reviewerNote: typeof parsed.reviewerNote === "string" ? parsed.reviewerNote : "",
     activeView: viewIds.includes(parsed.activeView as ViewId) ? (parsed.activeView as ViewId) : "overview",
     contactFilter:
@@ -2533,6 +2556,9 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const canQueueCommunication = communicationStatus === "approved" && !sourceBaselineChanged;
   const canChangeLocalQueueSchedule = !sourceBaselineChanged;
   const canSelectAudienceWithCurrentSource = !sourceBaselineChanged;
+  const sourceRecheckVisitedViews = new Set(sourceBaselineChanged ? state.sourceRecheckVisitedViews : []);
+  const missingSourceRecheckViews = SOURCE_RECHECK_REQUIRED_VIEWS.filter((view) => !sourceRecheckVisitedViews.has(view));
+  const canAcknowledgeSourceRefresh = !sourceBaselineChanged || missingSourceRecheckViews.length === 0;
   const reviewBlocked = !canRequestReview;
   const reviewItemCount = (state.status === "review" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "review").length;
   const queuedItemCount = (state.status === "queued" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "queued").length;
@@ -2658,7 +2684,14 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   ];
 
   const setView = (activeView: ViewId) => {
-    setState((current) => ({ ...current, activeView }));
+    setState((current) => ({
+      ...current,
+      activeView,
+      sourceRecheckVisitedViews:
+        sourceBaselineChanged && SOURCE_RECHECK_REQUIRED_VIEWS.includes(activeView)
+          ? Array.from(new Set([...current.sourceRecheckVisitedViews, activeView]))
+          : current.sourceRecheckVisitedViews,
+    }));
   };
 
   const setActiveDraft = (activeDraft: DraftId) => {
@@ -2938,13 +2971,14 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   };
 
   const acknowledgeSourceRefresh = () => {
-    if (!source || !currentSourceDocumentSignature) return;
+    if (!source || !currentSourceDocumentSignature || !canAcknowledgeSourceRefresh) return;
     setState((current) => ({
       ...current,
       sourceStateVersion: source.stateVersion,
       sourceLastSequence: source.lastSequence,
       sourceDocumentSignature: currentSourceDocumentSignature,
       sourceAcknowledgedAt: new Date().toISOString(),
+      sourceRecheckVisitedViews: [],
       activity: [record(`Acknowledged updated read-only source for ${source.title}; existing local work was preserved.`), ...current.activity].slice(0, 7),
     }));
   };
@@ -3069,6 +3103,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             warning: sourceBaselineChanged
               ? "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing."
               : "Read-only source matches the baseline acknowledged for this local workspace.",
+            requiredRecheckViews: SOURCE_RECHECK_REQUIRED_VIEWS.map((view) => sourceRecheckViewLabels[view]),
+            missingRecheckViews: missingSourceRecheckViews.map((view) => sourceRecheckViewLabels[view]),
             localItemCount: sourceRecheckItemCount,
             localActionsToRecheck: sourceBaselineChanged ? state.localActions.map((action) => ({ title: action.title, source: action.source, status: localActionStatusCopy[action.status] })) : [],
             localDraftsToRecheck: sourceChangedDraftsToRecheck.map((draft) => ({ title: draft.title, status: draft.status, source: draft.source })),
@@ -3153,6 +3189,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
               `- ${pack.sourceChangeReview.warning}`,
               `- Previous source baseline: state v${pack.sourceChangeReview.previousStateVersion}, event #${pack.sourceChangeReview.previousLastSequence}`,
               `- Current source baseline: state v${pack.sourceChangeReview.currentStateVersion}, event #${pack.sourceChangeReview.currentLastSequence}`,
+              `- Required source re-check views: ${pack.sourceChangeReview.requiredRecheckViews.join(", ")}`,
+              `- Source re-check views still to inspect: ${pack.sourceChangeReview.missingRecheckViews.length ? pack.sourceChangeReview.missingRecheckViews.join(", ") : "none"}`,
               `- Local items requiring re-check: ${pack.sourceChangeReview.localItemCount}`,
               ...(pack.sourceChangeReview.localActionsToRecheck.length
                 ? pack.sourceChangeReview.localActionsToRecheck.map((action) => `- Re-check action: ${action.title} (${action.status}) — ${action.source}`)
@@ -4131,10 +4169,33 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                       <p className="mt-2 text-xs text-ops-ink/70">No browser-local action or draft has been created yet; inspect the updated source before starting new work.</p>
                     )}
                   </div>
+                  <div className="mt-3 rounded-[var(--r-lg)] border border-ops-ink/15 bg-background/65 p-3 text-xs text-ops-ink/75" aria-label="Source re-check acknowledgement checklist">
+                    <p className="font-semibold uppercase tracking-[0.1em] text-ops-ink/70">Acknowledge after re-checking</p>
+                    <ul className="mt-2 grid gap-1 sm:grid-cols-3">
+                      {SOURCE_RECHECK_REQUIRED_VIEWS.map((view) => {
+                        const visited = sourceRecheckVisitedViews.has(view);
+                        return (
+                          <li key={view} className="flex items-center gap-2">
+                            <span className={`rounded-full px-2 py-0.5 text-[0.68rem] font-semibold ${visited ? "bg-ops-mint text-ops-ink" : "bg-ops-coral text-ops-ink"}`}>
+                              {visited ? "Checked" : "Needed"}
+                            </span>
+                            <span>{sourceRecheckViewLabels[view]}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {missingSourceRecheckViews.length ? (
+                      <p className="mt-2">Still inspect {missingSourceRecheckViews.map((view) => sourceRecheckViewLabels[view]).join(", ")} before acknowledging the new source baseline.</p>
+                    ) : (
+                      <p className="mt-2">Required source views have been reopened in this browser; acknowledgement can now unlock local approval and queue controls.</p>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={acknowledgeSourceRefresh}
-                    className="mt-3 rounded-full border border-ops-ink/20 bg-background/70 px-3 py-1.5 text-xs font-medium hover:bg-background focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    disabled={!canAcknowledgeSourceRefresh}
+                    title={!canAcknowledgeSourceRefresh ? `Reopen ${missingSourceRecheckViews.map((view) => sourceRecheckViewLabels[view]).join(", ")} before acknowledging this source update.` : undefined}
+                    className="mt-3 rounded-full border border-ops-ink/20 bg-background/70 px-3 py-1.5 text-xs font-medium hover:bg-background focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-background/70"
                   >
                     Acknowledge updated source
                   </button>
