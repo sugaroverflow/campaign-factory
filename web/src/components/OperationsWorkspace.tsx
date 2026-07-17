@@ -1047,11 +1047,12 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
   const removedFixtureSourceWorkingCopy = Boolean(state.sourceWorkingCopy && sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy));
   const removedMismatchedTopLevelSourceCopy = Boolean(state.sourceWorkingCopy && !sourceWorkingCopy && !removedFixtureSourceWorkingCopy);
   const removedFixtureTopLevelCopy = !sourceWorkingCopy && topLevelDraftLooksFixtureBound(state);
+  const removedUnprovenancedTopLevelReviewState = !sourceWorkingCopy && Boolean(state.status !== "draft" || state.queuedAt || state.reviewerNote);
   const removedFixtureSourceBaseline = Boolean(
     (state.sourceDocumentSignature && hasFixtureLeakage(state.sourceDocumentSignature)) ||
       (state.sourceRecheckDocumentSignature && hasFixtureLeakage(state.sourceRecheckDocumentSignature)),
   );
-  const resetTopLevelDraft = removedMismatchedTopLevelSourceCopy || removedFixtureSourceWorkingCopy || removedFixtureTopLevelCopy;
+  const resetTopLevelDraft = removedMismatchedTopLevelSourceCopy || removedFixtureSourceWorkingCopy || removedFixtureTopLevelCopy || removedUnprovenancedTopLevelReviewState;
 
   if (
     localActions.length === state.localActions.length &&
@@ -1061,6 +1062,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     selectedSegment === state.selectedSegment &&
     contactFilter === state.contactFilter &&
     !removedFixtureTopLevelCopy &&
+    !removedUnprovenancedTopLevelReviewState &&
     !removedFixtureSourceBaseline
   ) {
     return state;
@@ -1082,7 +1084,9 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     body: resetTopLevelDraft
       ? removedMismatchedTopLevelSourceCopy
         ? "This browser-local draft was reset because its stored source provenance belonged to another campaign. Use a source resource from this campaign before review or local queueing."
-        : "This browser-local draft was reset because it still contained fixture campaign copy or fixture-bound provenance. Use this real campaign's source material before review or local queueing."
+        : removedUnprovenancedTopLevelReviewState && !removedFixtureSourceWorkingCopy && !removedFixtureTopLevelCopy
+          ? "This browser-local review or queue state was reset because it did not retain source-resource provenance for this real campaign. Use this campaign's source resources to create a local working copy before review or local queueing."
+          : "This browser-local draft was reset because it still contained fixture campaign copy or fixture-bound provenance. Use this real campaign's source material before review or local queueing."
       : state.body,
     reviewerNote: resetTopLevelDraft ? "" : state.reviewerNote,
     status: resetTopLevelDraft ? "draft" : state.status,
