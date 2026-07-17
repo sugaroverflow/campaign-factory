@@ -2253,6 +2253,61 @@ test("operations portfolio: source labels carry through workspace switching with
   await expect(page.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "/operations");
 });
 
+test("operations workbench: source problem and theory fields hydrate the full context views", async ({ page }) => {
+  const campaignId = "57678ae0-29fd-4b4b-8a53-5c711cdb21cf";
+  const campaign = {
+    title: "Build 5,000 affordable houses in Tower Hamlets in the next 3 years",
+    place: "Tower Hamlets, London",
+    status: "partial",
+    next: "Verify the exact affordable housing delivery route in council papers",
+  };
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: campaign.status, stateVersion: 4, lastSequence: 2, events: [] },
+        documents: campaignOperationsDocuments(campaign, {
+          campaign_brief: [
+            campaign.title,
+            "",
+            `Place: ${campaign.place}`,
+            "",
+            "THE PROBLEM",
+            "Tower Hamlets has an acute affordable housing shortfall and residents need a source-backed route for holding decision-makers to account.",
+          ].join("\n"),
+          objective_theory_of_change: [
+            "OBJECTIVE AND THEORY OF CHANGE",
+            "",
+            "Decision-maker: Tower Hamlets Mayor and Cabinet housing route",
+            "",
+            "Specific action: adopt and publish a delivery plan for 5,000 affordable homes",
+            "",
+            "Minimum viable win: a dated council commitment with published delivery milestones",
+            "",
+            "Theory of change: if residents, tenants and planning-watch allies use verified housing evidence to press the Mayor and Cabinet route, the council has to publish clearer affordable-home milestones before local support is escalated.",
+          ].join("\n"),
+        }),
+        evidence: campaignEvidence([{ id: "housing-route", description: campaign.next, reason: "Objective context hydration", affectedSections: ["objective"] }], 2),
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=brief`);
+  await expect(page.getByRole("heading", { name: "Campaign brief" })).toBeVisible();
+  await expect(page.getByText("Problem", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Tower Hamlets has an acute affordable housing shortfall").first()).toBeVisible();
+  await expect(page.getByText("School-gate families")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Objective & targets/ }).first().click();
+  await expect(page.getByRole("heading", { name: "Objective & targets" })).toBeVisible();
+  await expect(page.getByText("Theory of change", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("if residents, tenants and planning-watch allies use verified housing evidence").first()).toBeVisible();
+  await expect(page.getByText("Mayor and Cabinet housing route").first()).toBeVisible();
+  await expect(page.getByText("published delivery milestones").first()).toBeVisible();
+});
+
 test("operations workbench: campaign switching isolates local actions and source working copies", async ({ page }) => {
   const campaigns = {
     "69f257b6-9913-4395-94f7-5c25b4b5fe95": {

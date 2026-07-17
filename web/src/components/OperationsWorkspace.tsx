@@ -866,6 +866,7 @@ const SOURCE_SECTION_LABELS = [
   "By",
   "Minimum viable win",
   "Success looks like",
+  "Theory of change",
   "Route to influence",
   "Coalition strategy",
   "Priority audiences",
@@ -928,6 +929,25 @@ function sourceLinesAfterHeading(doc: CompiledDocument | undefined, heading: str
     }
   }
   return items;
+}
+
+function sourceParagraphAfterHeading(doc: CompiledDocument | undefined, heading: string, max = 300) {
+  const lines = doc?.plainText?.split(/\r?\n/).map((line) => line.trim()) ?? [];
+  const start = lines.findIndex((line) => line.replace(/:$/, "").toLowerCase() === heading.toLowerCase());
+  if (start < 0) return null;
+  const paragraph: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (!line) {
+      if (paragraph.length) break;
+      continue;
+    }
+    if (SOURCE_SECTION_BOUNDARY.test(line) || /^[A-Z][A-Z0-9 /&'(),-]{3,}:?$/.test(line)) break;
+    if (/^[-•]\s+/.test(line) || /^\d+\.\s+/.test(line) || /^(P\d+|Phase\s+\d+)/i.test(line)) break;
+    paragraph.push(line);
+  }
+  const value = paragraph.join(" ").replace(/\s+/g, " ").trim();
+  if (!value) return null;
+  return shortText(value, max);
 }
 
 function sourceFirstParagraph(doc: CompiledDocument | undefined, max = 220) {
@@ -1335,10 +1355,12 @@ function buildSourceContext(source: CampaignSource): typeof campaignContext {
   const media = byKey.get("media_pack");
   const evidenceTotals = source.evidence.totals;
   const nextGate = source.nextGate ?? source.evidence.nextChecks[0]?.description ?? "Review unresolved load-bearing checks before the campaign changes phase.";
+  const sourceProblem = source.problem || sourceParagraphAfterHeading(brief, "THE PROBLEM") || sourceParagraphAfterHeading(brief, "Problem");
   const objectiveDecisionMaker = sourceSectionValue(objective, "Decision-maker");
   const objectiveAction = sourceSectionValue(objective, "Specific action");
   const objectiveBy = sourceSectionValue(objective, "By");
   const objectiveMinimumWin = sourceSectionValue(objective, "Minimum viable win");
+  const theoryOfChange = sourceSectionValue(objective, "Theory of change", 420) || sourceParagraphAfterHeading(objective, "THEORY OF CHANGE", 420);
   const routeToInfluence = sourceSectionValue(strategy, "Route to influence");
   const coalitionStrategy = sourceSectionValue(strategy, "Coalition strategy");
   const priorityAudiences = sourceLinesAfterHeading(strategy, "Priority audiences", 5);
@@ -1370,6 +1392,12 @@ function buildSourceContext(source: CampaignSource): typeof campaignContext {
           detail: sourceStatusDetail(source),
           use: "Partial is usable, but incomplete documents remain visible rather than silently filled.",
           owner: "Workbench",
+        },
+        {
+          label: "Problem",
+          detail: sourceProblem ?? "The typed campaign source did not expose a distinct problem paragraph; use the brief excerpt until a campaigner verifies the framing.",
+          use: "Keeps the workspace anchored to the actual source problem without substituting fixture narrative.",
+          owner: "Campaign source",
         },
         {
           label: "Brief excerpt",
@@ -1405,6 +1433,12 @@ function buildSourceContext(source: CampaignSource): typeof campaignContext {
           label: "Minimum viable win",
           detail: objectiveMinimumWin ?? "Minimum viable win was not exposed as a labelled source field.",
           use: "Lets local actions target a truthful near-term win instead of overstating the campaign outcome.",
+          owner: "Campaign source",
+        },
+        {
+          label: "Theory of change",
+          detail: theoryOfChange ?? "Theory of change was not exposed as a labelled source field; retain the source document rather than inventing causal steps.",
+          use: "Connects strategy, tactics, and local communications to the real source logic when it is available.",
           owner: "Campaign source",
         },
         {
