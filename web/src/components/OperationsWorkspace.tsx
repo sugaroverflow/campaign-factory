@@ -4952,6 +4952,15 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         <p className="mt-3 max-w-3xl text-muted-foreground">
           There are no fabricated analytics here. This page records the boundary and the review questions that would matter once a provider, consent-safe import, and response stream exist.
         </p>
+        {sourceBaselineChanged ? (
+          <div className="mt-5 rounded-[var(--r-xl)] border border-ops-coral bg-ops-coral/50 p-3 text-sm text-ops-ink" role="status" aria-label="Responses source update boundary">
+            <p className="font-medium">Response planning stays empty while the source is re-checked.</p>
+            <p className="mt-1 text-ops-ink/75">
+              No reply stream, list-health result, or outcome claim exists here; if the source changes, the workspace keeps this future-results area paused until the required source views are reopened and acknowledged.
+            </p>
+            {renderSourceRecheckProgress("Responses source re-check progress")}
+          </div>
+        ) : null}
         <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-border">
           <div className="hidden grid-cols-[0.8fr_1fr_0.9fr] gap-3 border-b border-border bg-secondary px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground md:grid">
             <span>Future signal</span><span>Why it matters</span><span>Current boundary</span>

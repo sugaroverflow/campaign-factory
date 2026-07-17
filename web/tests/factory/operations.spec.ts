@@ -9147,6 +9147,14 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByLabel("Local schedule intent")).toHaveAttribute("title", "Acknowledge the updated read-only source before changing local schedule intent.");
   await expect(page.getByText("Local schedule intent is paused until the updated read-only source is acknowledged, so queued work cannot be retimed against stale campaign material.")).toBeVisible();
   await expect(page.getByLabel("Reset local workspace scope")).toContainText("Reset clears this campaign's 2 browser-local items currently paused for source re-check");
+
+  await page.getByRole("button", { name: /Responses & results/ }).first().click();
+  await expect(page.getByLabel("Responses source update boundary")).toContainText("Response planning stays empty while the source is re-checked.");
+  await expect(page.getByLabel("Responses source re-check progress")).toContainText("Checked 2/3 required source views for the current baseline.");
+  await expect(page.getByLabel("Responses source re-check progress")).toContainText("Re-check Strategy & tactics");
+  await expect(page.getByText("No provider or inbox stream is connected.")).toBeVisible();
+
+  await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
   await expect(page.getByLabel("Export operations pack")).toContainText("Client-side download");
   const [changedJsonDownload] = await Promise.all([
     page.waitForEvent("download"),
