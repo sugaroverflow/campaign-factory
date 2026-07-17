@@ -433,11 +433,22 @@ function hasConsistentOperationsEvidenceReferences(value: EvidenceAndNextChecks)
     }
   }
 
+  const expectedConflicts = Array.from(claimsById.values()).filter(
+    (claim) => claim.label === "Conflicting evidence" || (claim.contradictsClaimIds?.length ?? 0) > 0,
+  );
+  if (expectedConflicts.length !== value.conflicts.length) return false;
+
   const seenConflictIds = new Set<string>();
-  for (const conflict of value.conflicts) {
+  for (const [index, conflict] of value.conflicts.entries()) {
     const sourceClaim = claimsById.get(conflict.id);
-    if (seenConflictIds.has(conflict.id) || !sourceClaim || !matchesOperationsEvidenceClaim(conflict, sourceClaim)) return false;
-    if (conflict.label !== "Conflicting evidence" && !conflict.contradictsClaimIds?.length) return false;
+    if (
+      seenConflictIds.has(conflict.id) ||
+      !sourceClaim ||
+      expectedConflicts[index]?.id !== conflict.id ||
+      !matchesOperationsEvidenceClaim(conflict, sourceClaim)
+    ) {
+      return false;
+    }
     seenConflictIds.add(conflict.id);
   }
 

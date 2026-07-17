@@ -2680,6 +2680,65 @@ test("operations workbench: source next checks cannot reference claims when the 
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
+test("operations workbench: source evidence conflicts must match public ledger claims", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 10, lastSequence: 100, events: [] },
+        documents: canonicalOperationsDocuments("Omitted conflict Ormskirk"),
+        evidence: {
+          groups: [
+            {
+              label: "Conflicting evidence",
+              count: 1,
+              claims: [
+                {
+                  id: "conflict-claim",
+                  text: "Public conflict claim should fail closed when omitted from the conflict list",
+                  type: "process",
+                  label: "Conflicting evidence",
+                  loadBearing: true,
+                  confidence: "medium",
+                  sourceCount: 2,
+                  affectedOutputs: ["campaign_brief"],
+                },
+              ],
+            },
+          ],
+          conflicts: [],
+          nextChecks: [
+            {
+              id: "omitted-conflict-check",
+              description: "Omitted source conflict should fail closed",
+              reason: "Contract validation",
+              claimIds: ["conflict-claim"],
+              affectedSections: ["evidence"],
+            },
+          ],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 1, loadBearing: 1, verifiedLoadBearing: 0, unresolvedLoadBearing: 1 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/typed public document contract/i)).toBeVisible();
+  await expect(page.getByText("Omitted conflict Ormskirk")).toHaveCount(0);
+  await expect(page.getByText("Public conflict claim should fail closed when omitted from the conflict list")).toHaveCount(0);
+  await expect(page.getByText("Omitted source conflict should fail closed")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
 test("operations workbench: source evidence totals must match public ledger groups", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 
