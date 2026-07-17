@@ -6073,6 +6073,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await page.getByRole("button", { name: /Overview/ }).first().click();
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toBeVisible();
   await expect(page.getByText(/Local approval baseline: acknowledged/)).toBeVisible();
+  await expect(page.getByLabel("Source document baseline state")).toContainText("changed since local acknowledgement");
   await expect(page.getByText(/Your browser-local actions and drafts were preserved/)).toBeVisible();
   await expect(page.getByLabel("Six-stage campaign runway")).toContainText("Paused for source update");
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("2 local items need source re-check");
@@ -6100,6 +6101,8 @@ test("operations workbench: source updates preserve browser-local work and requi
     sourceChangeReview: {
       baselineChanged: boolean;
       sourceAcknowledgedAt: string | null;
+      previousDocumentSignature: string | null;
+      currentDocumentSignature: string | null;
       warning: string;
       localActionsToRecheck: Array<{ title: string; source: string; status: string }>;
       localDraftsToRecheck: Array<{ title: string; source: string; status: string }>;
@@ -6109,6 +6112,8 @@ test("operations workbench: source updates preserve browser-local work and requi
   expect(changedPack.sourceChangeReview).toMatchObject({
     baselineChanged: true,
     sourceAcknowledgedAt: expect.any(String),
+    previousDocumentSignature: expect.stringContaining("media_pack:assembling:0"),
+    currentDocumentSignature: expect.stringContaining("media_pack:ready:1"),
     warning: "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing.",
   });
   expect(changedPack.sourceChangeReview.localActionsToRecheck[0]).toMatchObject({
@@ -6129,6 +6134,9 @@ test("operations workbench: source updates preserve browser-local work and requi
   const changedMarkdownPath = await changedMarkdownDownload.path();
   expect(changedMarkdownPath).toBeTruthy();
   const changedMarkdown = await readFile(changedMarkdownPath!, "utf8");
+  expect(changedMarkdown).toContain("Source baseline: changed since local acknowledgement");
+  expect(changedMarkdown).toContain("Previous source baseline: state v44, event #1909");
+  expect(changedMarkdown).toContain("Current source baseline: state v45, event #1918");
   expect(changedMarkdown).toContain("Source update warning: read-only source changed after this local workspace started");
   expect(changedMarkdown).toContain("## Source update review");
   expect(changedMarkdown).toContain("Re-check action: Confirm Planning Inspectorate appeal status (Next) — Campaign source · Evidence & checks · strategy");
@@ -6139,6 +6147,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await page.getByRole("button", { name: "Acknowledge updated source" }).click();
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toHaveCount(0);
   await expect(page.getByText(/Local approval baseline: acknowledged/)).toBeVisible();
+  await expect(page.getByLabel("Source document baseline state")).toContainText("matches local acknowledgement");
   await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();
   await expect(page.getByText("Local approvals are checking against the latest acknowledged read-only source baseline.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve as human reviewer" })).toBeEnabled();

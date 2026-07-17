@@ -2576,6 +2576,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             runStatus: source.runStatus,
             sourceStateVersion: source.stateVersion,
             sourceLastSequence: source.lastSequence,
+            currentSourceDocumentSignature,
+            acknowledgedSourceDocumentSignature: state.sourceDocumentSignature,
             sourceAcknowledgedAt: state.sourceAcknowledgedAt,
             sourceBaselineChanged,
           }
@@ -2629,6 +2631,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             currentStateVersion: source.stateVersion,
             previousLastSequence: state.sourceLastSequence,
             currentLastSequence: source.lastSequence,
+            previousDocumentSignature: state.sourceDocumentSignature,
+            currentDocumentSignature: currentSourceDocumentSignature,
             sourceAcknowledgedAt: state.sourceAcknowledgedAt,
             warning: sourceBaselineChanged
               ? "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing."
@@ -2660,6 +2664,12 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         `Exported: ${pack.exportedAt}`,
         campaign.sourceHref ? `Source brief: ${campaign.sourceHref}` : `Source: ${campaign.sourceOrigin}`,
         `Status: ${campaign.runStatus}`,
+        ...(source
+          ? [
+              `Source baseline: ${campaign.sourceBaselineChanged ? "changed since local acknowledgement" : "matches local acknowledgement"}`,
+              `Acknowledged baseline: state v${campaign.sourceStateVersion}, event #${campaign.sourceLastSequence}${campaign.sourceAcknowledgedAt ? `, acknowledged ${formatQueuedTime(campaign.sourceAcknowledgedAt)}` : ", not acknowledged yet"}`,
+            ]
+          : []),
         ...(campaign.sourceBaselineChanged
           ? ["Source update warning: read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing."]
           : []),
@@ -2708,6 +2718,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           ? [
               "## Source update review",
               `- ${pack.sourceChangeReview.warning}`,
+              `- Previous source baseline: state v${pack.sourceChangeReview.previousStateVersion}, event #${pack.sourceChangeReview.previousLastSequence}`,
+              `- Current source baseline: state v${pack.sourceChangeReview.currentStateVersion}, event #${pack.sourceChangeReview.currentLastSequence}`,
               ...(pack.sourceChangeReview.localActionsToRecheck.length
                 ? pack.sourceChangeReview.localActionsToRecheck.map((action) => `- Re-check action: ${action.title} (${action.status}) — ${action.source}`)
                 : ["- No browser-local actions currently require source re-check."]),
@@ -3554,6 +3566,9 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Local approval baseline: {state.sourceAcknowledgedAt ? `acknowledged ${formatQueuedTime(state.sourceAcknowledgedAt)}` : "not acknowledged yet"}.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground" aria-label="Source document baseline state">
+                Source document baseline: {sourceBaselineChanged ? "changed since local acknowledgement" : "matches local acknowledgement"}.
               </p>
               {sourceBaselineChanged ? (
                 <div className="mt-4 rounded-[var(--r-xl)] border border-ops-coral bg-ops-coral/55 p-3 text-sm text-ops-ink" role="status">
