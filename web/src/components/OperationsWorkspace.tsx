@@ -1058,6 +1058,12 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     (state.sourceDocumentSignature && hasFixtureLeakage(state.sourceDocumentSignature)) ||
       (state.sourceRecheckDocumentSignature && hasFixtureLeakage(state.sourceRecheckDocumentSignature)),
   );
+  const removedIncompleteSourceBaseline = Boolean(
+    ((state.sourceStateVersion !== null || state.sourceLastSequence !== null || state.sourceAcknowledgedAt) && !state.sourceDocumentSignature) ||
+      (state.sourceDocumentSignature && (state.sourceStateVersion === null || state.sourceLastSequence === null)) ||
+      ((state.sourceRecheckStateVersion !== null || state.sourceRecheckLastSequence !== null || state.sourceRecheckVisitedViews.length) && !state.sourceRecheckDocumentSignature) ||
+      (state.sourceRecheckDocumentSignature && (state.sourceRecheckStateVersion === null || state.sourceRecheckLastSequence === null)),
+  );
   const resetTopLevelDraft = removedMismatchedTopLevelSourceCopy || removedFixtureSourceWorkingCopy || removedFixtureTopLevelCopy || removedUnprovenancedTopLevelReviewState;
 
   if (
@@ -1070,6 +1076,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     !removedFixtureTopLevelCopy &&
     !removedUnprovenancedTopLevelReviewState &&
     !removedFixtureSourceBaseline &&
+    !removedIncompleteSourceBaseline &&
     !removedFixtureActivity
   ) {
     return state;
@@ -1079,14 +1086,14 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     ...state,
     selectedSegment,
     contactFilter,
-    sourceStateVersion: removedFixtureSourceBaseline ? null : state.sourceStateVersion,
-    sourceLastSequence: removedFixtureSourceBaseline ? null : state.sourceLastSequence,
-    sourceDocumentSignature: removedFixtureSourceBaseline ? null : state.sourceDocumentSignature,
-    sourceAcknowledgedAt: removedFixtureSourceBaseline ? null : state.sourceAcknowledgedAt,
-    sourceRecheckStateVersion: removedFixtureSourceBaseline ? null : state.sourceRecheckStateVersion,
-    sourceRecheckLastSequence: removedFixtureSourceBaseline ? null : state.sourceRecheckLastSequence,
-    sourceRecheckDocumentSignature: removedFixtureSourceBaseline ? null : state.sourceRecheckDocumentSignature,
-    sourceRecheckVisitedViews: removedFixtureSourceBaseline ? [] : state.sourceRecheckVisitedViews,
+    sourceStateVersion: removedFixtureSourceBaseline || removedIncompleteSourceBaseline ? null : state.sourceStateVersion,
+    sourceLastSequence: removedFixtureSourceBaseline || removedIncompleteSourceBaseline ? null : state.sourceLastSequence,
+    sourceDocumentSignature: removedFixtureSourceBaseline || removedIncompleteSourceBaseline ? null : state.sourceDocumentSignature,
+    sourceAcknowledgedAt: removedFixtureSourceBaseline || removedIncompleteSourceBaseline ? null : state.sourceAcknowledgedAt,
+    sourceRecheckStateVersion: removedFixtureSourceBaseline || removedIncompleteSourceBaseline ? null : state.sourceRecheckStateVersion,
+    sourceRecheckLastSequence: removedFixtureSourceBaseline || removedIncompleteSourceBaseline ? null : state.sourceRecheckLastSequence,
+    sourceRecheckDocumentSignature: removedFixtureSourceBaseline || removedIncompleteSourceBaseline ? null : state.sourceRecheckDocumentSignature,
+    sourceRecheckVisitedViews: removedFixtureSourceBaseline || removedIncompleteSourceBaseline ? [] : state.sourceRecheckVisitedViews,
     subject: resetTopLevelDraft ? "Local source draft reset" : state.subject,
     body: resetTopLevelDraft
       ? removedMismatchedTopLevelSourceCopy
@@ -1103,7 +1110,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     activeWorkingDraftId,
     sourceWorkingCopy,
     activity:
-      removedMismatchedLocalWork || resetTopLevelDraft || removedFixtureSourceBaseline || removedFixtureActivity
+      removedMismatchedLocalWork || resetTopLevelDraft || removedFixtureSourceBaseline || removedIncompleteSourceBaseline || removedFixtureActivity
         ? [{ id: "workspace-sanitized", label: "Browser-local state was sanitized for this real campaign workspace; public source data was not changed." }, ...activity].slice(0, 7)
         : state.activity,
   };
