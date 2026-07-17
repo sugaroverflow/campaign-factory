@@ -215,7 +215,7 @@ function upstreamResponseMetadata(response: Response, elapsedMs: number | undefi
     sourceResponseDate: sanitizeSourceResponseDate(response.headers.get("date")),
     sourceContentLength: sanitizeSourceContentLength(response.headers.get("content-length")),
     sourceServer: sanitizeSourceServer(response.headers.get("server")),
-    sourceBodyEmpty: hasEmptyObservedBody(response, bodyText),
+    sourceBodyEmpty: !bodyTruncated && hasEmptyObservedBody(response, bodyText),
     ...(bodyTruncated ? { sourceBodyTruncated: true } : {}),
     ...("value" in contentType ? { sourceContentType: contentType.value } : {}),
     ...("missing" in contentType ? { sourceContentTypeMissing: true } : {}),

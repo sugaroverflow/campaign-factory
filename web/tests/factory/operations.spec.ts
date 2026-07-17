@@ -541,6 +541,48 @@ test("operations source API: large upstream failure bodies are bounded before di
   }
 });
 
+test("operations source API: truncated whitespace upstream failures are not reported as empty bodies", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response(" ".repeat(70_000), {
+        status: 500,
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "x-matched-path": "/api/factory/runs/[id]",
+          "x-vercel-id": "lhr1::iad1::ops-whitespace-body",
+        },
+      });
+    }
+
+    throw new Error("Documents must not hydrate when the source run failure body is oversized whitespace.");
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(500);
+    expectPublicSourceJsonBoundary(response.headers, "truncated whitespace source run failure body");
+
+    const body = (await response.json()) as { error?: string; sourceStep?: string; sourcePath?: string; sourceRequestId?: string; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; documents?: unknown[] };
+    expect(body.error).toBe("Campaign source run unavailable");
+    expect(body.sourceStep).toBe("run");
+    expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}`);
+    expect(body.sourceRequestId).toBe("lhr1::iad1::ops-whitespace-body");
+    expect(body.sourceBodyEmpty).toBeUndefined();
+    expect(body.sourceBodyTruncated).toBe(true);
+    expect(body.sourceContentType).toBe("text/plain");
+    expect(body.documents).toBeUndefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: rate-limited source runs preserve retry guidance and stop document hydration", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;
