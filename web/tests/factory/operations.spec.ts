@@ -2841,49 +2841,52 @@ test("operations source API: source document retry guidance accepts HTTP-date up
   }
 });
 
-test("operations source API: document retry guidance rejects non-numeric upstream headers after a validated run header", async () => {
+test("operations source API: document retry guidance rejects numeric upstream headers outside the safe window after a validated run header", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;
-  const requestedUrls: string[] = [];
 
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    requestedUrls.push(String(input));
-    expect(init?.cache).toBe("no-store");
-    expect(init?.redirect).toBe("manual");
-    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+  for (const retryAfter of ["0", "00000", "86401", "999999"]) {
+    const requestedUrls: string[] = [];
 
-    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
-      return Response.json({ campaignId: curatedId, status: "partial", stateVersion: 1, lastSequence: 0, events: [] });
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      requestedUrls.push(String(input));
+      expect(init?.cache).toBe("no-store");
+      expect(init?.redirect).toBe("manual");
+      expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+      if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+        return Response.json({ campaignId: curatedId, status: "partial", stateVersion: 1, lastSequence: 0, events: [] });
+      }
+
+      if (String(input).endsWith(`/api/factory/runs/${curatedId}/documents`)) {
+        return Response.json(
+          { error: "Too many source reads", detail: "Try again shortly." },
+          { status: 429, headers: { "Retry-After": retryAfter } },
+        );
+      }
+
+      throw new Error(`Unexpected source request: ${String(input)}`);
+    }) as typeof fetch;
+
+    try {
+      const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+      expect(response.status).toBe(429);
+      expectPublicSourceJsonBoundary(response.headers, `document source rate limit with unsafe retry guidance ${retryAfter}`);
+      expect(response.headers.get("retry-after")).toBeNull();
+
+      const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string; documents?: unknown[]; sourceRunUnavailable?: boolean };
+      expect(body.error).toBe("Campaign source documents unavailable");
+      expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId}/documents returned HTTP 429`);
+      expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
+      expect(body.documents).toBeUndefined();
+      expect(body.sourceRunUnavailable).toBeUndefined();
+      expect(requestedUrls).toEqual([
+        `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
+        `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
     }
-
-    if (String(input).endsWith(`/api/factory/runs/${curatedId}/documents`)) {
-      return Response.json(
-        { error: "Too many source reads", detail: "Try again shortly." },
-        { status: 429, headers: { "Retry-After": "999999" } },
-      );
-    }
-
-    throw new Error(`Unexpected source request: ${String(input)}`);
-  }) as typeof fetch;
-
-  try {
-    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
-    expect(response.status).toBe(429);
-    expectPublicSourceJsonBoundary(response.headers, "document source rate limit with unsafe retry guidance");
-    expect(response.headers.get("retry-after")).toBeNull();
-
-    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string; documents?: unknown[]; sourceRunUnavailable?: boolean };
-    expect(body.error).toBe("Campaign source documents unavailable");
-    expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId}/documents returned HTTP 429`);
-    expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
-    expect(body.documents).toBeUndefined();
-    expect(body.sourceRunUnavailable).toBeUndefined();
-    expect(requestedUrls).toEqual([
-      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
-      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
-    ]);
-  } finally {
-    globalThis.fetch = originalFetch;
   }
 });
 
@@ -4273,6 +4276,25 @@ test("operations workspace: HTTP-date source retry guidance is visible without f
   await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
   await expect(page.getByText("Read-only source returned date-based retry guidance.")).toBeVisible();
   await expect(page.getByText("Source retry guidance: try again after Fri, 17 Jul 2026 06:30:00 GMT.")).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+});
+
+test("operations workspace: unsafe numeric source retry guidance is suppressed without fixture fallback", async ({ page }) => {
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      status: 429,
+      headers: { "Retry-After": "86401" },
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Campaign source run unavailable", detail: "Read-only source returned over-wide retry guidance.", sourceOrigin: "https://campaign-factory.vercel.app" }),
+    });
+  });
+
+  await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95");
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("Read-only source returned over-wide retry guidance.")).toBeVisible();
+  await expect(page.getByText(/Source retry guidance:/)).toHaveCount(0);
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
 });

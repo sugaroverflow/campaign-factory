@@ -43,7 +43,10 @@ const RETRY_AFTER_HTTP_DATE_RE = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} (Jan|Feb
 function sanitizeSourceRetryAfter(value: string | null) {
   if (!value) return undefined;
   const trimmed = value.trim();
-  if (/^\d{1,5}$/.test(trimmed)) return trimmed;
+  if (/^\d{1,5}$/.test(trimmed)) {
+    const seconds = Number.parseInt(trimmed, 10);
+    return seconds >= 1 && seconds <= 86_400 ? String(seconds) : undefined;
+  }
   if (trimmed.length <= 64 && RETRY_AFTER_HTTP_DATE_RE.test(trimmed) && Number.isFinite(Date.parse(trimmed))) return trimmed;
   return undefined;
 }
