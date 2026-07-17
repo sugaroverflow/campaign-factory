@@ -816,6 +816,53 @@ test("operations source API: malformed content-range headers fail closed with a 
   }
 });
 
+test("operations source API: impossible byte content ranges fail closed with a safe diagnostic", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response('{"status":"partial"}', {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "20",
+          "content-range": "bytes 20-10/120",
+          "x-matched-path": "/api/factory/runs/[id]",
+          "x-vercel-id": "lhr1::iad1::ops-impossible-content-range",
+        },
+      });
+    }
+
+    throw new Error("Documents must not hydrate when the source run returns an impossible Content-Range header.");
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(502);
+    expectPublicSourceJsonBoundary(response.headers, "impossible content-range source run body");
+
+    const body = (await response.json()) as { error?: string; detail?: string; sourceStep?: string; sourceFailureKind?: string; sourcePath?: string; sourceHttpStatus?: number; sourceContentLength?: number; sourceContentRange?: string; sourceBodyTruncated?: boolean; sourceContentType?: string; documents?: unknown[] };
+    expect(body.error).toBe("Campaign source contract mismatch");
+    expect(body.detail).toContain("returned a Content-Range header despite the complete-response JSON contract");
+    expect(body.sourceStep).toBe("run");
+    expect(body.sourceFailureKind).toBe("contract_mismatch");
+    expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}`);
+    expect(body.sourceHttpStatus).toBe(200);
+    expect(body.sourceContentLength).toBe(20);
+    expect(body.sourceContentRange).toBe("malformed");
+    expect(body.sourceBodyTruncated).toBe(true);
+    expect(body.sourceContentType).toBe("application/json");
+    expect(body.documents).toBeUndefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: content-encoded source runs fail closed despite identity requests", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;

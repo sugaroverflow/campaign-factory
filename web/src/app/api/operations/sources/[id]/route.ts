@@ -174,8 +174,25 @@ function sanitizeSourceContentLength(value: string | null) {
 function sanitizeSourceContentRange(value: string | null) {
   if (!value) return undefined;
   const trimmed = value.trim().toLowerCase().replace(/\s+/g, " ");
-  if (/^bytes (?:\d{1,9}-\d{1,9}|\*)\/(?:\d{1,9}|\*)$/.test(trimmed) && trimmed.length <= 80) return trimmed;
-  return trimmed ? "malformed" : undefined;
+  if (trimmed.length > 80) return "malformed";
+
+  const unsatisfiedMatch = trimmed.match(/^bytes \*\/(\d{1,9}|\*)$/);
+  if (unsatisfiedMatch) return trimmed;
+
+  const rangeMatch = trimmed.match(/^bytes (\d{1,9})-(\d{1,9})\/(\d{1,9}|\*)$/);
+  if (!rangeMatch) return trimmed ? "malformed" : undefined;
+
+  const start = Number(rangeMatch[1]);
+  const end = Number(rangeMatch[2]);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end) return "malformed";
+
+  const totalValue = rangeMatch[3];
+  if (totalValue !== "*") {
+    const total = Number(totalValue);
+    if (!Number.isSafeInteger(total) || total <= 0 || end >= total) return "malformed";
+  }
+
+  return trimmed;
 }
 
 function hasSourceContentRange(response: Response) {
