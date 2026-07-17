@@ -2560,6 +2560,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const status = statusCopy[communicationStatus];
   const canRequestReview = communicationSubject.trim().length > 8 && communicationBody.trim().length > 80;
   const canCreateSourceDerivedWork = !sourceBaselineChanged;
+  const canEditCommunicationCopy = activeDraftEditable && !sourceBaselineChanged;
   const canRequestReviewWithCurrentSource = canRequestReview && !sourceBaselineChanged;
   const canApproveCommunication = communicationStatus === "review" && !sourceBaselineChanged;
   const canQueueCommunication = communicationStatus === "approved" && !sourceBaselineChanged;
@@ -2819,6 +2820,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   };
 
   const updateDraft = (patch: Partial<Pick<DemoState, "subject" | "body">>) => {
+    if (sourceBaselineChanged) return;
     setState((current) => ({
       ...current,
       ...(current.activeWorkingDraftId
@@ -3706,6 +3708,11 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         <div className="mt-6 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-ops-yellow/45 p-4 text-sm text-muted-foreground">
           <span className="font-medium text-foreground">Review warning:</span> {activeSourceWorkingCopy ? `This copy came from ${activeSourceWorkingCopy.sourceDocument}; keep its source warnings attached before approval.` : activeDraft.requires} {activeDraftEditable && !activeSourceWorkingCopy ? selected.caveat : !activeDraftEditable ? (source ? "This staged source outline is not available for approval or queueing." : "This staged fixture is not available for approval or queueing.") : null}
         </div>
+        {sourceBaselineChanged && activeDraftEditable ? (
+          <p id="operations-draft-edit-source-pause" className="mt-4 rounded-[var(--r-lg)] border border-ops-coral bg-ops-coral/55 p-3 text-sm text-ops-ink" role="status">
+            Editing local draft copy is paused until the updated read-only source is acknowledged, so re-checking cannot accidentally rewrite a draft against stale campaign material.
+          </p>
+        ) : null}
         {activeSourceWorkingCopy ? (
           <div className="mt-4 rounded-[var(--r-2xl)] border border-ops-line bg-background/85 p-4 text-sm">
             <p className="font-medium">Source provenance attached</p>
@@ -3752,7 +3759,10 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                 id="operations-subject"
                 value={communicationSubject}
                 onChange={(event) => updateDraft({ subject: event.target.value })}
-                className="h-auto rounded-full border-[1.5px] px-4 py-2.5 text-base"
+                disabled={!canEditCommunicationCopy}
+                aria-describedby={sourceBaselineChanged ? "operations-draft-edit-source-pause" : undefined}
+                title={sourceBaselineChanged ? "Acknowledge the updated read-only source before editing this local draft copy." : undefined}
+                className="h-auto rounded-full border-[1.5px] px-4 py-2.5 text-base disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
               />
             </div>
             <div className="space-y-2">
@@ -3762,7 +3772,10 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                 value={communicationBody}
                 onChange={(event) => updateDraft({ body: event.target.value })}
                 rows={13}
-                className="min-h-[22rem] rounded-[var(--r-2xl)] border-[1.5px] p-4 text-base leading-relaxed"
+                disabled={!canEditCommunicationCopy}
+                aria-describedby={sourceBaselineChanged ? "operations-draft-edit-source-pause" : undefined}
+                title={sourceBaselineChanged ? "Acknowledge the updated read-only source before editing this local draft copy." : undefined}
+                className="min-h-[22rem] rounded-[var(--r-2xl)] border-[1.5px] p-4 text-base leading-relaxed disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
               />
             </div>
           </div>

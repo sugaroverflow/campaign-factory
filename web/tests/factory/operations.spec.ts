@@ -9084,6 +9084,11 @@ test("operations workbench: source updates preserve browser-local work and requi
 
   await page.getByRole("button", { name: /Drafts/ }).first().click();
   await expect(page.getByText("New editable copies from source resources are paused until the updated source is acknowledged; existing working copies stay selectable for review.")).toBeVisible();
+  await expect(page.getByText("Editing local draft copy is paused until the updated read-only source is acknowledged, so re-checking cannot accidentally rewrite a draft against stale campaign material.")).toBeVisible();
+  await expect(page.getByLabel("Subject")).toBeDisabled();
+  await expect(page.getByLabel("Subject")).toHaveAttribute("title", "Acknowledge the updated read-only source before editing this local draft copy.");
+  await expect(page.getByLabel("Message")).toBeDisabled();
+  await expect(page.getByLabel("Message")).toHaveAttribute("title", "Acknowledge the updated read-only source before editing this local draft copy.");
   await expect(page.getByRole("button", { name: "Acknowledge source update" }).first()).toBeDisabled();
   await expect(page.getByRole("button", { name: "Acknowledge source update" }).first()).toHaveAttribute(
     "title",
@@ -9194,6 +9199,9 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByRole("button", { name: /Residents directly affected by amenity/ })).toBeEnabled();
   await page.getByRole("button", { name: /Action plan/ }).first().click();
   await expect(page.getByLabel("Status for Confirm Planning Inspectorate appeal status")).toBeEnabled();
+  await page.getByRole("button", { name: /Drafts/ }).first().click();
+  await expect(page.getByLabel("Subject")).toBeEnabled();
+  await expect(page.getByLabel("Message")).toBeEnabled();
   await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();
   await expect(page.getByText("Local approvals are checking against the latest acknowledged read-only source baseline.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve as human reviewer" })).toBeEnabled();
@@ -9297,6 +9305,8 @@ test("operations workbench: content-only source title changes preserve local wor
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("1 local item needs source re-check");
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("Action: Confirm Planning Inspectorate appeal status");
   await page.getByRole("button", { name: /Drafts/ }).first().click();
+  await expect(page.getByText("Editing local draft copy is paused until the updated read-only source is acknowledged, so re-checking cannot accidentally rewrite a draft against stale campaign material.")).toBeVisible();
+  await expect(page.getByLabel("Subject")).toBeDisabled();
   await expect(page.getByText("Review requests are paused until the updated source is acknowledged, so local copy cannot move forward against stale campaign material.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Mark ready for review" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Mark ready for review" })).toHaveAttribute("title", "Acknowledge the updated read-only source before marking this local draft ready for review.");
@@ -9312,6 +9322,7 @@ test("operations workbench: content-only source title changes preserve local wor
   await page.getByRole("button", { name: /Overview/ }).first().click();
   await page.getByRole("button", { name: "Acknowledge updated source" }).click();
   await page.getByRole("button", { name: /Drafts/ }).first().click();
+  await expect(page.getByLabel("Subject")).toBeEnabled();
   await expect(page.getByRole("button", { name: "Mark ready for review" })).toBeEnabled();
 });
 
