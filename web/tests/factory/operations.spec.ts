@@ -6294,6 +6294,8 @@ test("operations workbench: campaignId route loads a read-only public campaign s
   await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
   await expect(page.getByLabel("Source next checks ledger")).toContainText("Confirm whether resident amenity evidence can be quoted");
   await expect(page.getByLabel("Source document readiness")).toContainText("Media Pack");
+  await expect(page.getByLabel("Source claim verification notes")).toContainText("Verification incomplete");
+  await expect(page.getByLabel("Source claim verification notes")).toContainText("Unresolved source claim 1");
   await page.getByLabel("Source next checks ledger").getByRole("button", { name: "Create action" }).nth(1).click();
   await expect(page.getByRole("heading", { name: "Owned local work from source checks" })).toBeVisible();
   await expect(page.getByLabel("Recommended source actions").getByText(/Check: Confirm whether resident amenity evidence/)).toBeVisible();
@@ -6335,7 +6337,7 @@ test("operations workbench: campaignId route loads a read-only public campaign s
 
   await page.getByRole("button", { name: /Campaign brief/ }).first().click();
   await expect(page.getByText("What the source says", { exact: true })).toBeVisible();
-  await expect(page.getByText(/source brief says the campaign must defend the council refusal/i)).toBeVisible();
+  await expect(page.getByText(/source brief says the campaign must defend the council refusal/i).first()).toBeVisible();
   await page.getByRole("button", { name: /Objective & targets/ }).first().click();
   await expect(page.getByText("Planning Inspectorate appeal decision-maker")).toBeVisible();
   await expect(page.getByText(/a dated, citable official appeal record/i)).toBeVisible();

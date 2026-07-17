@@ -3636,6 +3636,67 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             </div>
           </div>
         ) : null}
+        {source && section.title === "Evidence & checks" ? (
+          <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-ops-line bg-background" aria-label="Source claim verification notes">
+            <div className="border-b border-border bg-ops-coral/45 px-4 py-3">
+              <p className="text-sm font-semibold">Claim warnings and verification notes</p>
+              <p className="mt-1 text-xs text-muted-foreground">These are read from the typed evidence bundle and source documents; they are planning warnings, not local results.</p>
+            </div>
+            <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.7fr)]">
+              <div className="border-b border-border lg:border-b-0 lg:border-r">
+                {source.evidence.groups.length ? source.evidence.groups.slice(0, 3).map((group) => (
+                  <div key={group.label} className="border-b border-border px-4 py-4 text-sm last:border-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium">{group.label}</p>
+                      <span className="rounded-full bg-ops-yellow px-2 py-0.5 text-xs text-ops-ink">{group.count} claim{group.count === 1 ? "" : "s"}</span>
+                    </div>
+                    <ul className="mt-3 space-y-2 text-muted-foreground">
+                      {group.claims.slice(0, 3).map((claim) => (
+                        <li key={claim.id} className="border-l-2 border-ops-ink/20 pl-3">
+                          <span className="text-foreground">{claim.text}</span>
+                          <span className="mt-1 block text-xs">
+                            {claim.loadBearing ? "Key fact" : "Supporting fact"} · confidence {claim.confidence || "not stated"} · {claim.sourceCount || 0} source{claim.sourceCount === 1 ? "" : "s"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )) : (
+                  <div className="px-4 py-5 text-sm text-muted-foreground">No individual source claim groups were exposed by the typed evidence bundle.</div>
+                )}
+              </div>
+              <div>
+                {source.evidence.conflicts.length ? (
+                  <div className="border-b border-border px-4 py-4 text-sm">
+                    <p className="font-medium">Source conflicts</p>
+                    <ul className="mt-2 space-y-2 text-muted-foreground">
+                      {source.evidence.conflicts.slice(0, 3).map((claim) => <li key={claim.id}>{claim.text}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
+                {source.evidence.draftNotes.length ? (
+                  <div className="border-b border-border px-4 py-4 text-sm">
+                    <p className="font-medium">Draft verification notes</p>
+                    <ul className="mt-2 space-y-2 text-muted-foreground">
+                      {source.evidence.draftNotes.slice(0, 4).map((note) => <li key={`${note.section}-${note.text}`}>{note.section}: {note.text}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
+                {source.evidence.terminalGaps.length ? (
+                  <div className="border-b border-border px-4 py-4 text-sm">
+                    <p className="font-medium">Terminal gaps</p>
+                    <ul className="mt-2 space-y-2 text-muted-foreground">
+                      {source.evidence.terminalGaps.slice(0, 4).map((gap, index) => <li key={gap.id || index}>{gap.description}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
+                {!source.evidence.conflicts.length && !source.evidence.draftNotes.length && !source.evidence.terminalGaps.length ? (
+                  <div className="px-4 py-5 text-sm text-muted-foreground">No conflicts, draft verification notes, or terminal gaps were exposed by the source bundle.</div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
         {source && section.title === "Strategy & tactics" ? (
           <div className="mt-6 overflow-hidden rounded-[var(--r-2xl)] border border-ops-line bg-background" aria-label="Source tactic action candidates">
             <div className="border-b border-border bg-ops-mint/60 px-4 py-3">
