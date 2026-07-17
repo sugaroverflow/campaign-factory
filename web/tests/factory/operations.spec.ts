@@ -6086,6 +6086,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("2 local items need source re-check");
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("Action: Confirm Planning Inspectorate appeal status · Next · Campaign source · Evidence & checks · strategy");
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("Draft: Supporter email · Needs human review · Browser-local source workspace draft");
+  await expect(page.getByRole("button", { name: /Reviews & approvals: Open view, Source re-check gate, 2 items/ }).first()).toBeVisible();
   await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();
   await expect(page.getByText("Read-only source baseline current")).toBeVisible();
   await expect(page.getByText("The public source changed after this local workspace started. Acknowledge the updated source on Overview after re-checking local actions and drafts before approval or queueing.")).toBeVisible();
@@ -6119,6 +6120,7 @@ test("operations workbench: source updates preserve browser-local work and requi
       previousDocumentSignature: string | null;
       currentDocumentSignature: string | null;
       warning: string;
+      localItemCount: number;
       localActionsToRecheck: Array<{ title: string; source: string; status: string }>;
       localDraftsToRecheck: Array<{ title: string; source: string; status: string }>;
     };
@@ -6130,6 +6132,7 @@ test("operations workbench: source updates preserve browser-local work and requi
     previousDocumentSignature: expect.stringContaining("media_pack:assembling:0"),
     currentDocumentSignature: expect.stringContaining("media_pack:ready:1"),
     warning: "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing.",
+    localItemCount: 2,
   });
   expect(changedPack.sourceChangeReview.localActionsToRecheck[0]).toMatchObject({
     title: "Confirm Planning Inspectorate appeal status",
@@ -6152,6 +6155,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   expect(changedMarkdown).toContain("Source baseline: changed since local acknowledgement");
   expect(changedMarkdown).toContain("Previous source baseline: state v44, event #1909");
   expect(changedMarkdown).toContain("Current source baseline: state v45, event #1918");
+  expect(changedMarkdown).toContain("Local items requiring re-check: 2");
   expect(changedMarkdown).toContain("Source update warning: read-only source changed after this local workspace started");
   expect(changedMarkdown).toContain("## Source update review");
   expect(changedMarkdown).toContain("Re-check action: Confirm Planning Inspectorate appeal status (Next) — Campaign source · Evidence & checks · strategy");

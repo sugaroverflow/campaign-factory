@@ -2100,6 +2100,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         })),
       ]
     : [];
+  const sourceRecheckItemCount = sourceChangedActionsToRecheck.length + sourceChangedDraftsToRecheck.length;
   const sourceResourceGroups = useMemo(() => {
     const groups = new Map<string, SourceResource[]>();
     sourceResources.forEach((resource) => {
@@ -2130,7 +2131,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const reviewItemCount = (state.status === "review" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "review").length;
   const queuedItemCount = (state.status === "queued" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "queued").length;
   const queuedCount = queuedItemCount ? String(queuedItemCount) : undefined;
-  const reviewBadge = reviewItemCount ? String(reviewItemCount) : undefined;
+  const reviewBadge = sourceBaselineChanged && sourceRecheckItemCount ? String(sourceRecheckItemCount) : reviewItemCount ? String(reviewItemCount) : undefined;
   const readinessMatches = (contact: ContactFixture) => {
     if (state.contactReadinessFilter === "all") return true;
     if (state.contactReadinessFilter === "ready") return contact.readiness === "Ready fixture";
@@ -2243,8 +2244,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
       title: "Communications",
       items: [
         { id: "drafts", label: "Drafts", note: "Library, editor, preview" },
-        { id: "reviews", label: "Reviews & approvals", note: "Human approval gate", badge: reviewBadge },
-        { id: "outbox", label: "Outbox & schedule", note: "Local queue boundary", badge: queuedCount },
+        { id: "reviews", label: "Reviews & approvals", note: sourceBaselineChanged ? "Source re-check gate" : "Human approval gate", badge: reviewBadge },
+        { id: "outbox", label: "Outbox & schedule", note: sourceBaselineChanged ? "Paused for source update" : "Local queue boundary", badge: queuedCount },
         { id: "responses", label: "Responses & results", note: "Coming soon boundary" },
       ],
     },
@@ -2650,6 +2651,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             warning: sourceBaselineChanged
               ? "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing."
               : "Read-only source matches the baseline acknowledged for this local workspace.",
+            localItemCount: sourceRecheckItemCount,
             localActionsToRecheck: sourceBaselineChanged ? state.localActions.map((action) => ({ title: action.title, source: action.source, status: localActionStatusCopy[action.status] })) : [],
             localDraftsToRecheck: sourceChangedDraftsToRecheck.map((draft) => ({ title: draft.title, status: draft.status, source: draft.source })),
           }
@@ -2733,6 +2735,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
               `- ${pack.sourceChangeReview.warning}`,
               `- Previous source baseline: state v${pack.sourceChangeReview.previousStateVersion}, event #${pack.sourceChangeReview.previousLastSequence}`,
               `- Current source baseline: state v${pack.sourceChangeReview.currentStateVersion}, event #${pack.sourceChangeReview.currentLastSequence}`,
+              `- Local items requiring re-check: ${pack.sourceChangeReview.localItemCount}`,
               ...(pack.sourceChangeReview.localActionsToRecheck.length
                 ? pack.sourceChangeReview.localActionsToRecheck.map((action) => `- Re-check action: ${action.title} (${action.status}) — ${action.source}`)
                 : ["- No browser-local actions currently require source re-check."]),
