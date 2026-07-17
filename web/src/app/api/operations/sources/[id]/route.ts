@@ -16,7 +16,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const NO_STORE_HEADERS = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store",
+  "Cross-Origin-Resource-Policy": "same-origin",
+  "X-Content-Type-Options": "nosniff",
+};
 const READ_ONLY_ALLOW_HEADERS = { ...NO_STORE_HEADERS, Allow: "GET" };
 const SOURCE_FETCH_TIMEOUT_MS = 10_000;
 

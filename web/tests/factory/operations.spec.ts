@@ -49,6 +49,7 @@ test("operations source API: invalid and non-curated ids are allow-list misses w
     const response = await request.get(`/api/operations/sources/${id}`);
     expect(response.status()).toBe(404);
     expect(response.headers()["cache-control"]).toBe("no-store");
+    expect(response.headers()["cross-origin-resource-policy"]).toBe("same-origin");
     expect(response.headers()["x-content-type-options"]).toBe("nosniff");
 
     const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string };
@@ -72,6 +73,7 @@ test("operations source API: non-GET methods are blocked as read-only no-store r
     const response = await makeRequest();
     expect(response.status()).toBe(405);
     expect(response.headers()["cache-control"]).toBe("no-store");
+    expect(response.headers()["cross-origin-resource-policy"]).toBe("same-origin");
     expect(response.headers()["x-content-type-options"]).toBe("nosniff");
     expect(response.headers().allow).toBe("GET");
 
@@ -237,6 +239,51 @@ test("operations source API: upstream document responses require JSON content ty
     expect(body.error).toBe("Campaign source contract mismatch");
     expect(body.detail).toContain("non-JSON content type");
     expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
+    expect(requestedUrls).toEqual([
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("operations source API: successful source responses keep same-origin resource policy", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestedUrls.push(String(input));
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual({ accept: "application/json" });
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return Response.json({ campaignId: curatedId, status: "partial", stateVersion: 1, lastSequence: 0, events: [] });
+    }
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}/documents`)) {
+      return Response.json({
+        documents: canonicalOperationsDocuments(),
+        evidence: { groups: [], conflicts: [], nextChecks: [], terminalGaps: [], draftNotes: [], totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 } },
+      });
+    }
+
+    throw new Error(`Unexpected source request: ${String(input)}`);
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+
+    const body = (await response.json()) as { sourceOrigin?: string; documents?: unknown[]; sourceRunUnavailable?: boolean };
+    expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
+    expect(body.documents).toHaveLength(9);
+    expect(body.sourceRunUnavailable).toBeUndefined();
     expect(requestedUrls).toEqual([
       `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
       `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
