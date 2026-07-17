@@ -1009,7 +1009,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
   const removedFixtureAudienceState = selectedSegment !== state.selectedSegment || contactFilter !== state.contactFilter;
   const removedMismatchedLocalWork = localActions.length !== state.localActions.length || workingDrafts.length !== state.workingDrafts.length;
   const removedMismatchedTopLevelSourceCopy = Boolean(state.sourceWorkingCopy && !sourceWorkingCopy);
-  const removedFixtureTopLevelCopy = removedFixtureAudienceState && !sourceWorkingCopy && topLevelDraftLooksFixtureBound(state);
+  const removedFixtureTopLevelCopy = !sourceWorkingCopy && topLevelDraftLooksFixtureBound(state);
   const resetTopLevelDraft = removedMismatchedTopLevelSourceCopy || removedFixtureTopLevelCopy;
 
   if (
