@@ -66,6 +66,10 @@ function isNonNegativeInteger(value: unknown): value is number {
   return isFiniteNumber(value) && Number.isInteger(value) && value >= 0;
 }
 
+function isPositiveInteger(value: unknown): value is number {
+  return isFiniteNumber(value) && Number.isInteger(value) && value > 0;
+}
+
 const OPERATIONS_DOCUMENT_KEYS = new Set<string>(CANONICAL_DOCUMENTS.map((doc) => doc.key));
 const OPERATIONS_DOCUMENT_BY_KEY = new Map<string, (typeof CANONICAL_DOCUMENTS)[number]>(CANONICAL_DOCUMENTS.map((doc) => [doc.key, doc]));
 const OPERATIONS_DOCUMENT_STATUSES = new Set<string>(DOCUMENT_STATUSES);
@@ -154,7 +158,7 @@ function isOperationsFactoryEvent(value: unknown, campaignId: string): value is 
   const payload = value.payload;
   return (
     isNonEmptyString(value.eventId) &&
-    isNonNegativeInteger(value.sequence) &&
+    isPositiveInteger(value.sequence) &&
     value.campaignId === campaignId &&
     isOptionalString(value.batchId) &&
     isOptionalString(value.agentRunId) &&
