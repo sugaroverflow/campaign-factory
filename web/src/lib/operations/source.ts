@@ -23,6 +23,7 @@ export function normaliseOperationsSourceOrigin(value: unknown) {
   try {
     const url = new URL(trimmed);
     if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (url.username || url.password) return null;
     return url.origin.replace(/\/+$/, "");
   } catch {
     return null;
