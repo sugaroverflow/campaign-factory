@@ -721,6 +721,51 @@ test("operations source API: malformed content-length source runs fail closed be
   }
 });
 
+test("operations source API: mismatched content-length source runs fail closed before parsing", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response('{"status":"partial"}', {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "2",
+          "x-matched-path": "/api/factory/runs/[id]",
+          "x-vercel-id": "lhr1::iad1::ops-mismatched-content-length",
+        },
+      });
+    }
+
+    throw new Error("Documents must not hydrate when the source run returns a mismatched Content-Length header.");
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(502);
+    expectPublicSourceJsonBoundary(response.headers, "mismatched content-length source run body");
+
+    const body = (await response.json()) as { error?: string; detail?: string; sourceStep?: string; sourceFailureKind?: string; sourcePath?: string; sourceHttpStatus?: number; sourceContentLength?: number; sourceBodyTruncated?: boolean; sourceContentType?: string; documents?: unknown[] };
+    expect(body.error).toBe("Campaign source contract mismatch");
+    expect(body.detail).toContain("returned a Content-Length header that did not match the JSON body length");
+    expect(body.sourceStep).toBe("run");
+    expect(body.sourceFailureKind).toBe("contract_mismatch");
+    expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}`);
+    expect(body.sourceHttpStatus).toBe(200);
+    expect(body.sourceContentLength).toBe(2);
+    expect(body.sourceBodyTruncated).toBeUndefined();
+    expect(body.sourceContentType).toBe("application/json");
+    expect(body.documents).toBeUndefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: partial-content source runs fail closed before document hydration", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;

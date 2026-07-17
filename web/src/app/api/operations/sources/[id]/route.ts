@@ -230,7 +230,7 @@ function hasEmptyObservedBody(response: Response, bodyText?: string) {
 
 async function safeReadBoundedResponseText(response: Response, limitBytes: number) {
   const reader = response.body?.getReader();
-  if (!reader) return { text: undefined, truncated: false };
+  if (!reader) return { text: undefined, truncated: false, bytes: 0 };
   const decoder = new TextDecoder();
   let text = "";
   let bytes = 0;
@@ -258,10 +258,10 @@ async function safeReadBoundedResponseText(response: Response, limitBytes: numbe
       bytes += value.byteLength;
     }
   } catch {
-    return { text: undefined, truncated };
+    return { text: undefined, truncated, bytes };
   }
 
-  return { text: text + decoder.decode(), truncated };
+  return { text: text + decoder.decode(), truncated, bytes };
 }
 
 async function safeReadDiagnosticResponseText(response: Response) {
@@ -457,6 +457,17 @@ async function fetchSourceJson<T>(
         sourceFailureKind: "oversized_json",
         contractMismatch: true,
         message: `Read-only source ${path} returned a JSON body larger than the preview-safe limit.`,
+        ...metadata,
+      };
+    }
+    if (declaredContentLength !== undefined && responseBody.bytes !== declaredContentLength) {
+      return {
+        ok: false,
+        status: 502,
+        path,
+        sourceFailureKind: "contract_mismatch",
+        contractMismatch: true,
+        message: `Read-only source ${path} returned a Content-Length header that did not match the JSON body length.`,
         ...metadata,
       };
     }
