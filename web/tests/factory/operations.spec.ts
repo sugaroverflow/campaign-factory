@@ -676,6 +676,53 @@ test("operations source API: declared oversized JSON source runs fail before doc
   }
 });
 
+test("operations source API: content-encoded source runs fail closed despite identity requests", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response('{"status":"partial"}', {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "content-encoding": "gzip",
+          "content-length": "20",
+          "x-matched-path": "/api/factory/runs/[id]",
+          "x-vercel-id": "lhr1::iad1::ops-encoded-body",
+        },
+      });
+    }
+
+    throw new Error("Documents must not hydrate when the source run ignores identity encoding.");
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(502);
+    expectPublicSourceJsonBoundary(response.headers, "encoded source run body");
+
+    const body = (await response.json()) as { error?: string; detail?: string; sourceStep?: string; sourceFailureKind?: string; sourcePath?: string; sourceHttpStatus?: number; sourceContentLength?: number; sourceContentEncoding?: string; sourceBodyTruncated?: boolean; sourceContentType?: string; documents?: unknown[] };
+    expect(body.error).toBe("Campaign source contract mismatch");
+    expect(body.detail).toContain("returned a content-encoded body despite the identity encoding requirement");
+    expect(body.sourceStep).toBe("run");
+    expect(body.sourceFailureKind).toBe("encoded_body");
+    expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}`);
+    expect(body.sourceHttpStatus).toBe(200);
+    expect(body.sourceContentLength).toBe(20);
+    expect(body.sourceContentEncoding).toBe("gzip");
+    expect(body.sourceBodyTruncated).toBe(true);
+    expect(body.sourceContentType).toBe("application/json");
+    expect(body.documents).toBeUndefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: rate-limited source runs preserve retry guidance and stop document hydration", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;
@@ -2497,6 +2544,38 @@ test("operations workspace: oversized JSON diagnostics survive client sanitizati
   await expect(page.getByText(/JSON body larger than the preview-safe limit/)).toBeVisible();
   await expect(page.getByText(/source failure oversized JSON · upstream HTTP 200/)).toBeVisible();
   await expect(page.getByText(/content length 2100035 bytes · upstream body truncated · upstream content type application\/json/)).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+});
+
+
+test("operations workspace: encoded source-body diagnostics survive client sanitization without fixture fallback", async ({ page }) => {
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Campaign source contract mismatch",
+        detail: "Read-only source /api/factory/runs/69f257b6-9913-4395-94f7-5c25b4b5fe95 returned a content-encoded body despite the identity encoding requirement.",
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        sourceStep: "run",
+        sourceFailureKind: "encoded_body",
+        sourcePath: "/api/factory/runs/69f257b6-9913-4395-94f7-5c25b4b5fe95",
+        sourceHttpStatus: 200,
+        sourceContentLength: 20,
+        sourceContentEncoding: "gzip",
+        sourceBodyTruncated: true,
+        sourceContentType: "application/json",
+      }),
+    });
+  });
+
+  await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95");
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText(/content-encoded body despite the identity encoding requirement/)).toBeVisible();
+  await expect(page.getByText(/source failure encoded body · upstream HTTP 200/)).toBeVisible();
+  await expect(page.getByText(/content length 20 bytes · content encoding gzip · upstream body truncated · upstream content type application\/json/)).toBeVisible();
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
 });

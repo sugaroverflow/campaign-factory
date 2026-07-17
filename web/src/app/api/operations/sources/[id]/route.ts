@@ -103,6 +103,17 @@ function sanitizeSourceContentType(value: string | null) {
   return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(mediaType) && mediaType.length <= 80 ? { value: mediaType } : {};
 }
 
+function sanitizeSourceContentEncoding(value: string | null) {
+  if (!value) return undefined;
+  const trimmed = value.trim().toLowerCase();
+  return /^[a-z0-9!#$&^_.+-]{1,40}$/.test(trimmed) ? trimmed : undefined;
+}
+
+function hasNonIdentitySourceContentEncoding(response: Response) {
+  const encoding = sanitizeSourceContentEncoding(response.headers.get("content-encoding"));
+  return encoding !== undefined && encoding !== "identity";
+}
+
 function sanitizeSourceMatchedPath(value: string | null) {
   if (!value) return undefined;
   const trimmed = value.trim();
@@ -221,6 +232,7 @@ function upstreamResponseMetadata(response: Response, elapsedMs: number | undefi
     sourceResponseDate: sanitizeSourceResponseDate(response.headers.get("date")),
     sourceContentLength: sanitizeSourceContentLength(response.headers.get("content-length")),
     sourceServer: sanitizeSourceServer(response.headers.get("server")),
+    sourceContentEncoding: sanitizeSourceContentEncoding(response.headers.get("content-encoding")),
     sourceBodyEmpty: !bodyTruncated && hasEmptyObservedBody(response, bodyText),
     ...(bodyTruncated ? { sourceBodyTruncated: true } : {}),
     ...("value" in contentType ? { sourceContentType: contentType.value } : {}),
@@ -235,7 +247,7 @@ function sourceFailureHeaders(result: { retryAfter?: string }) {
 }
 
 type SourceStep = "run" | "documents" | "configuration";
-type SourceFailureKind = "configuration" | "http_error" | "redirect" | "non_json" | "malformed_json" | "oversized_json" | "contract_mismatch" | "not_ready" | "timeout" | "network";
+type SourceFailureKind = "configuration" | "http_error" | "redirect" | "non_json" | "encoded_body" | "malformed_json" | "oversized_json" | "contract_mismatch" | "not_ready" | "timeout" | "network";
 
 function sourceFailureBody(step: SourceStep, body: Record<string, unknown>) {
   return { ...body, sourceStep: step };
@@ -245,7 +257,7 @@ function hasExplicitEmptyBody(response: Response) {
   return response.headers.get("content-length")?.trim() === "0";
 }
 
-function upstreamFailureMetadata(result: { sourceFailureKind?: SourceFailureKind; sourcePath?: string; sourceHttpStatus?: number; sourceElapsedMs?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceServer?: string; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }) {
+function upstreamFailureMetadata(result: { sourceFailureKind?: SourceFailureKind; sourcePath?: string; sourceHttpStatus?: number; sourceElapsedMs?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceServer?: string; sourceContentEncoding?: string; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }) {
   return {
     ...(result.sourceFailureKind ? { sourceFailureKind: result.sourceFailureKind } : {}),
     ...(result.sourcePath ? { sourcePath: result.sourcePath } : {}),
@@ -259,6 +271,7 @@ function upstreamFailureMetadata(result: { sourceFailureKind?: SourceFailureKind
     ...(result.sourceResponseDate ? { sourceResponseDate: result.sourceResponseDate } : {}),
     ...(result.sourceContentLength !== undefined ? { sourceContentLength: result.sourceContentLength } : {}),
     ...(result.sourceServer ? { sourceServer: result.sourceServer } : {}),
+    ...(result.sourceContentEncoding ? { sourceContentEncoding: result.sourceContentEncoding } : {}),
     ...(result.sourceBodyEmpty ? { sourceBodyEmpty: true } : {}),
     ...(result.sourceBodyTruncated ? { sourceBodyTruncated: true } : {}),
     ...(result.sourceContentType ? { sourceContentType: result.sourceContentType } : {}),
@@ -271,7 +284,7 @@ async function fetchSourceJson<T>(
   path: string,
 ): Promise<
   | { ok: true; value: T; metadata: UpstreamMetadata }
-  | { ok: false; status: number; message: string; path: string; sourceFailureKind: SourceFailureKind; contractMismatch?: boolean; retryAfter?: string; sourcePath?: string; sourceHttpStatus?: number; sourceElapsedMs?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceServer?: string; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }
+  | { ok: false; status: number; message: string; path: string; sourceFailureKind: SourceFailureKind; contractMismatch?: boolean; retryAfter?: string; sourcePath?: string; sourceHttpStatus?: number; sourceElapsedMs?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceServer?: string; sourceContentEncoding?: string; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }
 > {
   const controller = new AbortController();
   const startedAt = Date.now();
@@ -302,6 +315,18 @@ async function fetchSourceJson<T>(
         message: `Read-only source ${path} returned HTTP ${response.status}.${redirectDetail}`,
         retryAfter: sanitizeRetryAfter(response.headers.get("retry-after")),
         ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), diagnosticBody.text, path, diagnosticBody.truncated),
+      };
+    }
+    if (hasNonIdentitySourceContentEncoding(response)) {
+      response.body?.cancel().catch(() => undefined);
+      return {
+        ok: false,
+        status: 502,
+        path,
+        sourceFailureKind: "encoded_body",
+        contractMismatch: true,
+        message: `Read-only source ${path} returned a content-encoded body despite the identity encoding requirement.`,
+        ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), undefined, path, true),
       };
     }
     if (!hasJsonContentType(response)) {
