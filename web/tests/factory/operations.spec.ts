@@ -5,6 +5,33 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 
+function canonicalOperationsDocuments(campaignTitle = "Keep KFC Out of Ormskirk") {
+  const rows = [
+    ["campaign_brief", 1, "Campaign Brief", false, ["problem", "evidence", "objective", "decision_route", "power", "pressure", "strategy", "tactics", "organising"], `${campaignTitle}\n\nPlace: Ormskirk, Lancashire\n\nTHE PROBLEM\nCanonical source document shell.`],
+    ["objective_theory_of_change", 2, "Objective and Theory of Change", false, ["objective"], "OBJECTIVE AND THEORY OF CHANGE\n\nVerify the public decision route before stronger claims are reused."],
+    ["power_stakeholder_map", 3, "Power and Stakeholder Map", false, ["power", "pressure"], "POWER AND STAKEHOLDER MAP\n\nPublic source stakeholder clues only."],
+    ["campaign_strategy", 4, "Campaign Strategy", false, ["strategy"], "CAMPAIGN STRATEGY\n\nKeep evidence boundaries visible."],
+    ["tactics_timeline", 5, "Tactics and Timeline", false, ["tactics"], "TACTICS AND TIMELINE\n\nCheck the public record first."],
+    ["organising_plan", 6, "Organising Plan", false, ["organising"], "ORGANISING PLAN\n\nNo imported contacts."],
+    ["lobbying_pack", 7, "Lobbying Pack", true, [], "LOBBYING PACK\n\nMeeting request\n\nKeep source provenance attached."],
+    ["media_pack", 8, "Media Pack", true, [], "MEDIA PACK\n\nAssembling."],
+    ["digital_pack", 9, "Digital Campaign Pack", true, [], "DIGITAL CAMPAIGN PACK\n\nSupporter email\n\nSubject: Source update\n\nKeep verification notes visible."],
+  ] as const;
+
+  return rows.map(([key, num, name, isPack, sectionKeys, plainText]) => ({
+    key,
+    num,
+    name,
+    status: key === "media_pack" ? "assembling" : "ready",
+    html: `<p>${plainText}</p>`,
+    plainText,
+    isPack,
+    sectionKeys,
+    resourceCount: isPack && key !== "media_pack" ? 1 : 0,
+    flags: [],
+  }));
+}
+
 test("operations source API: invalid and non-curated ids are allow-list misses with no-store caching", async ({ request }) => {
   for (const id of ["not-a-campaign-id", "00000000-0000-4000-8000-000000000000"]) {
     const response = await request.get(`/api/operations/sources/${id}`);
@@ -2461,6 +2488,64 @@ test("operations workbench: source next checks must reference known claims when 
   await expect(page.getByText("Unknown claim reference should not hydrate Ormskirk")).toHaveCount(0);
   await expect(page.getByText("Known source claim should not hydrate with an unknown next-check reference")).toHaveCount(0);
   await expect(page.getByText("Unknown claim reference should fail closed")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
+test("operations workbench: source next checks and draft notes require public text", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 10, lastSequence: 100, events: [] },
+        documents: canonicalOperationsDocuments("Keep KFC Out of Ormskirk"),
+        evidence: {
+          groups: [
+            {
+              label: "Verification incomplete",
+              count: 1,
+              claims: [
+                {
+                  id: "known-claim",
+                  text: "Known source claim should stay hidden when checks or draft notes are blank",
+                  type: "other",
+                  label: "Verification incomplete",
+                  loadBearing: true,
+                  confidence: "medium",
+                  sourceCount: 1,
+                  affectedOutputs: ["campaign_brief"],
+                },
+              ],
+            },
+          ],
+          conflicts: [],
+          nextChecks: [
+            {
+              id: "blank-check",
+              description: "   ",
+              reason: "Contract validation must not allow a blank public next-check description",
+              claimIds: ["known-claim"],
+              affectedSections: ["problem"],
+            },
+          ],
+          terminalGaps: [],
+          draftNotes: [{ text: "", section: "Digital Campaign Pack" }],
+          totals: { claims: 1, loadBearing: 1, verifiedLoadBearing: 0, unresolvedLoadBearing: 1 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/typed public document contract/i)).toBeVisible();
+  await expect(page.getByText("Known source claim should stay hidden when checks or draft notes are blank")).toHaveCount(0);
+  await expect(page.getByText("Contract validation must not allow a blank public next-check description")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });

@@ -343,8 +343,8 @@ function isOperationsNextCheck(value: unknown) {
   return (
     isRecord(value) &&
     isNonEmptyString(value.id) &&
-    typeof value.description === "string" &&
-    typeof value.reason === "string" &&
+    isNonEmptyString(value.description) &&
+    isNonEmptyString(value.reason) &&
     isOptionalUniqueNonEmptyStringArray(claimIds) &&
     isOperationsAffectedSectionArray(value.affectedSections)
   );
@@ -362,7 +362,7 @@ function isOperationsTerminalGap(value: unknown) {
 }
 
 function isOperationsDraftNote(value: unknown) {
-  return isRecord(value) && typeof value.text === "string" && typeof value.section === "string";
+  return isRecord(value) && isNonEmptyString(value.text) && isNonEmptyString(value.section);
 }
 
 function sameStringArray(left: string[] | undefined, right: string[] | undefined) {
