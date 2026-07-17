@@ -994,7 +994,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
   };
 }
 
-const FIXTURE_LEAKAGE_RE = /St John the Baptist|school street|school-run|school gates|Leicester City Council|Campaign Factory demo workspace|seeded campaign brief|local fixture contacts|fixture evidence check|fixture timing check|fixture media boundary|fixture campaign copy/i;
+const FIXTURE_LEAKAGE_RE = /St John the Baptist|school[\s_-]?street|school[\s_-]?run|school[\s_-]?gates?|Leicester City Council|Clean Air Leicester|Ward casework watcher|\bA\. Patel\b|\bR\. Johnson\b|\bM\. Davies\b|\bS\. Hussain\b|Campaign Factory demo workspace|seeded campaign brief|local fixture contacts|fixture evidence check|fixture timing check|fixture media boundary|fixture campaign copy/i;
 const FIXTURE_IDENTIFIER_RE = /\b(?:demo-)?fixture(?:[_:-][a-z0-9_-]+)+\b|\bfixture:[a-z0-9_-]+\b/i;
 
 function hasFixtureLeakage(value: string) {

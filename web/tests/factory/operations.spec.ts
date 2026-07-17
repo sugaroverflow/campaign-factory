@@ -6455,6 +6455,124 @@ test("operations workbench removes fixture identifier-only local work from real 
   expect(stored).not.toContain("Barnet local note queued locally.");
 });
 
+test("operations workbench removes legacy fixture contact and school-run variants from real campaign state", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          status: "completed",
+          next: "Check Barnet decision records",
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check Barnet decision records", reason: "Fixture contact guard", claimIds: [], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    const contactBoundCopy = {
+      id: `source:${campaignId}:resource:lobbying_pack:school-run-contact-note`,
+      campaignId,
+      title: "Barnet supporter note",
+      channel: "Briefing note",
+      sourceDocument: "Lobbying Pack",
+      sourceDocumentKey: "lobbying_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: ["Ask Clean Air Leicester to confirm whether this old fixture relationship is still relevant."],
+      provenance: `Source campaign ${campaignId}; copied into this browser-local workspace.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: 14,
+        sourceLastSequence: 25,
+        sourceDocumentSignature: "real-barnet-source-baseline",
+        selectedSegment: "source_primary",
+        subject: "Barnet source update",
+        body: "Use the Barnet source pack before any local queue intent.",
+        reviewerNote: "Legacy note mentions A. Patel and should be removed.",
+        status: "queued",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "outbox",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_next_check",
+        queuedAt: "2026-07-16T17:54:30.000Z",
+        localActions: [
+          {
+            id: `source:${campaignId}:action:confirm-record`,
+            title: "Confirm next decision record",
+            source: "Browser-local action",
+            owner: "A. Patel",
+            timing: "After school run",
+            priority: "High",
+            status: "next",
+            provenance: `Source campaign ${campaignId}; browser-local action.`,
+          },
+        ],
+        workingDrafts: [
+          {
+            id: contactBoundCopy.id,
+            title: "Barnet supporter note",
+            channel: "Briefing note",
+            subject: "Barnet source update",
+            body: "Use the Barnet source pack before any local queue intent.",
+            reviewerNote: "Ask Clean Air Leicester before using this local copy.",
+            status: "queued",
+            queuedAt: "2026-07-16T17:54:30.000Z",
+            createdAt: "2026-07-16T17:52:30.000Z",
+            updatedAt: "2026-07-16T17:54:30.000Z",
+            sourceWorkingCopy: contactBoundCopy,
+          },
+        ],
+        activeWorkingDraftId: contactBoundCopy.id,
+        sourceWorkingCopy: contactBoundCopy,
+        activity: [
+          { id: "legacy-contact", label: "A. Patel reviewed the school run contact note." },
+          { id: "legacy", label: "Barnet supporter note queued locally." },
+        ],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto("/operations");
+  const portfolio = page.getByLabel("Campaign operations portfolio");
+  const barnetRow = portfolio.locator("article").nth(2);
+  await expect(barnetRow).not.toContainText("1 action");
+  await expect(barnetRow).not.toContainText("1 queued locally");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("A. Patel");
+  await expect(page.locator("main")).not.toContainText("Clean Air Leicester");
+  await expect(page.locator("main")).not.toContainText("school run");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("A. Patel");
+  expect(stored).not.toContain("Clean Air Leicester");
+  expect(stored).not.toContain("school run");
+  expect(stored).not.toContain("Barnet supporter note queued locally.");
+});
+
 test("operations workbench removes unprovenanced top-level review state from real campaign state", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 
