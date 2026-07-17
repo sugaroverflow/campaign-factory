@@ -149,6 +149,7 @@ function sanitizeSourceContentCharset(value: unknown) {
 function sanitizeSourceContentRange(value: unknown) {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim().toLowerCase().replace(/\s+/g, " ");
+  if (trimmed === "malformed") return trimmed;
   return /^bytes (?:\d{1,9}-\d{1,9}|\*)\/(?:\d{1,9}|\*)$/.test(trimmed) && trimmed.length <= 80 ? trimmed : undefined;
 }
 
