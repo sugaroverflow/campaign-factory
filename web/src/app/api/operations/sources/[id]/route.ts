@@ -174,7 +174,8 @@ function sanitizeSourceContentLength(value: string | null) {
 function sanitizeSourceContentRange(value: string | null) {
   if (!value) return undefined;
   const trimmed = value.trim().toLowerCase().replace(/\s+/g, " ");
-  return /^bytes (?:\d{1,9}-\d{1,9}|\*)\/(?:\d{1,9}|\*)$/.test(trimmed) && trimmed.length <= 80 ? trimmed : undefined;
+  if (/^bytes (?:\d{1,9}-\d{1,9}|\*)\/(?:\d{1,9}|\*)$/.test(trimmed) && trimmed.length <= 80) return trimmed;
+  return trimmed ? "malformed" : undefined;
 }
 
 function hasSourceContentRange(response: Response) {
