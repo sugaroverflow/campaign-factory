@@ -2062,6 +2062,8 @@ test("operations workspace: failed direct source load keeps canonical source bri
   await expect(page.getByLabel("Stored local operations summary")).toContainText("no browser-local operations work yet");
   await expect(page.getByLabel("Stored local operations summary")).toContainText("No fixture content is substituted");
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Retry the read-only source load or inspect the public source brief/)).toBeVisible();
+  await expect(page.getByText(/Fix the campaign ID/)).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "View source brief" })).toHaveAttribute(
     "href",

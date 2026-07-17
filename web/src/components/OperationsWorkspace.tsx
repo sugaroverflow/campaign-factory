@@ -2016,6 +2016,10 @@ function SourceStateShell({ state, onRetry }: { state: Exclude<SourceState, { st
   const sourceDiagnostic = "sourceHttpStatus" in state ? upstreamDiagnosticPhrase(state.sourceHttpStatus, state.sourceRequestId, state.sourceMatchedPath, state.sourceCacheStatus, state.sourceAgeSeconds, state.sourceBodyEmpty, state.sourceContentType, state.sourceContentTypeMissing) : null;
   const checkedAt = "checkedAt" in state ? state.checkedAt : undefined;
   const showSourceStepWithoutOrigin = canLinkSource && !sourceOrigin && Boolean(sourceStep) && state.status !== "loading";
+  const noFallbackInstruction =
+    state.status === "invalid" || !canLinkSource
+      ? "Use one of the curated Operations campaign IDs or return to Campaign Factory."
+      : "Retry the read-only source load or inspect the public source brief; the labelled fixture demo remains sample-only and is not substituted for this campaign.";
   const localCounts = canLinkSource && state.status !== "loading" ? portfolioLocalCounts(campaignId) : emptyPortfolioLocalCounts();
   const localSignals = localSignalPhrases(localCounts);
 
@@ -2074,7 +2078,7 @@ function SourceStateShell({ state, onRetry }: { state: Exclude<SourceState, { st
             <div className="mt-6 rounded-[var(--r-2xl)] border border-dashed border-[var(--ring)] bg-secondary p-4 text-sm text-muted-foreground">
               <p className="font-medium text-foreground">No fixture fallback used</p>
               <p className="mt-1">
-                {canLinkSource ? "Fix the campaign ID or return to the source brief." : "Use one of the curated Operations campaign IDs or return to Campaign Factory."} External sending, imports, scheduling, and source write-back remain disconnected.
+                {noFallbackInstruction} External sending, imports, scheduling, and source write-back remain disconnected.
               </p>
             </div>
           )}
