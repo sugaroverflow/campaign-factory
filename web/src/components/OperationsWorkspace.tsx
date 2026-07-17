@@ -27,6 +27,11 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const PORTFOLIO_CAMPAIGNS: PortfolioCampaign[] = [...OPERATIONS_PUBLIC_CAMPAIGNS];
 const SOURCE_CLIENT_TIMEOUT_MS = 15_000;
+const SOURCE_CLIENT_FETCH_HEADERS = {
+  accept: "application/json",
+  "cache-control": "no-cache",
+  pragma: "no-cache",
+};
 
 function hasJsonResponseContentType(response: Response) {
   const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
@@ -1485,7 +1490,7 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
   let sourceRes: Response;
   try {
     sourceRes = await fetch(`/api/operations/sources/${encodeURIComponent(campaignId)}`, {
-      headers: { accept: "application/json" },
+      headers: SOURCE_CLIENT_FETCH_HEADERS,
       cache: "no-store",
       signal: controller.signal,
     });

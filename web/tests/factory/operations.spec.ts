@@ -11,6 +11,12 @@ const COMPILED_DOCUMENT_DISCLAIMER =
 const COMPILED_DOCUMENT_NEEDS_VERIFICATION_NOTE = "Some facts in this section couldn't be fully checked in time";
 const SOURCE_FETCH_HEADERS = { accept: "application/json", "cache-control": "no-cache", pragma: "no-cache" };
 
+function expectOperationsSourceClientRequest(request: { headers: () => Record<string, string> }) {
+  expect(request.headers().accept).toContain("application/json");
+  expect(request.headers()["cache-control"]).toBe("no-cache");
+  expect(request.headers().pragma).toBe("no-cache");
+}
+
 function withCompiledDocumentDisclaimer(plainText: string) {
   return `${plainText}\n\n${COMPILED_DOCUMENT_DISCLAIMER}`;
 }
@@ -642,24 +648,33 @@ test("operations portfolio: three curated public campaigns load independently", 
   } as const;
 
   await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    expectOperationsSourceClientRequest(route.request());
     const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] as keyof typeof campaigns;
     const campaign = campaigns[id];
+    const documents = canonicalOperationsDocuments(campaign.title).map((document) =>
+      document.key === "campaign_brief"
+        ? {
+            ...document,
+            html: `<p>${withCompiledDocumentDisclaimer(`${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`)}</p>`,
+            plainText: withCompiledDocumentDisclaimer(`${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`),
+          }
+        : document.key === "media_pack"
+          ? { ...document, status: campaign.mediaStatus }
+          : document,
+    );
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
         sourceOrigin: "https://campaign-factory.vercel.app",
         run: { campaignId: id, status: campaign.status, stateVersion: 1, lastSequence: 1, events: [] },
-        documents: [
-          { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`, isPack: false, sectionKeys: ["problem", "evidence", "objective", "decision_route", "power", "pressure", "strategy", "tactics", "organising"], resourceCount: 0, flags: [] },
-          { key: "media_pack", num: 8, name: "Media Pack", status: campaign.mediaStatus, html: "", plainText: "MEDIA PACK", isPack: true, sectionKeys: [], resourceCount: 0, flags: [] },
-        ],
+        documents,
         evidence: {
           groups: [],
           conflicts: [],
           nextChecks: [{ id: "next", description: campaign.next, reason: "Portfolio next gate", claimIds: [], affectedSections: [] }],
           terminalGaps: [],
           draftNotes: [],
-          totals: { claims: 90, loadBearing: 70, verifiedLoadBearing: 70 - campaign.unresolved, unresolvedLoadBearing: campaign.unresolved },
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
         },
       }),
     });
