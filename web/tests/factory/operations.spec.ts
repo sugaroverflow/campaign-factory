@@ -9041,6 +9041,9 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByLabel("Overview source re-check shortcuts")).toContainText("Re-check Evidence & checks");
   await expect(page.getByLabel("Overview source re-check shortcuts")).toContainText("Re-check Strategy & tactics");
   await expect(page.getByLabel("Overview source re-check shortcuts")).toContainText("Re-check Drafts");
+  await expect(page.getByRole("button", { name: /Evidence & checks: Open view, Claims needing verification, source re-check needed/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Strategy & tactics: Open view, Pressure sequence and owners, source re-check needed/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Drafts: Open view, Library, editor, preview, source re-check needed/ }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Acknowledge updated source" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Acknowledge updated source" })).toHaveAttribute(
     "title",
@@ -9080,6 +9083,8 @@ test("operations workbench: source updates preserve browser-local work and requi
     "Acknowledge the updated read-only source before creating new source-derived local actions.",
   );
   await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
+  await expect(page.getByRole("button", { name: /Evidence & checks: Current view, Claims needing verification, source re-check checked/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Strategy & tactics: Open view, Pressure sequence and owners, source re-check needed/ }).first()).toBeVisible();
   await expect(page.getByLabel("Evidence & checks source update pause")).toContainText("This source view is part of the required re-check.");
   await expect(page.getByLabel("Evidence & checks source re-check progress")).toContainText("Checked 1/3 required source views for the current baseline.");
   await expect(page.getByLabel("Source next checks ledger").getByRole("button", { name: "Action created" })).toBeDisabled();
@@ -9107,6 +9112,8 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByText("No imported contacts for Keep KFC Out of Ormskirk")).toBeVisible();
 
   await page.getByRole("button", { name: /Drafts/ }).first().click();
+  await expect(page.getByRole("button", { name: /Drafts: Current view, Library, editor, preview, source re-check checked/ }).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Strategy & tactics: Open view, Pressure sequence and owners, source re-check needed/ }).first()).toBeVisible();
   await expect(page.getByText("New editable copies from source resources are paused until the updated source is acknowledged; existing working copies stay selectable for review.")).toBeVisible();
   await expect(page.getByText("Editing local draft copy is paused until the updated read-only source is acknowledged, so re-checking cannot accidentally rewrite a draft against stale campaign material.")).toBeVisible();
   await expect(page.getByLabel("Draft source re-check progress")).toContainText("Checked 2/3 required source views for the current baseline.");

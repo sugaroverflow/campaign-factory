@@ -338,7 +338,7 @@ type Segment = {
   caveat: string;
 };
 
-type NavItem = { id: ViewId; label: string; badge?: string; note: string };
+type NavItem = { id: ViewId; label: string; badge?: string; badgeLabel?: string; badgeTone?: "default" | "source" | "checked"; note: string };
 type CampaignContextRow = { label: string; detail: string; use: string; owner: string };
 type RunwayStage = { label: string; view: ViewId; status: StageStatus; statusLabel: string; detail: string };
 type SourceStakeholder = { group: string; name: string; power: string; position: string; caresAbout?: string; ask?: string; approach?: string };
@@ -2606,6 +2606,15 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const queuedItemCount = (state.status === "queued" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "queued").length;
   const queuedCount = queuedItemCount ? String(queuedItemCount) : undefined;
   const reviewBadge = sourceBaselineChanged && sourceRecheckItemCount ? String(sourceRecheckItemCount) : reviewItemCount ? String(reviewItemCount) : undefined;
+  const sourceRecheckNavState = (view: ViewId) => {
+    if (!sourceBaselineChanged || !SOURCE_RECHECK_REQUIRED_VIEWS.includes(view)) return null;
+    const checked = sourceRecheckVisitedViews.has(view);
+    return {
+      badge: checked ? "Checked" : "Needed",
+      badgeLabel: checked ? "source re-check checked" : "source re-check needed",
+      badgeTone: checked ? "checked" : "source",
+    } satisfies Pick<NavItem, "badge" | "badgeLabel" | "badgeTone">;
+  };
   const readinessMatches = (contact: ContactFixture) => {
     if (state.contactReadinessFilter === "all") return true;
     if (state.contactReadinessFilter === "ready") return contact.readiness === "Ready fixture";
@@ -2703,8 +2712,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         { id: "brief", label: "Campaign brief", note: "Outcome, place, provenance" },
         { id: "objectives", label: "Objective & targets", note: "Decision-maker and influences" },
         { id: "power", label: "Power map", note: "Allies, blockers, persuadables" },
-        { id: "strategy", label: "Strategy & tactics", note: "Pressure sequence and owners" },
-        { id: "evidence", label: "Evidence & checks", note: "Claims needing verification" },
+        { id: "strategy", label: "Strategy & tactics", note: "Pressure sequence and owners", ...(sourceRecheckNavState("strategy") ?? {}) },
+        { id: "evidence", label: "Evidence & checks", note: "Claims needing verification", ...(sourceRecheckNavState("evidence") ?? {}) },
       ],
     },
     {
@@ -2717,7 +2726,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     {
       title: "Communications",
       items: [
-        { id: "drafts", label: "Drafts", note: "Library, editor, preview" },
+        { id: "drafts", label: "Drafts", note: "Library, editor, preview", ...(sourceRecheckNavState("drafts") ?? {}) },
         { id: "reviews", label: "Reviews & approvals", note: sourceBaselineChanged ? "Source re-check gate" : "Human approval gate", badge: reviewBadge },
         { id: "outbox", label: "Outbox & schedule", note: sourceBaselineChanged ? "Paused for source update" : "Local queue boundary", badge: queuedCount },
         { id: "responses", label: "Responses & results", note: "Coming soon boundary" },
@@ -3323,6 +3332,19 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           <div className={compact ? "grid gap-2 sm:grid-cols-2" : "space-y-1"}>
             {group.items.map((item) => {
               const active = state.activeView === item.id;
+              const badgeClass = active
+                ? "bg-background text-foreground"
+                : item.badgeTone === "source"
+                  ? ink
+                    ? "bg-ops-coral text-ops-ink"
+                    : "bg-ops-coral/30 text-foreground"
+                  : item.badgeTone === "checked"
+                    ? ink
+                      ? "bg-ops-mint text-ops-ink"
+                      : "bg-ops-mint/45 text-foreground"
+                    : ink
+                      ? "bg-ops-coral text-ops-ink"
+                      : "bg-tint-yellow text-foreground";
               return (
                 <button
                   key={item.id}
@@ -3338,12 +3360,12 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                         : "border-transparent text-foreground hover:border-border hover:bg-secondary"
                   }`}
                   aria-current={active ? "page" : undefined}
-                  aria-label={`${item.label}: ${active ? "Current view" : "Open view"}, ${item.note}${item.badge ? `, ${item.badge} item${item.badge === "1" ? "" : "s"}` : ""}`}
+                  aria-label={`${item.label}: ${active ? "Current view" : "Open view"}, ${item.note}${item.badge ? `, ${item.badgeLabel ?? `${item.badge} item${item.badge === "1" ? "" : "s"}`}` : ""}`}
                 >
                   <span className="flex items-center justify-between gap-2 text-sm font-medium">
                     {item.label}
                     {item.badge ? (
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${active ? "bg-background text-foreground" : ink ? "bg-ops-coral text-ops-ink" : "bg-tint-yellow text-foreground"}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${badgeClass}`}>
                         {item.badge}
                       </span>
                     ) : null}
