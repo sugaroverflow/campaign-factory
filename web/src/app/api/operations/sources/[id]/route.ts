@@ -420,7 +420,7 @@ async function fetchSourceJson<T>(
         sourceFailureKind: isRedirectStatus(response.status) ? "redirect" : "http_error",
         message: `Read-only source ${path} returned HTTP ${response.status}.${redirectDetail}`,
         retryAfter: sanitizeRetryAfter(response.headers.get("retry-after")),
-        ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), diagnosticBody.text, path, diagnosticBody.truncated),
+        ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), diagnosticBody.text, path, diagnosticBody.truncated, diagnosticBody.invalidTextEncoding ? "malformed" : undefined),
       };
     }
     if (!hasExpectedSourceStatus(response)) {
@@ -480,7 +480,7 @@ async function fetchSourceJson<T>(
         sourceFailureKind: "non_json",
         contractMismatch: true,
         message: `Read-only source ${path} returned a non-JSON content type.`,
-        ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), diagnosticBody.text, path, diagnosticBody.truncated),
+        ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), diagnosticBody.text, path, diagnosticBody.truncated, diagnosticBody.invalidTextEncoding ? "malformed" : undefined),
       };
     }
     const charsetMismatch = sourceJsonCharsetContractMismatch(response);

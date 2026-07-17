@@ -493,6 +493,52 @@ test("operations source API: empty upstream run failures are detected without co
   }
 });
 
+test("operations source API: invalid UTF-8 upstream run failures preserve text-encoding diagnostics", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response(new Uint8Array([0xff, 0xfe, 0xfd]), {
+        status: 500,
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "content-length": "3",
+          "x-matched-path": "/api/factory/runs/[id]",
+          "x-vercel-id": "lhr1::iad1::ops-invalid-text-failure",
+        },
+      });
+    }
+
+    throw new Error("Documents must not hydrate when the source run failure body is not valid UTF-8.");
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(500);
+    expectPublicSourceJsonBoundary(response.headers, "invalid UTF-8 source run failure body");
+
+    const body = (await response.json()) as { error?: string; sourceStep?: string; sourceFailureKind?: string; sourcePath?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceContentLength?: number; sourceContentType?: string; sourceTextEncoding?: string; sourceBodyEmpty?: boolean; documents?: unknown[] };
+    expect(body.error).toBe("Campaign source run unavailable");
+    expect(body.sourceStep).toBe("run");
+    expect(body.sourceFailureKind).toBe("http_error");
+    expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}`);
+    expect(body.sourceHttpStatus).toBe(500);
+    expect(body.sourceRequestId).toBe("lhr1::iad1::ops-invalid-text-failure");
+    expect(body.sourceContentLength).toBe(3);
+    expect(body.sourceContentType).toBe("text/plain");
+    expect(body.sourceTextEncoding).toBe("malformed");
+    expect(body.sourceBodyEmpty).toBeUndefined();
+    expect(body.documents).toBeUndefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: large upstream failure bodies are bounded before diagnostics", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;
@@ -2743,6 +2789,67 @@ test("operations source API: empty upstream document failures stay source-unavai
     expect(body.runStatus).toBe("partial");
     expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
     expect(body.sourceStep).toBe("documents");
+    expect(body.documents).toBeUndefined();
+    expect(body.sourceRunUnavailable).toBeUndefined();
+    expect(requestedUrls).toEqual([
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("operations source API: invalid UTF-8 upstream document failures preserve text-encoding diagnostics", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestedUrls.push(String(input));
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return Response.json({ campaignId: curatedId, status: "partial", stateVersion: 1, lastSequence: 0, events: [] });
+    }
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}/documents`)) {
+      return new Response(new Uint8Array([0xff, 0xfe, 0xfd]), {
+        status: 500,
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "content-length": "3",
+          "x-matched-path": "/api/factory/runs/[id]/documents",
+          "x-vercel-id": "lhr1::iad1::ops-doc-invalid-text-failure",
+        },
+      });
+    }
+
+    throw new Error(`Unexpected source request: ${String(input)}`);
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(500);
+    expectPublicSourceJsonBoundary(response.headers, "invalid UTF-8 source document failure body");
+
+    const body = (await response.json()) as { error?: string; detail?: string; runStatus?: string; sourceOrigin?: string; sourceStep?: string; sourceFailureKind?: string; sourcePath?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceContentLength?: number; sourceContentType?: string; sourceTextEncoding?: string; sourceBodyEmpty?: boolean; documents?: unknown[]; sourceRunUnavailable?: boolean };
+    expect(body.error).toBe("Campaign source documents unavailable");
+    expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId}/documents returned HTTP 500`);
+    expect(body.runStatus).toBe("partial");
+    expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
+    expect(body.sourceStep).toBe("documents");
+    expect(body.sourceFailureKind).toBe("http_error");
+    expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}/documents`);
+    expect(body.sourceHttpStatus).toBe(500);
+    expect(body.sourceRequestId).toBe("lhr1::iad1::ops-doc-invalid-text-failure");
+    expect(body.sourceMatchedPath).toBe("/api/factory/runs/[id]/documents");
+    expect(body.sourceContentLength).toBe(3);
+    expect(body.sourceContentType).toBe("text/plain");
+    expect(body.sourceTextEncoding).toBe("malformed");
+    expect(body.sourceBodyEmpty).toBeUndefined();
     expect(body.documents).toBeUndefined();
     expect(body.sourceRunUnavailable).toBeUndefined();
     expect(requestedUrls).toEqual([
