@@ -6073,6 +6073,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await page.getByRole("button", { name: /Overview/ }).first().click();
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toBeVisible();
   await expect(page.getByText(/Your browser-local actions and drafts were preserved/)).toBeVisible();
+  await expect(page.getByLabel("Six-stage campaign runway")).toContainText("Paused for source update");
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("2 local items need source re-check");
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("Action: Confirm Planning Inspectorate appeal status · Next · Campaign source · Evidence & checks · strategy");
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("Draft: Supporter email · Needs human review · Browser-local source workspace draft");
@@ -6085,6 +6086,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
 
   await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
+  await expect(page.getByLabel("Outbox source update pause")).toContainText("Local queue changes are paused for source re-check.");
   await expect(page.getByLabel("Export operations pack")).toContainText("Client-side download");
   const [changedJsonDownload] = await Promise.all([
     page.waitForEvent("download"),
@@ -6125,6 +6127,8 @@ test("operations workbench: source updates preserve browser-local work and requi
   await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();
   await expect(page.getByText("Local approvals are checking against the latest acknowledged read-only source baseline.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve as human reviewer" })).toBeEnabled();
+  await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
+  await expect(page.getByLabel("Outbox source update pause")).toHaveCount(0);
 });
 
 test("operations workbench: all real campaign routes export source-specific local packs", async ({ page }) => {

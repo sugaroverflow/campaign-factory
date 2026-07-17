@@ -2166,16 +2166,28 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     {
       label: "Human approval",
       view: "reviews",
-      status: communicationStatus === "approved" || communicationStatus === "queued" ? "complete" : communicationStatus === "review" ? "current" : "blocked",
-      statusLabel: communicationStatus === "approved" || communicationStatus === "queued" ? "Approved by human" : communicationStatus === "review" ? "Waiting for approval" : "Required before queue",
-      detail: "A person must explicitly approve before anything enters the local demo queue.",
+      status: sourceBaselineChanged ? "blocked" : communicationStatus === "approved" || communicationStatus === "queued" ? "complete" : communicationStatus === "review" ? "current" : "blocked",
+      statusLabel: sourceBaselineChanged
+        ? "Source re-check required"
+        : communicationStatus === "approved" || communicationStatus === "queued"
+          ? "Approved by human"
+          : communicationStatus === "review"
+            ? "Waiting for approval"
+            : "Required before queue",
+      detail: sourceBaselineChanged
+        ? "Read-only source changed; re-check local work and acknowledge the source before approval continues."
+        : "A person must explicitly approve before anything enters the local demo queue.",
     },
     {
       label: "Local outbox",
       view: "outbox",
-      status: communicationStatus === "queued" ? "complete" : communicationStatus === "approved" ? "current" : "soon",
-      statusLabel: communicationStatus === "queued" ? "Queued for demo" : communicationStatus === "approved" ? "Ready to queue locally" : "Provider off",
-      detail: communicationStatus === "queued" ? "Stored locally in this browser; no provider used." : "Local queue only; production scheduling and provider connection remain off.",
+      status: sourceBaselineChanged ? "blocked" : communicationStatus === "queued" ? "complete" : communicationStatus === "approved" ? "current" : "soon",
+      statusLabel: sourceBaselineChanged ? "Paused for source update" : communicationStatus === "queued" ? "Queued for demo" : communicationStatus === "approved" ? "Ready to queue locally" : "Provider off",
+      detail: sourceBaselineChanged
+        ? "Existing local queue rows are preserved, but new queue changes wait for source acknowledgement."
+        : communicationStatus === "queued"
+          ? "Stored locally in this browser; no provider used."
+          : "Local queue only; production scheduling and provider connection remain off.",
     },
   ];
 
@@ -3311,6 +3323,14 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             ? "The approved draft is stored in this browser for the conference demo. It is not connected to an email provider."
             : "Approve the draft before it can enter the local demo queue. Provider outreach stays disabled."}
         </p>
+        {sourceBaselineChanged ? (
+          <div className="mt-4 rounded-[var(--r-xl)] border border-ops-coral bg-ops-coral/55 p-3 text-sm text-ops-ink" role="status" aria-label="Outbox source update pause">
+            <p className="font-medium">Local queue changes are paused for source re-check.</p>
+            <p className="mt-1">
+              Existing browser-local queue rows stay visible, but approval and queue changes stay locked until the updated read-only source is acknowledged on Overview.
+            </p>
+          </div>
+        ) : null}
         <div className="mt-6 rounded-[var(--r-2xl)] border border-border bg-background p-4">
           <SmallLabel>Local dispatch runway</SmallLabel>
           <div className="mt-4 grid gap-3 md:grid-cols-4" aria-label="Local dispatch runway">
