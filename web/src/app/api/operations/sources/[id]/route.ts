@@ -84,6 +84,23 @@ function sanitizeSourceRequestId(value: string | null) {
   return /^[A-Za-z0-9:_.-]{1,128}$/.test(trimmed) ? trimmed : undefined;
 }
 
+function sanitizeSourceContentType(value: string | null) {
+  if (value === null) return { missing: true as const };
+  const mediaType = value.toLowerCase().split(";", 1)[0]?.trim() ?? "";
+  return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(mediaType) && mediaType.length <= 80 ? { value: mediaType } : {};
+}
+
+function upstreamResponseMetadata(response: Response) {
+  const contentType = sanitizeSourceContentType(response.headers.get("content-type"));
+  return {
+    sourceHttpStatus: response.status,
+    sourceRequestId: sanitizeSourceRequestId(response.headers.get("x-vercel-id")),
+    sourceBodyEmpty: hasExplicitEmptyBody(response),
+    ...("value" in contentType ? { sourceContentType: contentType.value } : {}),
+    ...("missing" in contentType ? { sourceContentTypeMissing: true } : {}),
+  };
+}
+
 function sourceFailureHeaders(result: { retryAfter?: string }) {
   return result.retryAfter ? { ...NO_STORE_HEADERS, "Retry-After": result.retryAfter } : NO_STORE_HEADERS;
 }
@@ -98,11 +115,13 @@ function hasExplicitEmptyBody(response: Response) {
   return response.headers.get("content-length")?.trim() === "0";
 }
 
-function upstreamFailureMetadata(result: { sourceHttpStatus?: number; sourceRequestId?: string; sourceBodyEmpty?: boolean }) {
+function upstreamFailureMetadata(result: { sourceHttpStatus?: number; sourceRequestId?: string; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }) {
   return {
     ...(result.sourceHttpStatus ? { sourceHttpStatus: result.sourceHttpStatus } : {}),
     ...(result.sourceRequestId ? { sourceRequestId: result.sourceRequestId } : {}),
     ...(result.sourceBodyEmpty ? { sourceBodyEmpty: true } : {}),
+    ...(result.sourceContentType ? { sourceContentType: result.sourceContentType } : {}),
+    ...(result.sourceContentTypeMissing ? { sourceContentTypeMissing: true } : {}),
   };
 }
 
@@ -111,7 +130,7 @@ async function fetchSourceJson<T>(
   path: string,
 ): Promise<
   | { ok: true; value: T }
-  | { ok: false; status: number; message: string; path: string; contractMismatch?: boolean; retryAfter?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceBodyEmpty?: boolean }
+  | { ok: false; status: number; message: string; path: string; contractMismatch?: boolean; retryAfter?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }
 > {
   const controller = new AbortController();
   let timedOut = false;
@@ -138,9 +157,7 @@ async function fetchSourceJson<T>(
         path,
         message: `Read-only source ${path} returned HTTP ${response.status}.${redirectDetail}`,
         retryAfter: sanitizeRetryAfter(response.headers.get("retry-after")),
-        sourceHttpStatus: response.status,
-        sourceRequestId: sanitizeSourceRequestId(response.headers.get("x-vercel-id")),
-        sourceBodyEmpty: hasExplicitEmptyBody(response),
+        ...upstreamResponseMetadata(response),
       };
     }
     if (!hasJsonContentType(response)) {
@@ -150,8 +167,7 @@ async function fetchSourceJson<T>(
         path,
         contractMismatch: true,
         message: `Read-only source ${path} returned a non-JSON content type.`,
-        sourceHttpStatus: response.status,
-        sourceRequestId: sanitizeSourceRequestId(response.headers.get("x-vercel-id")),
+        ...upstreamResponseMetadata(response),
       };
     }
     try {
@@ -163,8 +179,7 @@ async function fetchSourceJson<T>(
         path,
         contractMismatch: true,
         message: `Read-only source ${path} returned malformed JSON.`,
-        sourceHttpStatus: response.status,
-        sourceRequestId: sanitizeSourceRequestId(response.headers.get("x-vercel-id")),
+        ...upstreamResponseMetadata(response),
       };
     }
   } catch {
