@@ -12,6 +12,11 @@ export const dynamic = "force-dynamic";
 
 const PUBLIC_READ_HEADERS = {
   "Cache-Control": "no-store",
+  "Content-Security-Policy": "default-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+  "Cross-Origin-Resource-Policy": "same-origin",
+  Expires: "0",
+  Pragma: "no-cache",
+  "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
 };
 

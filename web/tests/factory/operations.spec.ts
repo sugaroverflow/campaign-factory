@@ -19,6 +19,16 @@ function expectOperationsSourceClientRequest(request: { headers: () => Record<st
   expect(request.headers().pragma).toBe("no-cache");
 }
 
+function expectPublicSourceJsonBoundary(headers: Headers, label: string) {
+  expect(headers.get("cache-control"), label).toBe("no-store");
+  expect(headers.get("content-security-policy"), label).toBe("default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+  expect(headers.get("cross-origin-resource-policy"), label).toBe("same-origin");
+  expect(headers.get("expires"), label).toBe("0");
+  expect(headers.get("pragma"), label).toBe("no-cache");
+  expect(headers.get("referrer-policy"), label).toBe("no-referrer");
+  expect(headers.get("x-content-type-options"), label).toBe("nosniff");
+}
+
 function withCompiledDocumentDisclaimer(plainText: string) {
   return `${plainText}\n\n${COMPILED_DOCUMENT_DISCLAIMER}`;
 }
@@ -80,8 +90,7 @@ test("factory public source routes: unavailable read store returns JSON instead 
       const response = await route();
       expect(response.status, name).toBe(503);
       expect(response.headers.get("content-type"), name).toContain("application/json");
-      expect(response.headers.get("cache-control"), name).toBe("no-store");
-      expect(response.headers.get("x-content-type-options"), name).toBe("nosniff");
+      expectPublicSourceJsonBoundary(response.headers, name);
 
       const body = (await response.json()) as { error?: string; detail?: string };
       expect(body.error, name).toBe("Factory read store unavailable");
@@ -118,8 +127,7 @@ test("factory public source routes: invalid ids are no-store JSON misses", async
     const response = await route();
     expect(response.status, name).toBe(404);
     expect(response.headers.get("content-type"), name).toContain("application/json");
-    expect(response.headers.get("cache-control"), name).toBe("no-store");
-    expect(response.headers.get("x-content-type-options"), name).toBe("nosniff");
+    expectPublicSourceJsonBoundary(response.headers, name);
 
     const body = (await response.json()) as { error?: string };
     expect(body.error, name).toBe("Run not found");
