@@ -1160,11 +1160,12 @@ test("operations source API: successful source responses keep same-origin resour
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
-  const sourceReadOptions: Array<{ credentials?: RequestCredentials; referrerPolicy?: ReferrerPolicy }> = [];
+  const sourceReadOptions: Array<{ method?: string; credentials?: RequestCredentials; referrerPolicy?: ReferrerPolicy }> = [];
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     requestedUrls.push(String(input));
-    sourceReadOptions.push({ credentials: init?.credentials, referrerPolicy: init?.referrerPolicy });
+    sourceReadOptions.push({ method: init?.method, credentials: init?.credentials, referrerPolicy: init?.referrerPolicy });
+    expect(init?.method).toBe("GET");
     expect(init?.cache).toBe("no-store");
     expect(init?.credentials).toBe("omit");
     expect(init?.redirect).toBe("manual");
@@ -1207,8 +1208,8 @@ test("operations source API: successful source responses keep same-origin resour
       `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
     ]);
     expect(sourceReadOptions).toEqual([
-      { credentials: "omit", referrerPolicy: "no-referrer" },
-      { credentials: "omit", referrerPolicy: "no-referrer" },
+      { method: "GET", credentials: "omit", referrerPolicy: "no-referrer" },
+      { method: "GET", credentials: "omit", referrerPolicy: "no-referrer" },
     ]);
   } finally {
     globalThis.fetch = originalFetch;

@@ -95,6 +95,7 @@ async function fetchSourceJson<T>(
 
   try {
     const response = await fetch(`${origin}${path}`, {
+      method: "GET",
       headers: SOURCE_FETCH_HEADERS,
       cache: "no-store",
       credentials: "omit",
