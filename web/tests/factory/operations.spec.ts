@@ -1685,6 +1685,30 @@ test("operations workbench: failed or not-yet-usable real source loads do not fa
   await page.unroute(`**/api/operations/sources/${campaignId}`);
   await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
     await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Campaign source documents unavailable",
+        detail: "Unsafe upstream detail should not render",
+        sourceOrigin: "https://campaign-factory.example/source",
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/public campaign source could not be loaded \(HTTP 502\)/i)).toBeVisible();
+  await expect(page.getByText("Checked read-only source:")).toHaveCount(0);
+  await expect(page.getByText("Unsafe upstream detail should not render")).toHaveCount(0);
+  await expect(page.getByText("campaign-factory.example")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+
+  await page.unroute(`**/api/operations/sources/${campaignId}`);
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
       status: 409,
       contentType: "application/json",
       body: JSON.stringify({

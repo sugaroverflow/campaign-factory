@@ -34,6 +34,10 @@ function hasJsonResponseContentType(response: Response) {
   return mediaType === "application/json" || mediaType.endsWith("+json");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 type SegmentId = "school_gates" | "ward_parents" | "local_allies";
 type DraftId = "supporter_email" | "decision_maker_letter" | "press_pitch";
 type DraftStatus = "draft" | "review" | "approved" | "queued";
@@ -1501,11 +1505,13 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
   if (!sourceRes.ok) {
     const errorBody = sourceBody as { error?: string; detail?: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string } | null;
     const sourceOrigin = normaliseOperationsSourceOrigin(errorBody?.sourceOrigin);
-    const fallbackMessage = sourceRes.status === 404 && !sourceOrigin
+    const hasSourceOriginField = isRecord(errorBody) && Object.prototype.hasOwnProperty.call(errorBody, "sourceOrigin");
+    const canUseSourceErrorDetail = !hasSourceOriginField || Boolean(sourceOrigin);
+    const fallbackMessage = sourceRes.status === 404 && !hasSourceOriginField
       ? "No curated public campaign source was found for that campaign ID."
       : `The public campaign source could not be loaded (HTTP ${sourceRes.status}).`;
-    const err = new Error(errorBody?.detail || errorBody?.error || fallbackMessage);
-    if (errorBody?.runStatus) (err as Error & { runStatus?: RunReadModel["status"] }).runStatus = errorBody.runStatus;
+    const err = new Error(canUseSourceErrorDetail ? errorBody?.detail || errorBody?.error || fallbackMessage : fallbackMessage);
+    if (canUseSourceErrorDetail && errorBody?.runStatus) (err as Error & { runStatus?: RunReadModel["status"] }).runStatus = errorBody.runStatus;
     if (sourceOrigin) (err as Error & { sourceOrigin?: string }).sourceOrigin = sourceOrigin;
     throw err;
   }
