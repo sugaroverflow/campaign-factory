@@ -121,6 +121,7 @@ type DemoState = {
   sourceStateVersion: number | null;
   sourceLastSequence: number | null;
   sourceDocumentSignature: string | null;
+  sourceAcknowledgedAt: string | null;
   selectedSegment: SegmentId;
   subject: string;
   body: string;
@@ -558,6 +559,7 @@ const initialState: DemoState = {
   sourceStateVersion: null,
   sourceLastSequence: null,
   sourceDocumentSignature: null,
+  sourceAcknowledgedAt: null,
   selectedSegment: "school_gates",
   subject: "Make the St John the Baptist school street permanent",
   body:
@@ -744,6 +746,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     sourceStateVersion: typeof parsed.sourceStateVersion === "number" ? parsed.sourceStateVersion : null,
     sourceLastSequence: typeof parsed.sourceLastSequence === "number" ? parsed.sourceLastSequence : null,
     sourceDocumentSignature: typeof parsed.sourceDocumentSignature === "string" ? parsed.sourceDocumentSignature : null,
+    sourceAcknowledgedAt: typeof parsed.sourceAcknowledgedAt === "string" && parsed.sourceAcknowledgedAt ? parsed.sourceAcknowledgedAt : null,
     reviewerNote: typeof parsed.reviewerNote === "string" ? parsed.reviewerNote : "",
     activeView: viewIds.includes(parsed.activeView as ViewId) ? (parsed.activeView as ViewId) : "overview",
     contactFilter:
@@ -1316,6 +1319,7 @@ function buildInitialStateForSource(source: CampaignSource): DemoState {
     sourceStateVersion: source.stateVersion,
     sourceLastSequence: source.lastSequence,
     sourceDocumentSignature: sourceDocumentSignature(source),
+    sourceAcknowledgedAt: source.loadedAt,
     subject: `${source.title}: update for review`,
     body: [
       "Hello,",
@@ -1999,9 +2003,20 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         sourceStateVersion: source.stateVersion,
         sourceLastSequence: source.lastSequence,
         sourceDocumentSignature: signature,
+        sourceAcknowledgedAt: source.loadedAt,
       }));
     });
   }, [hasStoredLocalState, hydrated, source, state.sourceStateVersion, state.workspaceKey]);
+
+  useEffect(() => {
+    if (!hydrated || !source || !hasStoredLocalState || state.workspaceKey !== source.campaignId || state.sourceStateVersion === null || state.sourceAcknowledgedAt) return;
+    queueMicrotask(() => {
+      setState((current) => ({
+        ...current,
+        sourceAcknowledgedAt: source.loadedAt,
+      }));
+    });
+  }, [hasStoredLocalState, hydrated, source, state.sourceAcknowledgedAt, state.sourceStateVersion, state.workspaceKey]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -2502,6 +2517,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
       sourceStateVersion: source.stateVersion,
       sourceLastSequence: source.lastSequence,
       sourceDocumentSignature: currentSourceDocumentSignature,
+      sourceAcknowledgedAt: new Date().toISOString(),
       activity: [record(`Acknowledged updated read-only source for ${source.title}; existing local work was preserved.`), ...current.activity].slice(0, 7),
     }));
   };
@@ -2560,6 +2576,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             runStatus: source.runStatus,
             sourceStateVersion: source.stateVersion,
             sourceLastSequence: source.lastSequence,
+            sourceAcknowledgedAt: state.sourceAcknowledgedAt,
             sourceBaselineChanged,
           }
         : {
@@ -2612,6 +2629,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             currentStateVersion: source.stateVersion,
             previousLastSequence: state.sourceLastSequence,
             currentLastSequence: source.lastSequence,
+            sourceAcknowledgedAt: state.sourceAcknowledgedAt,
             warning: sourceBaselineChanged
               ? "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing."
               : "Read-only source matches the baseline acknowledged for this local workspace.",
@@ -3533,6 +3551,9 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
               <h2 className="mt-2 text-2xl font-medium">{sourceStatusPhrase(source)} · loaded from public Campaign Factory data</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 Campaign ID <span className="font-mono text-xs text-foreground">{source.campaignId}</span> · state v{source.stateVersion} · event #{source.lastSequence} · loaded {formatQueuedTime(source.loadedAt)}.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Local approval baseline: {state.sourceAcknowledgedAt ? `acknowledged ${formatQueuedTime(state.sourceAcknowledgedAt)}` : "not acknowledged yet"}.
               </p>
               {sourceBaselineChanged ? (
                 <div className="mt-4 rounded-[var(--r-xl)] border border-ops-coral bg-ops-coral/55 p-3 text-sm text-ops-ink" role="status">

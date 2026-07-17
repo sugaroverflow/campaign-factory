@@ -6072,6 +6072,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await page.reload();
   await page.getByRole("button", { name: /Overview/ }).first().click();
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toBeVisible();
+  await expect(page.getByText(/Local approval baseline: acknowledged/)).toBeVisible();
   await expect(page.getByText(/Your browser-local actions and drafts were preserved/)).toBeVisible();
   await expect(page.getByLabel("Six-stage campaign runway")).toContainText("Paused for source update");
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("2 local items need source re-check");
@@ -6098,6 +6099,7 @@ test("operations workbench: source updates preserve browser-local work and requi
     campaign: { sourceBaselineChanged: boolean };
     sourceChangeReview: {
       baselineChanged: boolean;
+      sourceAcknowledgedAt: string | null;
       warning: string;
       localActionsToRecheck: Array<{ title: string; source: string; status: string }>;
       localDraftsToRecheck: Array<{ title: string; source: string; status: string }>;
@@ -6106,6 +6108,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   expect(changedPack.campaign.sourceBaselineChanged).toBe(true);
   expect(changedPack.sourceChangeReview).toMatchObject({
     baselineChanged: true,
+    sourceAcknowledgedAt: expect.any(String),
     warning: "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing.",
   });
   expect(changedPack.sourceChangeReview.localActionsToRecheck[0]).toMatchObject({
@@ -6135,6 +6138,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await page.getByRole("button", { name: /Overview/ }).first().click();
   await page.getByRole("button", { name: "Acknowledge updated source" }).click();
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toHaveCount(0);
+  await expect(page.getByText(/Local approval baseline: acknowledged/)).toBeVisible();
   await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();
   await expect(page.getByText("Local approvals are checking against the latest acknowledged read-only source baseline.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve as human reviewer" })).toBeEnabled();
