@@ -9058,6 +9058,12 @@ test("operations workbench: source updates preserve browser-local work and requi
     "title",
     "Acknowledge the updated read-only source before creating new source-derived local actions.",
   );
+  await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
+  await expect(page.getByLabel("Source next checks ledger").getByRole("button", { name: "Action created" })).toBeDisabled();
+  await expect(page.getByLabel("Source next checks ledger").getByRole("button", { name: "Action created" })).toHaveAttribute(
+    "title",
+    "Acknowledge the updated read-only source before creating new source-derived local actions.",
+  );
 
   await page.getByRole("button", { name: /Audiences/ }).first().click();
   await expect(page.getByText("Audience selection is paused until the updated read-only source is acknowledged, so local drafts cannot be retargeted against stale campaign material.")).toBeVisible();
@@ -9149,6 +9155,8 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toHaveCount(0);
   await expect(page.getByText(/Local approval baseline: acknowledged/)).toBeVisible();
   await expect(page.getByLabel("Source document baseline state")).toContainText("matches local acknowledgement");
+  await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
+  await expect(page.getByLabel("Source next checks ledger").getByRole("button", { name: "Action created" })).not.toHaveAttribute("title", "Acknowledge the updated read-only source before creating new source-derived local actions.");
   await page.getByRole("button", { name: /Audiences/ }).first().click();
   await expect(page.getByRole("button", { name: /Residents directly affected by amenity/ })).toBeEnabled();
   await page.getByRole("button", { name: /Action plan/ }).first().click();

@@ -4332,8 +4332,15 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                         {check.affectedSections?.length ? ` · ${check.affectedSections.join(", ")}` : ""}
                       </p>
                     </div>
-                    <Button type="button" variant="outline" onClick={() => createSourceCheckAction(check, index)} disabled={actionExists}>
-                      {actionExists ? "Action created" : "Create action"}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => createSourceCheckAction(check, index)}
+                      disabled={actionExists || !canCreateSourceDerivedWork}
+                      aria-describedby={!canCreateSourceDerivedWork ? "operations-section-source-action-pause" : undefined}
+                      title={!canCreateSourceDerivedWork ? "Acknowledge the updated read-only source before creating new source-derived local actions." : undefined}
+                    >
+                      {actionExists ? "Action created" : !canCreateSourceDerivedWork ? "Source re-check required" : "Create action"}
                     </Button>
                   </div>
                 );
@@ -4358,8 +4365,16 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                       </div>
                       <span className="rounded-full bg-ops-coral px-2.5 py-1 text-xs text-ops-ink">Incomplete</span>
                     </div>
-                    <Button type="button" variant="outline" className="mt-3" onClick={() => createIncompleteDocumentAction(doc)} disabled={actionExists}>
-                      {actionExists ? "Follow-up created" : "Create follow-up"}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={() => createIncompleteDocumentAction(doc)}
+                      disabled={actionExists || !canCreateSourceDerivedWork}
+                      aria-describedby={!canCreateSourceDerivedWork ? "operations-section-source-action-pause" : undefined}
+                      title={!canCreateSourceDerivedWork ? "Acknowledge the updated read-only source before creating new source-derived local actions." : undefined}
+                    >
+                      {actionExists ? "Follow-up created" : !canCreateSourceDerivedWork ? "Source re-check required" : "Create follow-up"}
                     </Button>
                   </div>
                 );
