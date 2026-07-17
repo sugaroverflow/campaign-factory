@@ -94,10 +94,15 @@ function sourceFailureBody(step: SourceStep, body: Record<string, unknown>) {
   return { ...body, sourceStep: step };
 }
 
-function upstreamFailureMetadata(result: { sourceHttpStatus?: number; sourceRequestId?: string }) {
+function hasExplicitEmptyBody(response: Response) {
+  return response.headers.get("content-length")?.trim() === "0";
+}
+
+function upstreamFailureMetadata(result: { sourceHttpStatus?: number; sourceRequestId?: string; sourceBodyEmpty?: boolean }) {
   return {
     ...(result.sourceHttpStatus ? { sourceHttpStatus: result.sourceHttpStatus } : {}),
     ...(result.sourceRequestId ? { sourceRequestId: result.sourceRequestId } : {}),
+    ...(result.sourceBodyEmpty ? { sourceBodyEmpty: true } : {}),
   };
 }
 
@@ -106,7 +111,7 @@ async function fetchSourceJson<T>(
   path: string,
 ): Promise<
   | { ok: true; value: T }
-  | { ok: false; status: number; message: string; path: string; contractMismatch?: boolean; retryAfter?: string; sourceHttpStatus?: number; sourceRequestId?: string }
+  | { ok: false; status: number; message: string; path: string; contractMismatch?: boolean; retryAfter?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceBodyEmpty?: boolean }
 > {
   const controller = new AbortController();
   let timedOut = false;
@@ -135,6 +140,7 @@ async function fetchSourceJson<T>(
         retryAfter: sanitizeRetryAfter(response.headers.get("retry-after")),
         sourceHttpStatus: response.status,
         sourceRequestId: sanitizeSourceRequestId(response.headers.get("x-vercel-id")),
+        sourceBodyEmpty: hasExplicitEmptyBody(response),
       };
     }
     if (!hasJsonContentType(response)) {
