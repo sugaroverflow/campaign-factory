@@ -26,6 +26,11 @@ const NO_STORE_HEADERS = {
   "X-Content-Type-Options": "nosniff",
 };
 const READ_ONLY_ALLOW_HEADERS = { ...NO_STORE_HEADERS, Allow: "GET" };
+const SOURCE_FETCH_HEADERS = {
+  accept: "application/json",
+  "cache-control": "no-cache",
+  pragma: "no-cache",
+};
 const SOURCE_FETCH_TIMEOUT_MS = 10_000;
 
 function sourceJson<T>(body: T, status = 200, headers: Record<string, string> = NO_STORE_HEADERS) {
@@ -77,7 +82,7 @@ async function fetchSourceJson<T>(
 
   try {
     const response = await fetch(`${origin}${path}`, {
-      headers: { accept: "application/json" },
+      headers: SOURCE_FETCH_HEADERS,
       cache: "no-store",
       redirect: "manual",
       signal: controller.signal,

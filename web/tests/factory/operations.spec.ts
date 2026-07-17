@@ -9,6 +9,7 @@ test.beforeEach(async ({ page }) => {
 const COMPILED_DOCUMENT_DISCLAIMER =
   "AI-generated draft — please verify all facts and figures before publishing or campaigning with this material.";
 const COMPILED_DOCUMENT_NEEDS_VERIFICATION_NOTE = "Some facts in this section couldn't be fully checked in time";
+const SOURCE_FETCH_HEADERS = { accept: "application/json", "cache-control": "no-cache", pragma: "no-cache" };
 
 function withCompiledDocumentDisclaimer(plainText: string) {
   return `${plainText}\n\n${COMPILED_DOCUMENT_DISCLAIMER}`;
@@ -106,7 +107,7 @@ test("operations source API: upstream run redirects fail closed before document 
     requestedUrls.push(String(input));
     expect(init?.cache).toBe("no-store");
     expect(init?.redirect).toBe("manual");
-    expect(init?.headers).toEqual({ accept: "application/json" });
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
 
     if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
       return new Response(null, {
@@ -143,7 +144,7 @@ test("operations source API: upstream document redirects fail closed after the v
     requestedUrls.push(String(input));
     expect(init?.cache).toBe("no-store");
     expect(init?.redirect).toBe("manual");
-    expect(init?.headers).toEqual({ accept: "application/json" });
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
 
     if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
       return Response.json({ campaignId: curatedId, status: "partial", stateVersion: 1, lastSequence: 0, events: [] });
@@ -186,7 +187,7 @@ test("operations source API: upstream run responses require JSON content type be
     requestedUrls.push(String(input));
     expect(init?.cache).toBe("no-store");
     expect(init?.redirect).toBe("manual");
-    expect(init?.headers).toEqual({ accept: "application/json" });
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
 
     if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
       return new Response(JSON.stringify({ campaignId: curatedId, status: "partial", stateVersion: 1, lastSequence: 0, events: [] }), {
@@ -222,7 +223,7 @@ test("operations source API: upstream document responses require JSON content ty
     requestedUrls.push(String(input));
     expect(init?.cache).toBe("no-store");
     expect(init?.redirect).toBe("manual");
-    expect(init?.headers).toEqual({ accept: "application/json" });
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
 
     if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
       return Response.json({ campaignId: curatedId, status: "partial", stateVersion: 1, lastSequence: 0, events: [] });
@@ -265,7 +266,7 @@ test("operations source API: network failures do not leak thrown upstream detail
     requestedUrls.push(String(input));
     expect(init?.cache).toBe("no-store");
     expect(init?.redirect).toBe("manual");
-    expect(init?.headers).toEqual({ accept: "application/json" });
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
 
     throw new Error("Leaked upstream credential https://user:pass@example.invalid/private-source");
   }) as typeof fetch;
@@ -307,7 +308,7 @@ test("operations source API: successful source responses keep same-origin resour
     requestedUrls.push(String(input));
     expect(init?.cache).toBe("no-store");
     expect(init?.redirect).toBe("manual");
-    expect(init?.headers).toEqual({ accept: "application/json" });
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
 
     if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
       return Response.json({ campaignId: curatedId, status: "partial", stateVersion: 1, lastSequence: 0, events: [] });
