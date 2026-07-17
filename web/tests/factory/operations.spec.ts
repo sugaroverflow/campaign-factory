@@ -1156,7 +1156,7 @@ test("operations source API: upstream document network failures fail closed afte
   }
 });
 
-test("operations source API: successful source responses keep same-origin resource policy", async () => {
+test("operations source API: successful source responses keep same-origin resource policy and ignore arbitrary query URLs", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
@@ -1182,7 +1182,9 @@ test("operations source API: successful source responses keep same-origin resour
   }) as typeof fetch;
 
   try {
-    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}?url=https%3A%2F%2Fexample.com%2Fanything%3Fsecret%3D1`), {
+      params: Promise.resolve({ id: curatedId }),
+    });
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
