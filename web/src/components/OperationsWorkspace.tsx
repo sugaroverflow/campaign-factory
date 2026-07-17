@@ -2572,6 +2572,20 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         readiness: selected.readiness,
         caveat: selected.caveat,
       },
+      sourceChangeReview: source
+        ? {
+            baselineChanged: sourceBaselineChanged,
+            previousStateVersion: state.sourceStateVersion,
+            currentStateVersion: source.stateVersion,
+            previousLastSequence: state.sourceLastSequence,
+            currentLastSequence: source.lastSequence,
+            warning: sourceBaselineChanged
+              ? "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing."
+              : "Read-only source matches the baseline acknowledged for this local workspace.",
+            localActionsToRecheck: sourceBaselineChanged ? state.localActions.map((action) => ({ title: action.title, source: action.source, status: localActionStatusCopy[action.status] })) : [],
+            localDraftsToRecheck: sourceBaselineChanged ? queuedDrafts.map((draft) => ({ title: draft.title, subject: draft.subject, status: draft.status, source: draft.source })) : [],
+          }
+        : null,
       actions: state.localActions.map((action) => ({ ...action, statusLabel: localActionStatusCopy[action.status] })),
       drafts: queuedDrafts,
       outbox: {
@@ -2630,8 +2644,28 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         `- Caveat: ${pack.selectedAudience.caveat}`,
         "",
         "## Local actions",
-        ...(pack.actions.length ? pack.actions.map((action) => `- [${action.statusLabel}] ${action.title} — ${action.owner}; ${action.timing}`) : ["- No browser-local actions yet."]),
+        ...(pack.actions.length
+          ? pack.actions.flatMap((action) => [
+              `- [${action.statusLabel}] ${action.title} — ${action.owner}; ${action.timing}`,
+              `  - Source/provenance: ${action.source}`,
+              `  - Local boundary: ${action.provenance}`,
+              ...(pack.sourceChangeReview?.baselineChanged ? ["  - Source update review: re-check this action against the updated read-only source before approving or queueing local work."] : []),
+            ])
+          : ["- No browser-local actions yet."]),
         "",
+        ...(pack.sourceChangeReview?.baselineChanged
+          ? [
+              "## Source update review",
+              `- ${pack.sourceChangeReview.warning}`,
+              ...(pack.sourceChangeReview.localActionsToRecheck.length
+                ? pack.sourceChangeReview.localActionsToRecheck.map((action) => `- Re-check action: ${action.title} (${action.status}) — ${action.source}`)
+                : ["- No browser-local actions currently require source re-check."]),
+              ...(pack.sourceChangeReview.localDraftsToRecheck.length
+                ? pack.sourceChangeReview.localDraftsToRecheck.map((draft) => `- Re-check draft: ${draft.title} (${draft.status}) — ${draft.source}`)
+                : ["- No browser-local drafts currently require source re-check."]),
+              "",
+            ]
+          : []),
         "## Drafts & local outbox",
         ...(pack.drafts.length
           ? pack.drafts.flatMap((draft) => [

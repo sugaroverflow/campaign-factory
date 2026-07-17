@@ -6081,8 +6081,20 @@ test("operations workbench: source updates preserve browser-local work and requi
   ]);
   const changedJsonPath = await changedJsonDownload.path();
   expect(changedJsonPath).toBeTruthy();
-  const changedPack = JSON.parse(await readFile(changedJsonPath!, "utf8")) as { campaign: { sourceBaselineChanged: boolean } };
+  const changedPack = JSON.parse(await readFile(changedJsonPath!, "utf8")) as {
+    campaign: { sourceBaselineChanged: boolean };
+    sourceChangeReview: { baselineChanged: boolean; warning: string; localActionsToRecheck: Array<{ title: string; source: string; status: string }> };
+  };
   expect(changedPack.campaign.sourceBaselineChanged).toBe(true);
+  expect(changedPack.sourceChangeReview).toMatchObject({
+    baselineChanged: true,
+    warning: "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing.",
+  });
+  expect(changedPack.sourceChangeReview.localActionsToRecheck[0]).toMatchObject({
+    title: "Confirm Planning Inspectorate appeal status",
+    source: "Campaign source · Evidence & checks · strategy",
+    status: "Next",
+  });
 
   const [changedMarkdownDownload] = await Promise.all([
     page.waitForEvent("download"),
@@ -6092,6 +6104,9 @@ test("operations workbench: source updates preserve browser-local work and requi
   expect(changedMarkdownPath).toBeTruthy();
   const changedMarkdown = await readFile(changedMarkdownPath!, "utf8");
   expect(changedMarkdown).toContain("Source update warning: read-only source changed after this local workspace started");
+  expect(changedMarkdown).toContain("## Source update review");
+  expect(changedMarkdown).toContain("Re-check action: Confirm Planning Inspectorate appeal status (Next) — Campaign source · Evidence & checks · strategy");
+  expect(changedMarkdown).toContain("Source update review: re-check this action against the updated read-only source before approving or queueing local work.");
 
   await page.getByRole("button", { name: /Overview/ }).first().click();
   await page.getByRole("button", { name: "Acknowledge updated source" }).click();
