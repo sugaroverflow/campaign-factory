@@ -104,6 +104,28 @@ test("factory public source routes: unavailable read store returns JSON instead 
   }
 });
 
+test("factory public source routes: invalid ids are no-store JSON misses", async () => {
+  for (const { name, route } of [
+    {
+      name: "run header",
+      route: () => getFactoryRun(new Request("http://localhost/api/factory/runs/not-a-run-id"), { params: Promise.resolve({ id: "not-a-run-id" }) }),
+    },
+    {
+      name: "compiled documents",
+      route: () => getFactoryRunDocuments(new Request("http://localhost/api/factory/runs/not-a-run-id/documents"), { params: Promise.resolve({ id: "not-a-run-id" }) }),
+    },
+  ]) {
+    const response = await route();
+    expect(response.status, name).toBe(404);
+    expect(response.headers.get("content-type"), name).toContain("application/json");
+    expect(response.headers.get("cache-control"), name).toBe("no-store");
+    expect(response.headers.get("x-content-type-options"), name).toBe("nosniff");
+
+    const body = (await response.json()) as { error?: string };
+    expect(body.error, name).toBe("Run not found");
+  }
+});
+
 test("operations source API: invalid and non-curated ids are allow-list misses with no-store caching", async ({ request }) => {
   for (const id of ["not-a-campaign-id", "00000000-0000-4000-8000-000000000000"]) {
     const response = await request.get(`/api/operations/sources/${id}`);

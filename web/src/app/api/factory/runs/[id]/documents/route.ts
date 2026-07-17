@@ -12,17 +12,22 @@ import { compileDocuments, buildEvidenceAndNextChecks } from "@/lib/factory/docu
 import { factoryReadSql } from "../../../_lib/worker";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const TERMINAL = new Set(["completed", "partial", "failed", "cancelled"]);
-const READ_FAILURE_HEADERS = {
+const PUBLIC_READ_HEADERS = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
 };
 
+function factoryJson<T>(body: T, status = 200) {
+  return NextResponse.json(body, { status, headers: PUBLIC_READ_HEADERS });
+}
+
 function factoryReadUnavailable() {
-  return NextResponse.json(
+  return factoryJson(
     { error: "Factory read store unavailable", detail: "The public campaign documents could not be reached. Try again later." },
-    { status: 503, headers: READ_FAILURE_HEADERS },
+    503,
   );
 }
 
@@ -30,7 +35,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const { id } = await ctx.params;
   // Non-UUID ids must 404 per contract, not surface a Postgres 22P02 as a 500.
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    return NextResponse.json({ error: "Run not found" }, { status: 404 });
+    return factoryJson({ error: "Run not found" }, 404);
   }
   let sql: ReturnType<typeof factoryReadSql>;
   try {
@@ -42,11 +47,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
   try {
     const run = await getRun(sql, id);
-    if (!run) return NextResponse.json({ error: "Run not found" }, { status: 404 });
+    if (!run) return factoryJson({ error: "Run not found" }, 404);
     if (!TERMINAL.has(run.status)) {
-      return NextResponse.json(
+      return factoryJson(
         { error: "Documents are available once the campaign has finished.", status: run.status },
-        { status: 409 },
+        409,
       );
     }
 
@@ -54,7 +59,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const claims = await getClaims(sql, id);
     const documents = compileDocuments(state, claims);
     const evidence = buildEvidenceAndNextChecks(state, claims);
-    return NextResponse.json({ documents, evidence });
+    return factoryJson({ documents, evidence });
   } catch (error) {
     console.error("Factory document read failed", error);
     return factoryReadUnavailable();

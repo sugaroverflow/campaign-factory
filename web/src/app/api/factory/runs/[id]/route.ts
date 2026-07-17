@@ -8,16 +8,21 @@ import { getRunReadModel } from "@/lib/factory/store/runs";
 import { factoryReadSql } from "../../_lib/worker";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-const READ_FAILURE_HEADERS = {
+const PUBLIC_READ_HEADERS = {
   "Cache-Control": "no-store",
   "X-Content-Type-Options": "nosniff",
 };
 
+function factoryJson<T>(body: T, status = 200) {
+  return NextResponse.json(body, { status, headers: PUBLIC_READ_HEADERS });
+}
+
 function factoryReadUnavailable() {
-  return NextResponse.json(
+  return factoryJson(
     { error: "Factory read store unavailable", detail: "The public campaign read model could not be reached. Try again later." },
-    { status: 503, headers: READ_FAILURE_HEADERS },
+    503,
   );
 }
 
@@ -25,7 +30,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const { id } = await ctx.params;
   // Non-UUID ids must 404 per contract, not surface a Postgres 22P02 as a 500.
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
-    return NextResponse.json({ error: "Run not found" }, { status: 404 });
+    return factoryJson({ error: "Run not found" }, 404);
   }
   const afterRaw = Number(new URL(req.url).searchParams.get("after") ?? "0");
   const after = Number.isFinite(afterRaw) && afterRaw >= 0 ? afterRaw : 0;
@@ -36,6 +41,6 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
     console.error("Factory run read failed", error);
     return factoryReadUnavailable();
   }
-  if (!model) return NextResponse.json({ error: "Run not found" }, { status: 404 });
-  return NextResponse.json(model);
+  if (!model) return factoryJson({ error: "Run not found" }, 404);
+  return factoryJson(model);
 }
