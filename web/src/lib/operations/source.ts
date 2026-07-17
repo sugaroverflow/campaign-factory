@@ -44,6 +44,10 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 function isUniqueStringArray(value: unknown): value is string[] {
   if (!isStringArray(value)) return false;
   return new Set(value).size === value.length;
@@ -148,7 +152,7 @@ function isOperationsFactoryEvent(value: unknown, campaignId: string): value is 
   if (!isRecord(value) || !isRecord(value.payload)) return false;
   const payload = value.payload;
   return (
-    typeof value.eventId === "string" &&
+    isNonEmptyString(value.eventId) &&
     isNonNegativeInteger(value.sequence) &&
     value.campaignId === campaignId &&
     isOptionalString(value.batchId) &&
@@ -238,7 +242,7 @@ export function isOperationsCompiledDocumentList(value: unknown): value is Compi
 function isOperationsEvidenceClaimView(value: unknown) {
   if (!isRecord(value)) return false;
   return (
-    typeof value.id === "string" &&
+    isNonEmptyString(value.id) &&
     typeof value.text === "string" &&
     typeof value.type === "string" &&
     typeof value.label === "string" &&
@@ -295,7 +299,7 @@ function isOperationsNextCheck(value: unknown) {
   const claimIds = isRecord(value) ? value.claimIds : undefined;
   return (
     isRecord(value) &&
-    typeof value.id === "string" &&
+    isNonEmptyString(value.id) &&
     typeof value.description === "string" &&
     typeof value.reason === "string" &&
     isOptionalUniqueStringArray(claimIds) &&
@@ -306,7 +310,7 @@ function isOperationsNextCheck(value: unknown) {
 function isOperationsTerminalGap(value: unknown) {
   return (
     isRecord(value) &&
-    typeof value.id === "string" &&
+    isNonEmptyString(value.id) &&
     typeof value.description === "string" &&
     isOptionalString(value.agentRunId) &&
     isOptionalNonNegativeInteger(value.step) &&
