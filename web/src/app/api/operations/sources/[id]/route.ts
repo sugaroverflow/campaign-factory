@@ -116,7 +116,7 @@ async function fetchSourceJson<T>(
     try {
       return { ok: true, value: (await response.json()) as T };
     } catch {
-      return { ok: false, status: 502, path, contractMismatch: true, message: `Read-only source ${path} returned a non-JSON response.` };
+      return { ok: false, status: 502, path, contractMismatch: true, message: `Read-only source ${path} returned malformed JSON.` };
     }
   } catch {
     return {
