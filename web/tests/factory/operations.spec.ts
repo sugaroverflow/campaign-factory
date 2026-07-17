@@ -3482,6 +3482,60 @@ test("operations workbench: source run event state versions cannot exceed run st
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
+test("operations workbench: source run event state versions cannot go backwards", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: {
+          campaignId,
+          status: "partial",
+          stateVersion: 10,
+          lastSequence: 100,
+          events: [
+            {
+              eventId: "event-state-five",
+              sequence: 1,
+              campaignId,
+              type: "document.status",
+              at: "2026-07-16T20:40:00Z",
+              stateVersion: 5,
+              visibility: "public",
+              payload: { summary: "Higher state-version event should not hydrate Ormskirk" },
+            },
+            {
+              eventId: "event-state-four",
+              sequence: 2,
+              campaignId,
+              type: "document.status",
+              at: "2026-07-16T20:41:00Z",
+              stateVersion: 4,
+              visibility: "public",
+              payload: { summary: "Lower state-version event should not hydrate Ormskirk" },
+            },
+          ],
+        },
+        documents: canonicalOperationsDocuments("Reverse state-version Ormskirk"),
+        evidence: { groups: [], conflicts: [], nextChecks: [], terminalGaps: [], draftNotes: [], totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 } },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/did not match the requested campaign/i)).toBeVisible();
+  await expect(page.getByText("Reverse state-version Ormskirk")).toHaveCount(0);
+  await expect(page.getByText("Higher state-version event should not hydrate Ormskirk")).toHaveCount(0);
+  await expect(page.getByText("Lower state-version event should not hydrate Ormskirk")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
 test("operations workbench: source reference arrays must use non-empty unique ids", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 

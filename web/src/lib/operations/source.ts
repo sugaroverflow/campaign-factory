@@ -281,6 +281,7 @@ function hasConsistentOperationsRunEvents(value: RunReadModel) {
   const seenSequences = new Set<number>();
   let previousSequence = 0;
   let previousTimestamp = Number.NEGATIVE_INFINITY;
+  let previousStateVersion = Number.NEGATIVE_INFINITY;
   for (const event of value.events) {
     const eventTimestamp = Date.parse(event.at);
     if (
@@ -289,7 +290,8 @@ function hasConsistentOperationsRunEvents(value: RunReadModel) {
       event.sequence <= previousSequence ||
       event.sequence > value.lastSequence ||
       eventTimestamp < previousTimestamp ||
-      (event.stateVersion !== undefined && event.stateVersion > value.stateVersion)
+      (event.stateVersion !== undefined && event.stateVersion > value.stateVersion) ||
+      (event.stateVersion !== undefined && event.stateVersion < previousStateVersion)
     ) {
       return false;
     }
@@ -297,6 +299,7 @@ function hasConsistentOperationsRunEvents(value: RunReadModel) {
     seenSequences.add(event.sequence);
     previousSequence = event.sequence;
     previousTimestamp = eventTimestamp;
+    if (event.stateVersion !== undefined) previousStateVersion = event.stateVersion;
   }
   return true;
 }
