@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { GET as getFactoryRun } from "@/app/api/factory/runs/[id]/route";
+import { GET as getFactoryRunDocuments } from "@/app/api/factory/runs/[id]/documents/route";
 import { GET as getOperationsSource } from "@/app/api/operations/sources/[id]/route";
 
 test.beforeEach(async ({ page }) => {
@@ -50,6 +52,57 @@ function canonicalOperationsDocuments(campaignTitle = "Keep KFC Out of Ormskirk"
     };
   });
 }
+
+test("factory public source routes: unavailable read store returns JSON instead of an empty 500", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFactoryDatabaseUrl = process.env.FACTORY_DATABASE_URL;
+  const originalDatabaseUrl = process.env.DATABASE_URL;
+  const originalConsoleError = console.error;
+  const loggedErrors: unknown[][] = [];
+
+  delete process.env.FACTORY_DATABASE_URL;
+  delete process.env.DATABASE_URL;
+  console.error = (...args: unknown[]) => {
+    loggedErrors.push(args);
+  };
+
+  try {
+    for (const { name, route } of [
+      {
+        name: "run header",
+        route: () => getFactoryRun(new Request(`http://localhost/api/factory/runs/${curatedId}`), { params: Promise.resolve({ id: curatedId }) }),
+      },
+      {
+        name: "compiled documents",
+        route: () => getFactoryRunDocuments(new Request(`http://localhost/api/factory/runs/${curatedId}/documents`), { params: Promise.resolve({ id: curatedId }) }),
+      },
+    ]) {
+      const response = await route();
+      expect(response.status, name).toBe(503);
+      expect(response.headers.get("content-type"), name).toContain("application/json");
+      expect(response.headers.get("cache-control"), name).toBe("no-store");
+      expect(response.headers.get("x-content-type-options"), name).toBe("nosniff");
+
+      const body = (await response.json()) as { error?: string; detail?: string };
+      expect(body.error, name).toBe("Factory read store unavailable");
+      expect(body.detail, name).toContain("could not be reached");
+      expect(body.detail, name).not.toContain("DATABASE_URL");
+    }
+    expect(loggedErrors).toHaveLength(2);
+  } finally {
+    console.error = originalConsoleError;
+    if (originalFactoryDatabaseUrl === undefined) {
+      delete process.env.FACTORY_DATABASE_URL;
+    } else {
+      process.env.FACTORY_DATABASE_URL = originalFactoryDatabaseUrl;
+    }
+    if (originalDatabaseUrl === undefined) {
+      delete process.env.DATABASE_URL;
+    } else {
+      process.env.DATABASE_URL = originalDatabaseUrl;
+    }
+  }
+});
 
 test("operations source API: invalid and non-curated ids are allow-list misses with no-store caching", async ({ request }) => {
   for (const id of ["not-a-campaign-id", "00000000-0000-4000-8000-000000000000"]) {

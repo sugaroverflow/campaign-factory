@@ -14,6 +14,17 @@ import { factoryReadSql } from "../../../_lib/worker";
 export const runtime = "nodejs";
 
 const TERMINAL = new Set(["completed", "partial", "failed", "cancelled"]);
+const READ_FAILURE_HEADERS = {
+  "Cache-Control": "no-store",
+  "X-Content-Type-Options": "nosniff",
+};
+
+function factoryReadUnavailable() {
+  return NextResponse.json(
+    { error: "Factory read store unavailable", detail: "The public campaign documents could not be reached. Try again later." },
+    { status: 503, headers: READ_FAILURE_HEADERS },
+  );
+}
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
@@ -21,20 +32,31 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
     return NextResponse.json({ error: "Run not found" }, { status: 404 });
   }
-  const sql = factoryReadSql();
-
-  const run = await getRun(sql, id);
-  if (!run) return NextResponse.json({ error: "Run not found" }, { status: 404 });
-  if (!TERMINAL.has(run.status)) {
-    return NextResponse.json(
-      { error: "Documents are available once the campaign has finished.", status: run.status },
-      { status: 409 },
-    );
+  let sql: ReturnType<typeof factoryReadSql>;
+  try {
+    sql = factoryReadSql();
+  } catch (error) {
+    console.error("Factory document read failed", error);
+    return factoryReadUnavailable();
   }
 
-  const state = await getAcceptedState(sql, id);
-  const claims = await getClaims(sql, id);
-  const documents = compileDocuments(state, claims);
-  const evidence = buildEvidenceAndNextChecks(state, claims);
-  return NextResponse.json({ documents, evidence });
+  try {
+    const run = await getRun(sql, id);
+    if (!run) return NextResponse.json({ error: "Run not found" }, { status: 404 });
+    if (!TERMINAL.has(run.status)) {
+      return NextResponse.json(
+        { error: "Documents are available once the campaign has finished.", status: run.status },
+        { status: 409 },
+      );
+    }
+
+    const state = await getAcceptedState(sql, id);
+    const claims = await getClaims(sql, id);
+    const documents = compileDocuments(state, claims);
+    const evidence = buildEvidenceAndNextChecks(state, claims);
+    return NextResponse.json({ documents, evidence });
+  } catch (error) {
+    console.error("Factory document read failed", error);
+    return factoryReadUnavailable();
+  }
 }
