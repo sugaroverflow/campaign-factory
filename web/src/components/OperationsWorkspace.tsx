@@ -227,8 +227,8 @@ type SourceState =
   | { status: "fixture" }
   | { status: "invalid"; campaignId: string }
   | { status: "loading"; campaignId: string }
-  | { status: "error"; campaignId: string; title: string; message: string; sourceOrigin?: string; retryAfter?: string }
-  | { status: "unavailable"; campaignId: string; title: string; message: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string; retryAfter?: string }
+  | { status: "error"; campaignId: string; title: string; message: string; sourceOrigin?: string; retryAfter?: string; checkedAt?: string }
+  | { status: "unavailable"; campaignId: string; title: string; message: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string; retryAfter?: string; checkedAt?: string }
   | { status: "ready"; source: CampaignSource };
 
 type PortfolioCampaign = {
@@ -247,7 +247,7 @@ type PortfolioLocalCounts = {
 type PortfolioItem =
   | { campaign: PortfolioCampaign; status: "loading"; local: PortfolioLocalCounts }
   | { campaign: PortfolioCampaign; status: "ready"; source: CampaignSource; local: PortfolioLocalCounts }
-  | { campaign: PortfolioCampaign; status: "error"; title: string; message: string; sourceOrigin?: string; retryAfter?: string; local: PortfolioLocalCounts };
+  | { campaign: PortfolioCampaign; status: "error"; title: string; message: string; sourceOrigin?: string; retryAfter?: string; checkedAt?: string; local: PortfolioLocalCounts };
 
 type CampaignSwitcherItem =
   | { campaign: PortfolioCampaign; status: "loading" }
@@ -1753,7 +1753,7 @@ function OperationsPortfolio() {
         setItems((current) =>
           current.map((item) =>
             item.campaign.id === campaign.id
-              ? { campaign, status: "error", title: "Campaign source unavailable", message, sourceOrigin, retryAfter, local: portfolioLocalCounts(campaign.id) }
+              ? { campaign, status: "error", title: "Campaign source unavailable", message, sourceOrigin, retryAfter, checkedAt: new Date().toISOString(), local: portfolioLocalCounts(campaign.id) }
               : item,
           ),
         );
@@ -1841,6 +1841,9 @@ function OperationsPortfolio() {
                         Checked read-only source: <span className="font-medium text-foreground">{item.sourceOrigin}</span>
                       </p>
                     ) : null}
+                    {item.status === "error" && item.checkedAt ? (
+                      <p className="mt-2 text-xs text-muted-foreground">Last source attempt {formatQueuedTime(item.checkedAt)}.</p>
+                    ) : null}
                     {item.status === "error" && retryAfterMessage(item.retryAfter) ? (
                       <p className="mt-2 text-xs font-medium text-ops-ink">{retryAfterMessage(item.retryAfter)}</p>
                     ) : null}
@@ -1897,6 +1900,7 @@ function SourceStateShell({ state, onRetry }: { state: Exclude<SourceState, { st
         : state.message;
   const sourceOrigin = "sourceOrigin" in state ? state.sourceOrigin : undefined;
   const retryMessage = "retryAfter" in state ? retryAfterMessage(state.retryAfter) : null;
+  const checkedAt = "checkedAt" in state ? state.checkedAt : undefined;
   const localCounts = canLinkSource && state.status !== "loading" ? portfolioLocalCounts(campaignId) : emptyPortfolioLocalCounts();
   const localSignals = localSignalPhrases(localCounts);
 
@@ -1924,7 +1928,7 @@ function SourceStateShell({ state, onRetry }: { state: Exclude<SourceState, { st
           <p className="mt-4 max-w-3xl text-muted-foreground">{detail}</p>
           {sourceOrigin ? (
             <p className="mt-3 max-w-3xl rounded-[var(--r-xl)] border border-ops-line bg-background/80 px-3 py-2 text-sm text-muted-foreground">
-              Checked read-only source: <span className="font-medium text-foreground">{sourceOrigin}</span>
+              Checked read-only source: <span className="font-medium text-foreground">{sourceOrigin}</span>{checkedAt ? ` · last attempt ${formatQueuedTime(checkedAt)}` : ""}
             </p>
           ) : null}
           {retryMessage ? (
@@ -2025,10 +2029,10 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         const sourceOrigin = (error as { sourceOrigin?: string } | null)?.sourceOrigin;
         const retryAfter = (error as { retryAfter?: string } | null)?.retryAfter;
         if (runStatus && runStatus !== "completed" && runStatus !== "partial") {
-          setSourceState({ status: "unavailable", campaignId, title: "Campaign not usable yet", message, runStatus, sourceOrigin, retryAfter });
+          setSourceState({ status: "unavailable", campaignId, title: "Campaign not usable yet", message, runStatus, sourceOrigin, retryAfter, checkedAt: new Date().toISOString() });
           return;
         }
-        setSourceState({ status: "error", campaignId, title: "Campaign source unavailable", message, sourceOrigin, retryAfter });
+        setSourceState({ status: "error", campaignId, title: "Campaign source unavailable", message, sourceOrigin, retryAfter, checkedAt: new Date().toISOString() });
       });
     return () => controller.abort();
   }, [campaignId, sourceRetryCount]);

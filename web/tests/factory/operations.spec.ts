@@ -1934,6 +1934,7 @@ test("operations portfolio: one failed source does not blank usable campaigns", 
   await expect(page.getByText("Campaign source unavailable", { exact: true })).toBeVisible();
   await expect(page.getByText(/Preview source returned HTTP 429/)).toBeVisible();
   await expect(page.getByText("Checked read-only source:")).toBeVisible();
+  await expect(page.getByText(/Last source attempt/)).toBeVisible();
   await expect(page.getByText("Source retry guidance: try again after 90 seconds.")).toBeVisible();
   await expect(page.getByText("https://campaign-factory.vercel.app", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open workspace" })).toHaveCount(3);
@@ -1960,6 +1961,7 @@ test("operations workspace: failed direct source load keeps canonical source bri
   await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
   await expect(page.getByText(/Preview source returned HTTP 500/)).toBeVisible();
   await expect(page.getByText("Checked read-only source:")).toBeVisible();
+  await expect(page.getByText(/last attempt/)).toBeVisible();
   await expect(page.getByText("https://campaign-factory.vercel.app", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Stored local operations summary")).toContainText("no browser-local operations work yet");
   await expect(page.getByLabel("Stored local operations summary")).toContainText("No fixture content is substituted");
