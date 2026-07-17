@@ -3369,6 +3369,80 @@ test("operations source API: explicit identity content-encoding hydrates complet
   }
 });
 
+test("operations source API: unicode JSON with byte-accurate content-length hydrates", async () => {
+  const curatedId = "57678ae0-29fd-4b4b-8a53-5c711cdb21cf";
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  const runBody = JSON.stringify({ campaignId: curatedId, status: "partial", stateVersion: 7, lastSequence: 3, events: [] });
+  const documents = campaignOperationsDocuments(
+    { title: "Build 5,000 affordable homes in Tower Hamlets — café outreach", place: "Tower Hamlets, London", next: "Verify the £5,000 affordability evidence before publishing residents’ copy." },
+    {
+      digital_pack: "DIGITAL CAMPAIGN PACK\n\nSupporter email\n\nSubject: Residents’ update — affordability evidence\n\nKeep the £5,000 affordability figure and café quotes under review before local use.",
+    },
+  );
+  const documentsBody = JSON.stringify({
+    documents,
+    evidence: campaignEvidence([
+      { id: "unicode-check", description: "Check residents’ quotes, £ values, and café references before reuse.", reason: "UTF-8 source text must hydrate when Content-Length is byte-accurate.", affectedSections: ["organising"] },
+    ]),
+  });
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestedUrls.push(String(input));
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response(runBody, {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=UTF-8",
+          "content-length": String(Buffer.byteLength(runBody)),
+          "x-matched-path": "/api/factory/runs/[id]",
+          "x-vercel-id": "lhr1::iad1::ops-run-unicode-length",
+        },
+      });
+    }
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}/documents`)) {
+      return new Response(documentsBody, {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=\"UTF-8\"",
+          "content-length": String(Buffer.byteLength(documentsBody)),
+          "x-matched-path": "/api/factory/runs/[id]/documents",
+          "x-vercel-id": "lhr1::iad1::ops-documents-unicode-length",
+        },
+      });
+    }
+
+    throw new Error(`Unexpected source request: ${String(input)}`);
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(200);
+    expectPublicSourceJsonBoundary(response.headers, "unicode byte-accurate source responses");
+
+    const body = (await response.json()) as { run?: { campaignId?: string; status?: string }; documents?: Array<{ plainText?: string }>; evidence?: { nextChecks?: Array<{ description?: string }> }; sourceFailureKind?: string; sourceTextEncoding?: string };
+    expect(body.run?.campaignId).toBe(curatedId);
+    expect(body.run?.status).toBe("partial");
+    expect(body.documents).toHaveLength(9);
+    expect(body.documents?.[0]?.plainText).toContain("Tower Hamlets — café outreach");
+    expect(body.documents?.[8]?.plainText).toContain("Residents’ update — affordability evidence");
+    expect(body.evidence?.nextChecks?.[0]?.description).toContain("£ values");
+    expect(body.sourceFailureKind).toBeUndefined();
+    expect(body.sourceTextEncoding).toBeUndefined();
+    expect(requestedUrls).toEqual([
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations workbench: cross-view local review and demo queue flow", async ({ page }) => {
   await page.goto("/operations?demo=fixture");
 
