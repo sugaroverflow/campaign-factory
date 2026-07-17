@@ -3335,7 +3335,9 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                   id={`action-status-${action.id}`}
                   value={action.status}
                   onChange={(event) => updateLocalActionStatus(action.id, event.target.value as LocalActionStatus)}
-                  className="h-10 w-full rounded-full border border-border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                  disabled={sourceBaselineChanged}
+                  title={sourceBaselineChanged ? "Acknowledge the updated read-only source before changing this local action status." : undefined}
+                  className="h-10 w-full rounded-full border border-border bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:bg-secondary disabled:text-muted-foreground"
                 >
                   {Object.entries(localActionStatusCopy).map(([value, label]) => (
                     <option key={value} value={value}>{label}</option>

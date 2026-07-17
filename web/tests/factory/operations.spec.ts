@@ -9048,6 +9048,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
   await expect(page.getByLabel("Action plan source update pause")).toContainText("Action statuses need source re-check.");
   await expect(page.getByText("Source re-check required before this local action informs approval or queueing.")).toBeVisible();
+  await expect(page.getByLabel("Status for Confirm Planning Inspectorate appeal status")).toBeDisabled();
 
   await page.goto("/operations");
   const portfolio = page.getByLabel("Campaign operations portfolio");
@@ -9120,6 +9121,8 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toHaveCount(0);
   await expect(page.getByText(/Local approval baseline: acknowledged/)).toBeVisible();
   await expect(page.getByLabel("Source document baseline state")).toContainText("matches local acknowledgement");
+  await page.getByRole("button", { name: /Action plan/ }).first().click();
+  await expect(page.getByLabel("Status for Confirm Planning Inspectorate appeal status")).toBeEnabled();
   await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();
   await expect(page.getByText("Local approvals are checking against the latest acknowledged read-only source baseline.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve as human reviewer" })).toBeEnabled();
