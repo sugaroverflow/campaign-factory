@@ -177,6 +177,8 @@ function upstreamResponseMetadata(response: Response, elapsedMs: number | undefi
   };
 }
 
+type UpstreamMetadata = ReturnType<typeof upstreamResponseMetadata>;
+
 function sourceFailureHeaders(result: { retryAfter?: string }) {
   return result.retryAfter ? { ...NO_STORE_HEADERS, "Retry-After": result.retryAfter } : NO_STORE_HEADERS;
 }
@@ -213,7 +215,7 @@ async function fetchSourceJson<T>(
   origin: string,
   path: string,
 ): Promise<
-  | { ok: true; value: T }
+  | { ok: true; value: T; metadata: UpstreamMetadata }
   | { ok: false; status: number; message: string; path: string; contractMismatch?: boolean; retryAfter?: string; sourceHttpStatus?: number; sourceElapsedMs?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceServer?: string; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }
 > {
   const controller = new AbortController();
@@ -256,8 +258,9 @@ async function fetchSourceJson<T>(
       };
     }
     const responseText = await safeReadResponseText(response);
+    const metadata = upstreamResponseMetadata(response, sourceElapsedMs(startedAt), responseText);
     try {
-      return { ok: true, value: JSON.parse(responseText ?? "") as T };
+      return { ok: true, value: JSON.parse(responseText ?? "") as T, metadata };
     } catch {
       return {
         ok: false,
@@ -265,7 +268,7 @@ async function fetchSourceJson<T>(
         path,
         contractMismatch: true,
         message: `Read-only source ${path} returned malformed JSON.`,
-        ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), responseText),
+        ...metadata,
       };
     }
   } catch {
@@ -305,7 +308,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (run.ok) {
     if (!isOperationsRunReadModel(run.value, id)) {
       return sourceJson(
-        sourceFailureBody("run", { error: "Campaign source contract mismatch", detail: "The public source did not return a run in the expected shape.", sourceOrigin: origin }),
+        sourceFailureBody("run", { error: "Campaign source contract mismatch", detail: "The public source did not return a run in the expected shape.", sourceOrigin: origin, ...upstreamFailureMetadata(run.metadata) }),
         502,
       );
     }
@@ -324,7 +327,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 
     if (!hasUnavailableOperationsRunHeaderProvenance(run.value, false)) {
       return sourceJson(
-        sourceFailureBody("run", { error: "Campaign source contract mismatch", detail: "The public source returned an unavailable run header without unavailable provenance.", sourceOrigin: origin }),
+        sourceFailureBody("run", { error: "Campaign source contract mismatch", detail: "The public source returned an unavailable run header without unavailable provenance.", sourceOrigin: origin, ...upstreamFailureMetadata(run.metadata) }),
         502,
       );
     }
@@ -387,7 +390,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     !hasConsistentOperationsDocumentEvidence(docs.value.documents, docs.value.evidence)
   ) {
     return sourceJson(
-      sourceFailureBody("documents", { error: "Campaign source contract mismatch", detail: "The public source did not return compiled documents and evidence in the expected shape.", runStatus: run.value.status, sourceOrigin: origin }),
+      sourceFailureBody("documents", { error: "Campaign source contract mismatch", detail: "The public source did not return compiled documents and evidence in the expected shape.", runStatus: run.value.status, sourceOrigin: origin, ...upstreamFailureMetadata(docs.metadata) }),
       502,
     );
   }
