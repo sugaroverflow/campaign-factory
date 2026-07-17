@@ -1961,6 +1961,8 @@ test("operations workspace: failed direct source load keeps canonical source bri
   await expect(page.getByText(/Preview source returned HTTP 500/)).toBeVisible();
   await expect(page.getByText("Checked read-only source:")).toBeVisible();
   await expect(page.getByText("https://campaign-factory.vercel.app", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Stored local operations summary")).toContainText("no browser-local operations work yet");
+  await expect(page.getByLabel("Stored local operations summary")).toContainText("No fixture content is substituted");
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "View source brief" })).toHaveAttribute(
@@ -1971,6 +1973,59 @@ test("operations workspace: failed direct source load keeps canonical source bri
     "href",
     "https://campaign-factory.vercel.app/factory/c/57678ae0-29fd-4b4b-8a53-5c711cdb21cf",
   );
+});
+
+
+test("operations workspace: failed direct source load reports preserved local work without fixture fallback", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 500.", sourceOrigin: "https://campaign-factory.vercel.app" }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        selectedSegment: "local_allies",
+        subject: "Source-backed local draft awaiting review",
+        body: "This preserved browser-local source draft is deliberately long enough to survive normalisation while the public source endpoint is unavailable.",
+        status: "review",
+        mode: "compose",
+        activeView: "reviews",
+        queuedAt: null,
+        reviewerNote: "Check source again before approval.",
+        localActions: [
+          {
+            id: `source:${id}:appeal-status`,
+            title: "Confirm Planning Inspectorate appeal status",
+            source: "Campaign source · Evidence & checks · strategy",
+            owner: "Reviewer",
+            timing: "Before stronger public claims",
+            priority: "High",
+            status: "next",
+            provenance: `Source campaign ${id}; stored only in this browser.`,
+          },
+        ],
+        workingDrafts: [],
+        activity: [{ id: "local", label: "Local source work existed before the source failure." }],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByLabel("Stored local operations summary")).toContainText("1 action · 1 review");
+  await expect(page.getByLabel("Stored local operations summary")).toContainText("No fixture content is substituted");
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
 });
 
 test("operations workspace: source retry guidance is visible without fixture fallback", async ({ page }) => {

@@ -823,10 +823,12 @@ function hasStoredState(storageKey = STORAGE_KEY) {
   return Boolean(localStorage.getItem(storageKey) || (storageKey === STORAGE_KEY ? LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean) : null));
 }
 
+const emptyPortfolioLocalCounts = (): PortfolioLocalCounts => ({ actions: 0, drafts: 0, reviews: 0, queued: 0 });
+
 function portfolioLocalCounts(campaignId: string): PortfolioLocalCounts {
-  if (typeof window === "undefined") return { actions: 0, drafts: 0, reviews: 0, queued: 0 };
+  if (typeof window === "undefined") return emptyPortfolioLocalCounts();
   const loaded = loadState(localStorageKeyFor(campaignId));
-  if (loaded.workspaceKey !== campaignId) return { actions: 0, drafts: 0, reviews: 0, queued: 0 };
+  if (loaded.workspaceKey !== campaignId) return emptyPortfolioLocalCounts();
   const state = sanitizeStateForWorkspace(loaded, campaignId);
   return {
     actions: state.localActions.length,
@@ -834,6 +836,16 @@ function portfolioLocalCounts(campaignId: string): PortfolioLocalCounts {
     reviews: (state.status === "review" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "review").length,
     queued: (state.status === "queued" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "queued").length,
   };
+}
+
+function localSignalPhrases(counts: PortfolioLocalCounts, sourceRecheckItemCount = 0) {
+  return [
+    sourceRecheckItemCount ? `${sourceRecheckItemCount} source re-check${sourceRecheckItemCount === 1 ? "" : "s"} required` : null,
+    counts.actions ? `${counts.actions} action${counts.actions === 1 ? "" : "s"}` : null,
+    counts.drafts ? `${counts.drafts} working draft${counts.drafts === 1 ? "" : "s"}` : null,
+    counts.reviews ? `${counts.reviews} review${counts.reviews === 1 ? "" : "s"}` : null,
+    counts.queued ? `${counts.queued} queued locally` : null,
+  ].filter(Boolean);
 }
 
 function storedSourceRecheckItemCount(campaignId: string, source: CampaignSource) {
@@ -1800,13 +1812,7 @@ function OperationsPortfolio() {
           {items.map((item) => {
             const source = item.status === "ready" ? item.source : null;
             const sourceRecheckItemCount = source ? storedSourceRecheckItemCount(item.campaign.id, source) : 0;
-            const localSignals = [
-              sourceRecheckItemCount ? `${sourceRecheckItemCount} source re-check${sourceRecheckItemCount === 1 ? "" : "s"} required` : null,
-              item.local.actions ? `${item.local.actions} action${item.local.actions === 1 ? "" : "s"}` : null,
-              item.local.drafts ? `${item.local.drafts} working draft${item.local.drafts === 1 ? "" : "s"}` : null,
-              item.local.reviews ? `${item.local.reviews} review${item.local.reviews === 1 ? "" : "s"}` : null,
-              item.local.queued ? `${item.local.queued} queued locally` : null,
-            ].filter(Boolean);
+            const localSignals = localSignalPhrases(item.local, sourceRecheckItemCount);
             return (
               <article key={item.campaign.id} className={`rounded-[var(--r-2xl)] border p-4 shadow-sm ${item.campaign.conferenceHero ? "border-ops-ink bg-ops-yellow/50" : "border-ops-line bg-background"}`}>
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
@@ -1874,6 +1880,8 @@ function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fi
         : state.message;
   const sourceOrigin = "sourceOrigin" in state ? state.sourceOrigin : undefined;
   const retryMessage = "retryAfter" in state ? retryAfterMessage(state.retryAfter) : null;
+  const localCounts = canLinkSource && state.status !== "loading" ? portfolioLocalCounts(campaignId) : emptyPortfolioLocalCounts();
+  const localSignals = localSignalPhrases(localCounts);
 
   return (
     <div className="min-h-screen bg-ops-paper text-foreground">
@@ -1905,6 +1913,11 @@ function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fi
           {retryMessage ? (
             <p className="mt-3 max-w-3xl rounded-[var(--r-xl)] border border-ops-line bg-ops-yellow/60 px-3 py-2 text-sm font-medium text-ops-ink">
               {retryMessage}
+            </p>
+          ) : null}
+          {canLinkSource && state.status !== "loading" ? (
+            <p className="mt-3 max-w-3xl rounded-[var(--r-xl)] border border-ops-line bg-background/80 px-3 py-2 text-sm text-muted-foreground" aria-label="Stored local operations summary">
+              Stored browser-local work for this campaign: <span className="font-medium text-foreground">{localSignals.length ? localSignals.join(" · ") : "no browser-local operations work yet"}</span>. No fixture content is substituted while the read-only source is unavailable.
             </p>
           ) : null}
           {state.status === "loading" ? (
