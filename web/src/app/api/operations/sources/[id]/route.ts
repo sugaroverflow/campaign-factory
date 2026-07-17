@@ -97,7 +97,9 @@ async function fetchSourceJson<T>(
     const response = await fetch(`${origin}${path}`, {
       headers: SOURCE_FETCH_HEADERS,
       cache: "no-store",
+      credentials: "omit",
       redirect: "manual",
+      referrerPolicy: "no-referrer",
       signal: controller.signal,
     });
     if (!response.ok) {
