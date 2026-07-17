@@ -9056,6 +9056,9 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByRole("button", { name: "Approve as human reviewer" })).toHaveAttribute("title", "Acknowledge the updated read-only source before recording human approval.");
   await expect(page.getByRole("button", { name: "Queue locally for demo" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Queue locally for demo" })).toHaveAttribute("title", "Acknowledge the updated read-only source before changing the local queue.");
+  await expect(page.getByLabel("Optional reviewer note")).toBeDisabled();
+  await expect(page.getByLabel("Optional reviewer note")).toHaveAttribute("title", "Acknowledge the updated read-only source before changing this local reviewer note.");
+  await expect(page.getByText("Reviewer notes stay preserved but paused until the updated source is acknowledged, so review metadata cannot change against stale campaign material.")).toBeVisible();
   await page.getByRole("button", { name: /Action plan/ }).first().click();
   await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
   await expect(page.getByLabel("Action plan source update pause")).toContainText("Action statuses need source re-check.");
@@ -9205,6 +9208,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();
   await expect(page.getByText("Local approvals are checking against the latest acknowledged read-only source baseline.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve as human reviewer" })).toBeEnabled();
+  await expect(page.getByLabel("Optional reviewer note")).toBeEnabled();
   await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
   await expect(page.getByLabel("Outbox source update pause")).toHaveCount(0);
   await expect(page.getByLabel("Local schedule intent")).toBeEnabled();

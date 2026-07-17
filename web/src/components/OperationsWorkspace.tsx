@@ -2566,6 +2566,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const canQueueCommunication = communicationStatus === "approved" && !sourceBaselineChanged;
   const canChangeLocalQueueSchedule = !sourceBaselineChanged;
   const canSelectAudienceWithCurrentSource = !sourceBaselineChanged;
+  const canEditReviewerNoteWithCurrentSource = !sourceBaselineChanged;
   const sourceRecheckMatchesCurrentSource = Boolean(
     sourceBaselineChanged &&
       source &&
@@ -2850,6 +2851,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   };
 
   const updateReviewerNote = (note: string) => {
+    if (!canEditReviewerNoteWithCurrentSource) return;
     setState((current) => ({
       ...current,
       ...(current.activeWorkingDraftId
@@ -3945,9 +3947,16 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             className="mt-2 min-h-24 bg-background"
             value={reviewerNote}
             onChange={(event) => updateReviewerNote(event.target.value)}
+            disabled={!canEditReviewerNoteWithCurrentSource}
+            aria-describedby={sourceBaselineChanged ? "operations-review-source-pause" : undefined}
+            title={sourceBaselineChanged ? "Acknowledge the updated read-only source before changing this local reviewer note." : undefined}
             placeholder="Record the human check, evidence caveat, or consent question that should travel with this local copy."
           />
-          <p className="mt-2 text-xs text-muted-foreground">Saved only in this browser-local workspace and included in client-side exports; it does not write back to the campaign source.</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {sourceBaselineChanged
+              ? "Reviewer notes stay preserved but paused until the updated source is acknowledged, so review metadata cannot change against stale campaign material."
+              : "Saved only in this browser-local workspace and included in client-side exports; it does not write back to the campaign source."}
+          </p>
         </div>
       </Panel>
       <Panel className="bg-ops-ink text-white">
