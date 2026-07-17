@@ -597,7 +597,6 @@ test("operations source API: oversized JSON source runs are bounded before parsi
         status: 200,
         headers: {
           "content-type": "application/json; charset=utf-8",
-          "content-length": "2100035",
           "x-matched-path": "/api/factory/runs/[id]",
           "x-vercel-id": "lhr1::iad1::ops-oversized-json",
         },
@@ -621,7 +620,53 @@ test("operations source API: oversized JSON source runs are bounded before parsi
     expect(body.sourceFailureKind).toBe("oversized_json");
     expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}`);
     expect(body.sourceHttpStatus).toBe(200);
-    expect(body.sourceContentLength).toBe(2100035);
+    expect(body.sourceContentLength).toBeUndefined();
+    expect(body.sourceBodyEmpty).toBeUndefined();
+    expect(body.sourceBodyTruncated).toBe(true);
+    expect(body.sourceContentType).toBe("application/json");
+    expect(body.documents).toBeUndefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("operations source API: declared oversized JSON source runs fail before document hydration", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response("{}", {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "3000000",
+          "x-matched-path": "/api/factory/runs/[id]",
+          "x-vercel-id": "lhr1::iad1::ops-declared-oversized-json",
+        },
+      });
+    }
+
+    throw new Error("Documents must not hydrate when the source run declares an oversized JSON body.");
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(502);
+    expectPublicSourceJsonBoundary(response.headers, "declared oversized JSON source run body");
+
+    const body = (await response.json()) as { error?: string; detail?: string; sourceStep?: string; sourceFailureKind?: string; sourcePath?: string; sourceHttpStatus?: number; sourceContentLength?: number; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; documents?: unknown[] };
+    expect(body.error).toBe("Campaign source contract mismatch");
+    expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId} declared a JSON body larger than the preview-safe limit.`);
+    expect(body.sourceStep).toBe("run");
+    expect(body.sourceFailureKind).toBe("oversized_json");
+    expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}`);
+    expect(body.sourceHttpStatus).toBe(200);
+    expect(body.sourceContentLength).toBe(3000000);
     expect(body.sourceBodyEmpty).toBeUndefined();
     expect(body.sourceBodyTruncated).toBe(true);
     expect(body.sourceContentType).toBe("application/json");

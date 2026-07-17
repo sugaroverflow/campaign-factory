@@ -142,6 +142,10 @@ function sanitizeSourceContentLength(value: string | null) {
   return Number.isSafeInteger(bytes) ? bytes : undefined;
 }
 
+function declaredSourceContentLength(response: Response) {
+  return sanitizeSourceContentLength(response.headers.get("content-length"));
+}
+
 function sourceElapsedMs(startedAt: number) {
   const elapsed = Date.now() - startedAt;
   return Number.isSafeInteger(elapsed) && elapsed >= 0 && elapsed <= SOURCE_FETCH_TIMEOUT_MS + 5_000 ? elapsed : undefined;
@@ -311,6 +315,20 @@ async function fetchSourceJson<T>(
         ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), diagnosticBody.text, path, diagnosticBody.truncated),
       };
     }
+    const declaredContentLength = declaredSourceContentLength(response);
+    if (declaredContentLength !== undefined && declaredContentLength > SOURCE_JSON_BODY_LIMIT_BYTES) {
+      response.body?.cancel().catch(() => undefined);
+      return {
+        ok: false,
+        status: 502,
+        path,
+        sourceFailureKind: "oversized_json",
+        contractMismatch: true,
+        message: `Read-only source ${path} declared a JSON body larger than the preview-safe limit.`,
+        ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), undefined, path, true),
+      };
+    }
+
     const responseBody = await safeReadJsonResponseText(response);
     const metadata = upstreamResponseMetadata(response, sourceElapsedMs(startedAt), responseBody.text, path, responseBody.truncated);
     if (responseBody.truncated) {
