@@ -252,6 +252,46 @@ test("operations source API: upstream document responses require JSON content ty
   }
 });
 
+test("operations source API: network failures do not leak thrown upstream details", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestedUrls.push(String(input));
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual({ accept: "application/json" });
+
+    throw new Error("Leaked upstream credential https://user:pass@example.invalid/private-source");
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(502);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+    expect(response.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+
+    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string };
+    expect(body.error).toBe("Campaign source documents unavailable");
+    expect(body.detail).toContain("The read-only source could not be reached.");
+    expect(body.detail).toContain(`/api/factory/runs/${curatedId}`);
+    expect(body.detail).not.toContain("Leaked upstream credential");
+    expect(body.detail).not.toContain("user:pass");
+    expect(body.detail).not.toContain("example.invalid");
+    expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
+    expect(requestedUrls).toEqual([
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: successful source responses keep same-origin resource policy", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;

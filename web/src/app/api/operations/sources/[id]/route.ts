@@ -92,14 +92,14 @@ async function fetchSourceJson<T>(
     } catch {
       return { ok: false, status: 502, path, contractMismatch: true, message: `Read-only source ${path} returned a non-JSON response.` };
     }
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       status: timedOut ? 504 : 502,
       path,
       message: timedOut
         ? `Read-only source ${path} timed out after ${SOURCE_FETCH_TIMEOUT_MS / 1000} seconds.`
-        : error instanceof Error ? error.message : "The read-only source could not be reached.",
+        : "The read-only source could not be reached.",
     };
   } finally {
     clearTimeout(timeout);
