@@ -5,6 +5,13 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
 });
 
+const COMPILED_DOCUMENT_DISCLAIMER =
+  "AI-generated draft — please verify all facts and figures before publishing or campaigning with this material.";
+
+function withCompiledDocumentDisclaimer(plainText: string) {
+  return `${plainText}\n\n${COMPILED_DOCUMENT_DISCLAIMER}`;
+}
+
 function canonicalOperationsDocuments(campaignTitle = "Keep KFC Out of Ormskirk") {
   const rows = [
     ["campaign_brief", 1, "Campaign Brief", false, ["problem", "evidence", "objective", "decision_route", "power", "pressure", "strategy", "tactics", "organising"], `${campaignTitle}\n\nPlace: Ormskirk, Lancashire\n\nTHE PROBLEM\nCanonical source document shell.`],
@@ -18,18 +25,21 @@ function canonicalOperationsDocuments(campaignTitle = "Keep KFC Out of Ormskirk"
     ["digital_pack", 9, "Digital Campaign Pack", true, [], "DIGITAL CAMPAIGN PACK\n\nSupporter email\n\nSubject: Source update\n\nKeep verification notes visible."],
   ] as const;
 
-  return rows.map(([key, num, name, isPack, sectionKeys, plainText]) => ({
-    key,
-    num,
-    name,
-    status: key === "media_pack" ? "assembling" : "ready",
-    html: `<p>${plainText}</p>`,
-    plainText,
-    isPack,
-    sectionKeys,
-    resourceCount: isPack && key !== "media_pack" ? 1 : 0,
-    flags: [],
-  }));
+  return rows.map(([key, num, name, isPack, sectionKeys, plainText]) => {
+    const textWithDisclaimer = withCompiledDocumentDisclaimer(plainText);
+    return {
+      key,
+      num,
+      name,
+      status: key === "media_pack" ? "assembling" : "ready",
+      html: `<p>${textWithDisclaimer}</p>`,
+      plainText: textWithDisclaimer,
+      isPack,
+      sectionKeys,
+      resourceCount: isPack && key !== "media_pack" ? 1 : 0,
+      flags: [],
+    };
+  });
 }
 
 test("operations source API: invalid and non-curated ids are allow-list misses with no-store caching", async ({ request }) => {
@@ -3783,6 +3793,45 @@ test("operations workbench: unsupported compiled document flags do not hydrate a
   await expect(page.getByText(/typed public document contract/i)).toBeVisible();
   await expect(page.getByText("Unsupported document flag should not hydrate Ormskirk")).toHaveCount(0);
   await expect(page.getByText("Ready for provider delivery")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
+test("operations workbench: compiled documents must carry the shared safety disclaimer before hydration", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const documents = canonicalOperationsDocuments();
+  const plainText = "Missing compiled-document disclaimer should not hydrate Ormskirk";
+  documents[0] = {
+    ...documents[0],
+    html: `<p>${plainText}</p>`,
+    plainText,
+  };
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 13, lastSequence: 103, events: [] },
+        documents,
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/typed public document contract/i)).toBeVisible();
+  await expect(page.getByText("Missing compiled-document disclaimer should not hydrate Ormskirk")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });

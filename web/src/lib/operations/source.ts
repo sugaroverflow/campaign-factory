@@ -2,6 +2,7 @@ import type { RunReadModel } from "@/lib/factory/contracts/api";
 import { FACTORY_EVENT_TYPES, type FactoryEvent } from "@/lib/factory/contracts/core";
 import { CANONICAL_DOCUMENTS, DOCUMENT_STATUSES } from "@/lib/factory/contracts/documents";
 import { DOC_SECTIONS, type CompiledDocument, type EvidenceAndNextChecks } from "@/lib/factory/documents";
+import { DOCUMENT_DISCLAIMER } from "@/lib/factory/documents/language";
 import { UNRESOLVED_LABELS } from "@/lib/factory/documents/render";
 import { JOURNEY_STEPS } from "@/lib/factory/contracts/journey";
 import { VERIFICATION_LABELS } from "@/lib/pipeline/labels";
@@ -47,14 +48,21 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function hasRenderedText(value: unknown): value is string {
-  if (!isNonEmptyString(value)) return false;
-  const visibleText = value
+function visibleRenderedText(value: string) {
+  return value
     .replace(/<[^>]*>/g, " ")
     .replace(/&nbsp;|&#160;|&#xA0;/gi, " ")
     .replace(/&[a-z0-9#]+;/gi, "x")
+    .replace(/\s+/g, " ")
     .trim();
-  return visibleText.length > 0;
+}
+
+function hasRenderedText(value: unknown): value is string {
+  return isNonEmptyString(value) && visibleRenderedText(value).length > 0;
+}
+
+function hasCompiledDocumentDisclaimer(value: Pick<CompiledDocument, "html" | "plainText">) {
+  return value.plainText.includes(DOCUMENT_DISCLAIMER) && visibleRenderedText(value.html).includes(DOCUMENT_DISCLAIMER);
 }
 
 function isUniqueNonEmptyStringArray(value: unknown): value is string[] {
@@ -286,6 +294,7 @@ export function isOperationsCompiledDocument(value: unknown): value is CompiledD
     OPERATIONS_DOCUMENT_STATUSES.has(value.status) &&
     hasRenderedText(value.html) &&
     isNonEmptyString(value.plainText) &&
+    hasCompiledDocumentDisclaimer(value as Pick<CompiledDocument, "html" | "plainText">) &&
     value.isPack === shouldBePack &&
     isJourneySectionKeyArray(value.sectionKeys) &&
     matchesCanonicalDocumentSections(value.key, value.isPack, value.sectionKeys) &&
