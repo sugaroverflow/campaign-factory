@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -1718,9 +1718,50 @@ function OperationsPortfolio() {
   const [items, setItems] = useState<PortfolioItem[]>(initialItems);
   const [lastLoaded, setLastLoaded] = useState<string | null>(null);
   const portfolioRefreshId = useRef(0);
+  const portfolioItemRefreshIds = useRef<Record<string, number>>({});
   const portfolioControllers = useRef<AbortController[]>([]);
 
-  const refresh = () => {
+  const refreshCampaign = useCallback((campaign: PortfolioCampaign, currentRefreshId = portfolioRefreshId.current) => {
+    const itemRefreshId = (portfolioItemRefreshIds.current[campaign.id] ?? 0) + 1;
+    portfolioItemRefreshIds.current[campaign.id] = itemRefreshId;
+    const controller = new AbortController();
+    portfolioControllers.current.push(controller);
+    setItems((current) =>
+      current.map((item) =>
+        item.campaign.id === campaign.id
+          ? { campaign, status: "loading", local: portfolioLocalCounts(campaign.id) }
+          : item,
+      ),
+    );
+    fetchCampaignSource(campaign.id, controller.signal)
+      .then((source) => {
+        if (controller.signal.aborted || currentRefreshId !== portfolioRefreshId.current || itemRefreshId !== portfolioItemRefreshIds.current[campaign.id]) return;
+        setItems((current) =>
+          current.map((item) =>
+            item.campaign.id === campaign.id
+              ? { campaign, status: "ready", source, local: portfolioLocalCounts(campaign.id) }
+              : item,
+          ),
+        );
+        setLastLoaded(new Date().toISOString());
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || currentRefreshId !== portfolioRefreshId.current || itemRefreshId !== portfolioItemRefreshIds.current[campaign.id]) return;
+        const message = error instanceof Error ? error.message : "This campaign source could not be loaded.";
+        const sourceOrigin = (error as { sourceOrigin?: string } | null)?.sourceOrigin;
+        const retryAfter = (error as { retryAfter?: string } | null)?.retryAfter;
+        setItems((current) =>
+          current.map((item) =>
+            item.campaign.id === campaign.id
+              ? { campaign, status: "error", title: "Campaign source unavailable", message, sourceOrigin, retryAfter, local: portfolioLocalCounts(campaign.id) }
+              : item,
+          ),
+        );
+        setLastLoaded(new Date().toISOString());
+      });
+  }, []);
+
+  const refresh = useCallback(() => {
     portfolioRefreshId.current += 1;
     const currentRefreshId = portfolioRefreshId.current;
     portfolioControllers.current.forEach((controller) => controller.abort());
@@ -1732,37 +1773,8 @@ function OperationsPortfolio() {
         local: portfolioLocalCounts(campaign.id),
       })),
     );
-    PORTFOLIO_CAMPAIGNS.forEach((campaign) => {
-      const controller = new AbortController();
-      portfolioControllers.current.push(controller);
-      fetchCampaignSource(campaign.id, controller.signal)
-        .then((source) => {
-          if (controller.signal.aborted || currentRefreshId !== portfolioRefreshId.current) return;
-          setItems((current) =>
-            current.map((item) =>
-              item.campaign.id === campaign.id
-                ? { campaign, status: "ready", source, local: portfolioLocalCounts(campaign.id) }
-                : item,
-            ),
-          );
-          setLastLoaded(new Date().toISOString());
-        })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted || currentRefreshId !== portfolioRefreshId.current) return;
-          const message = error instanceof Error ? error.message : "This campaign source could not be loaded.";
-          const sourceOrigin = (error as { sourceOrigin?: string } | null)?.sourceOrigin;
-          const retryAfter = (error as { retryAfter?: string } | null)?.retryAfter;
-          setItems((current) =>
-            current.map((item) =>
-              item.campaign.id === campaign.id
-                ? { campaign, status: "error", title: "Campaign source unavailable", message, sourceOrigin, retryAfter, local: portfolioLocalCounts(campaign.id) }
-                : item,
-            ),
-          );
-          setLastLoaded(new Date().toISOString());
-        });
-    });
-  };
+    PORTFOLIO_CAMPAIGNS.forEach((campaign) => refreshCampaign(campaign, currentRefreshId));
+  }, [refreshCampaign]);
 
   useEffect(() => {
     queueMicrotask(refresh);
@@ -1771,7 +1783,7 @@ function OperationsPortfolio() {
       portfolioControllers.current.forEach((controller) => controller.abort());
       portfolioControllers.current = [];
     };
-  }, []);
+  }, [refresh]);
 
   return (
     <div className="min-h-screen bg-ops-paper text-foreground">
@@ -1844,6 +1856,11 @@ function OperationsPortfolio() {
                     </p>
                   </div>
                   <div className="flex flex-col gap-3">
+                    {item.status === "error" ? (
+                      <button type="button" onClick={() => refreshCampaign(item.campaign)} className="rounded-full bg-ops-ink px-4 py-2 text-center text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+                        Try this source again
+                      </button>
+                    ) : null}
                     <Link href={`/operations?campaignId=${item.campaign.id}`} className="rounded-full bg-ops-ink px-4 py-2 text-center text-sm font-medium text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                       Open workspace
                     </Link>

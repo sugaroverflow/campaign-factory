@@ -2047,6 +2047,48 @@ test("operations workspace: source retry guidance is visible without fixture fal
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
 });
 
+test("operations portfolio: failed campaign rows can retry their source without fixture fallback", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const requestCounts = new Map<string, number>();
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = new URL(route.request().url()).pathname.split("/").pop() ?? "";
+    const count = (requestCounts.get(id) ?? 0) + 1;
+    requestCounts.set(id, count);
+    if (id === campaignId && count > 1) {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          sourceOrigin: "https://campaign-factory.vercel.app",
+          run: { campaignId, status: "partial", stateVersion: 1, lastSequence: 1, events: [] },
+          documents: canonicalOperationsDocuments(),
+          evidence: campaignEvidence([{ id: "appeal-check", description: "Confirm official appeal status before the next phase", reason: "Portfolio row retry recovered the read-only source", affectedSections: ["strategy"] }], 1),
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 500.", sourceOrigin: "https://campaign-factory.vercel.app" }),
+    });
+  });
+
+  await page.goto("/operations");
+
+  await expect(page.getByRole("heading", { name: /Three real campaigns, one operations portfolio/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try this source again" })).toHaveCount(3);
+
+  await page.getByRole("button", { name: "Try this source again" }).first().click();
+
+  await expect(page.getByText("Keep KFC Out of Ormskirk", { exact: true })).toBeVisible();
+  await expect(page.getByText("Confirm official appeal status before the next phase").first()).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  expect(requestCounts.get(campaignId)).toBeGreaterThanOrEqual(2);
+});
+
 test("operations workspace: retry action reloads the read-only source without fixture fallback", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   let requestCount = 0;
