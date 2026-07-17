@@ -2051,6 +2051,27 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
       state.sourceStateVersion !== null &&
       (state.sourceStateVersion !== source.stateVersion || state.sourceLastSequence !== source.lastSequence || state.sourceDocumentSignature !== currentSourceDocumentSignature),
   );
+  const sourceChangedActionsToRecheck = sourceBaselineChanged ? state.localActions : [];
+  const sourceChangedDraftsToRecheck = sourceBaselineChanged
+    ? [
+        ...(state.status !== "draft" || state.sourceWorkingCopy
+          ? [
+              {
+                id: "seeded-supporter-email",
+                title: state.sourceWorkingCopy?.title ?? "Supporter email",
+                status: statusCopy[state.status].label,
+                source: state.sourceWorkingCopy ? `${state.sourceWorkingCopy.sourceDocument} (${state.sourceWorkingCopy.sourceDocumentKey})` : "Browser-local source workspace draft",
+              },
+            ]
+          : []),
+        ...state.workingDrafts.map((draft) => ({
+          id: draft.id,
+          title: draft.title,
+          status: statusCopy[draft.status].label,
+          source: `${draft.sourceWorkingCopy.sourceDocument} (${draft.sourceWorkingCopy.sourceDocumentKey})`,
+        })),
+      ]
+    : [];
   const sourceResourceGroups = useMemo(() => {
     const groups = new Map<string, SourceResource[]>();
     sourceResources.forEach((resource) => {
@@ -3488,6 +3509,27 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                 <div className="mt-4 rounded-[var(--r-xl)] border border-ops-coral bg-ops-coral/55 p-3 text-sm text-ops-ink" role="status">
                   <p className="font-medium">Read-only source has changed since this local workspace started.</p>
                   <p className="mt-1">Your browser-local actions and drafts were preserved. Re-check Evidence, Strategy, and Drafts before approving or queueing local work.</p>
+                  <div className="mt-3 rounded-[var(--r-lg)] border border-ops-ink/15 bg-background/65 p-3" aria-label="Local work requiring source re-check">
+                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-ops-ink/70">
+                      {sourceChangedActionsToRecheck.length + sourceChangedDraftsToRecheck.length} local item{sourceChangedActionsToRecheck.length + sourceChangedDraftsToRecheck.length === 1 ? "" : "s"} need source re-check
+                    </p>
+                    {sourceChangedActionsToRecheck.length || sourceChangedDraftsToRecheck.length ? (
+                      <ul className="mt-2 space-y-1 text-xs text-ops-ink/75">
+                        {sourceChangedActionsToRecheck.slice(0, 3).map((action) => (
+                          <li key={`source-recheck-action-${action.id}`}>
+                            Action: {action.title} · {localActionStatusCopy[action.status]} · {action.source}
+                          </li>
+                        ))}
+                        {sourceChangedDraftsToRecheck.slice(0, 3).map((draft) => (
+                          <li key={`source-recheck-draft-${draft.id}`}>
+                            Draft: {draft.title} · {draft.status} · {draft.source}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-xs text-ops-ink/70">No browser-local action or draft has been created yet; inspect the updated source before starting new work.</p>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={acknowledgeSourceRefresh}

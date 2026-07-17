@@ -6070,6 +6070,8 @@ test("operations workbench: source updates preserve browser-local work and requi
   await page.getByRole("button", { name: /Overview/ }).first().click();
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toBeVisible();
   await expect(page.getByText(/Your browser-local actions and drafts were preserved/)).toBeVisible();
+  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("1 local item need source re-check");
+  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("Action: Confirm Planning Inspectorate appeal status · Next · Campaign source · Evidence & checks · strategy");
   await page.getByRole("button", { name: /Action plan/ }).first().click();
   await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
 
