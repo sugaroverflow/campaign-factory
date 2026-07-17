@@ -2616,7 +2616,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
               ? "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing."
               : "Read-only source matches the baseline acknowledged for this local workspace.",
             localActionsToRecheck: sourceBaselineChanged ? state.localActions.map((action) => ({ title: action.title, source: action.source, status: localActionStatusCopy[action.status] })) : [],
-            localDraftsToRecheck: sourceBaselineChanged ? queuedDrafts.map((draft) => ({ title: draft.title, subject: draft.subject, status: draft.status, source: draft.source })) : [],
+            localDraftsToRecheck: sourceChangedDraftsToRecheck.map((draft) => ({ title: draft.title, status: draft.status, source: draft.source })),
           }
         : null,
       actions: state.localActions.map((action) => ({ ...action, statusLabel: localActionStatusCopy[action.status] })),

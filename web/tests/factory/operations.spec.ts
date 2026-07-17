@@ -6096,7 +6096,12 @@ test("operations workbench: source updates preserve browser-local work and requi
   expect(changedJsonPath).toBeTruthy();
   const changedPack = JSON.parse(await readFile(changedJsonPath!, "utf8")) as {
     campaign: { sourceBaselineChanged: boolean };
-    sourceChangeReview: { baselineChanged: boolean; warning: string; localActionsToRecheck: Array<{ title: string; source: string; status: string }> };
+    sourceChangeReview: {
+      baselineChanged: boolean;
+      warning: string;
+      localActionsToRecheck: Array<{ title: string; source: string; status: string }>;
+      localDraftsToRecheck: Array<{ title: string; source: string; status: string }>;
+    };
   };
   expect(changedPack.campaign.sourceBaselineChanged).toBe(true);
   expect(changedPack.sourceChangeReview).toMatchObject({
@@ -6107,6 +6112,11 @@ test("operations workbench: source updates preserve browser-local work and requi
     title: "Confirm Planning Inspectorate appeal status",
     source: "Campaign source · Evidence & checks · strategy",
     status: "Next",
+  });
+  expect(changedPack.sourceChangeReview.localDraftsToRecheck[0]).toMatchObject({
+    title: "Supporter email",
+    source: "Browser-local source workspace draft",
+    status: "Needs human review",
   });
 
   const [changedMarkdownDownload] = await Promise.all([
@@ -6119,6 +6129,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   expect(changedMarkdown).toContain("Source update warning: read-only source changed after this local workspace started");
   expect(changedMarkdown).toContain("## Source update review");
   expect(changedMarkdown).toContain("Re-check action: Confirm Planning Inspectorate appeal status (Next) — Campaign source · Evidence & checks · strategy");
+  expect(changedMarkdown).toContain("Re-check draft: Supporter email (Needs human review) — Browser-local source workspace draft");
   expect(changedMarkdown).toContain("Source update review: re-check this action against the updated read-only source before approving or queueing local work.");
 
   await page.getByRole("button", { name: /Overview/ }).first().click();
