@@ -9052,6 +9052,10 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByText("Read-only source baseline current")).toBeVisible();
   await expect(page.getByText("The public source changed after this local workspace started. Acknowledge the updated source on Overview after re-checking local actions and drafts before approval or queueing.")).toBeVisible();
   await expect(page.getByLabel("Review source update pause")).toContainText("Approval and local queue controls stay locked until the updated read-only source is acknowledged after re-checking this local work.");
+  await expect(page.getByLabel("Review source re-check progress")).toContainText("Checked 0/3 required source views for the current baseline.");
+  await expect(page.getByLabel("Review source re-check progress")).toContainText("Re-check Evidence & checks");
+  await expect(page.getByLabel("Review source re-check progress")).toContainText("Re-check Strategy & tactics");
+  await expect(page.getByLabel("Review source re-check progress")).toContainText("Re-check Drafts");
   await expect(page.getByRole("button", { name: "Approve as human reviewer" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Approve as human reviewer" })).toHaveAttribute("title", "Acknowledge the updated read-only source before recording human approval.");
   await expect(page.getByRole("button", { name: "Queue locally for demo" })).toBeDisabled();
@@ -9106,6 +9110,11 @@ test("operations workbench: source updates preserve browser-local work and requi
 
   await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
   await expect(page.getByLabel("Outbox source update pause")).toContainText("Local queue changes are paused for source re-check.");
+  await expect(page.getByLabel("Outbox source re-check progress")).toContainText("Checked 2/3 required source views for the current baseline.");
+  await expect(page.getByLabel("Outbox source re-check progress")).toContainText("CheckedEvidence & checks");
+  await expect(page.getByLabel("Outbox source re-check progress")).toContainText("NeededStrategy & tactics");
+  await expect(page.getByLabel("Outbox source re-check progress")).toContainText("CheckedDrafts");
+  await expect(page.getByLabel("Outbox source re-check progress")).toContainText("Re-check Strategy & tactics");
   await expect(page.getByLabel("Local schedule intent")).toBeDisabled();
   await expect(page.getByLabel("Local schedule intent")).toHaveAttribute("title", "Acknowledge the updated read-only source before changing local schedule intent.");
   await expect(page.getByText("Local schedule intent is paused until the updated read-only source is acknowledged, so queued work cannot be retimed against stale campaign material.")).toBeVisible();

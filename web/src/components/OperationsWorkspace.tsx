@@ -3342,6 +3342,46 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     </Button>
   );
 
+  const renderSourceRecheckProgress = (ariaLabel: string) =>
+    sourceBaselineChanged ? (
+      <div className="mt-3 rounded-[var(--r-lg)] border border-ops-ink/15 bg-background/65 p-3 text-xs text-ops-ink/75" aria-label={ariaLabel}>
+        <p className="font-semibold uppercase tracking-[0.1em] text-ops-ink/70">Source re-check progress</p>
+        <p className="mt-1">
+          Checked {SOURCE_RECHECK_REQUIRED_VIEWS.length - missingSourceRecheckViews.length}/{SOURCE_RECHECK_REQUIRED_VIEWS.length} required source views for the current baseline.
+        </p>
+        <ul className="mt-2 grid gap-1 sm:grid-cols-3">
+          {SOURCE_RECHECK_REQUIRED_VIEWS.map((view) => {
+            const visited = sourceRecheckVisitedViews.has(view);
+            return (
+              <li key={view} className="flex items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-[0.68rem] font-semibold ${visited ? "bg-ops-mint text-ops-ink" : "bg-ops-coral text-ops-ink"}`}>
+                  {visited ? "Checked" : "Needed"}
+                </span>
+                <span>{sourceRecheckViewLabels[view]}</span>
+              </li>
+            );
+          })}
+        </ul>
+        {missingSourceRecheckViews.length ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="font-medium">Reopen next:</span>
+            {missingSourceRecheckViews.map((view) => (
+              <button
+                key={view}
+                type="button"
+                onClick={() => setView(view)}
+                className="rounded-full border border-ops-ink/20 bg-background/70 px-2.5 py-1 text-xs font-medium hover:bg-background focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                Re-check {sourceRecheckViewLabels[view]}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2">All required views have been reopened; return to Overview to acknowledge this source baseline.</p>
+        )}
+      </div>
+    ) : null;
+
   const recommendedActions: RecommendedLocalAction[] = source
     ? [
         ...source.evidence.nextChecks.slice(0, 3).map((check, index) => {
@@ -3906,9 +3946,10 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           ))}
         </div>
         {sourceBaselineChanged ? (
-          <p id="operations-review-source-pause" className="mt-5 rounded-[var(--r-xl)] border border-ops-coral bg-ops-coral/55 p-3 text-sm text-ops-ink" role="status" aria-label="Review source update pause">
-            Approval and local queue controls stay locked until the updated read-only source is acknowledged after re-checking this local work.
-          </p>
+          <div id="operations-review-source-pause" className="mt-5 rounded-[var(--r-xl)] border border-ops-coral bg-ops-coral/55 p-3 text-sm text-ops-ink" role="status" aria-label="Review source update pause">
+            <p>Approval and local queue controls stay locked until the updated read-only source is acknowledged after re-checking this local work.</p>
+            {renderSourceRecheckProgress("Review source re-check progress")}
+          </div>
         ) : null}
         <div className="mt-6 flex flex-wrap gap-3 border-t border-border pt-5">
           <Button
@@ -4003,6 +4044,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             <p className="mt-1">
               Existing browser-local queue rows stay visible, but approval and queue changes stay locked until the updated read-only source is acknowledged on Overview.
             </p>
+            {renderSourceRecheckProgress("Outbox source re-check progress")}
           </div>
         ) : null}
         <div className="mt-6 rounded-[var(--r-2xl)] border border-border bg-background p-4">
