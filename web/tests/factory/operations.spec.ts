@@ -134,6 +134,44 @@ test("factory public source routes: invalid ids are no-store JSON misses", async
   }
 });
 
+test("factory public source routes: non-GET methods are explicit read-only no-store responses", async ({ request }) => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  for (const { name, path } of [
+    { name: "run header", path: `/api/factory/runs/${curatedId}` },
+    { name: "compiled documents", path: `/api/factory/runs/${curatedId}/documents` },
+  ]) {
+    for (const { method, makeRequest } of [
+      { method: "HEAD", makeRequest: () => request.fetch(path, { method: "HEAD" }) },
+      { method: "OPTIONS", makeRequest: () => request.fetch(path, { method: "OPTIONS" }) },
+      { method: "POST", makeRequest: () => request.post(path, { data: { campaignId: curatedId } }) },
+      { method: "PUT", makeRequest: () => request.put(path, { data: { campaignId: curatedId } }) },
+      { method: "PATCH", makeRequest: () => request.patch(path, { data: { campaignId: curatedId } }) },
+      { method: "DELETE", makeRequest: () => request.delete(path) },
+    ]) {
+      const response = await makeRequest();
+      expect(response.status(), `${name} ${method}`).toBe(405);
+      expect(response.headers()["cache-control"], `${name} ${method}`).toBe("no-store");
+      expect(response.headers()["content-security-policy"], `${name} ${method}`).toBe("default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+      expect(response.headers()["cross-origin-resource-policy"], `${name} ${method}`).toBe("same-origin");
+      expect(response.headers().expires, `${name} ${method}`).toBe("0");
+      expect(response.headers().pragma, `${name} ${method}`).toBe("no-cache");
+      expect(response.headers()["referrer-policy"], `${name} ${method}`).toBe("no-referrer");
+      expect(response.headers()["x-content-type-options"], `${name} ${method}`).toBe("nosniff");
+      expect(response.headers().allow, `${name} ${method}`).toBe("GET");
+
+      if (method === "HEAD") {
+        expect(await response.body()).toHaveLength(0);
+        continue;
+      }
+
+      const body = (await response.json()) as { error?: string; detail?: string };
+      expect(body.error, `${name} ${method}`).toBe("Factory public source is read-only");
+      expect(body.detail, `${name} ${method}`).toContain("GET behaviour only");
+    }
+  }
+});
+
 test("operations source API: invalid and non-curated ids are allow-list misses with no-store caching", async ({ request }) => {
   for (const id of ["not-a-campaign-id", "00000000-0000-4000-8000-000000000000"]) {
     const response = await request.get(`/api/operations/sources/${id}`);

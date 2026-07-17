@@ -24,10 +24,25 @@ const PUBLIC_READ_HEADERS = {
   "Referrer-Policy": "no-referrer",
   "X-Content-Type-Options": "nosniff",
 };
+const PUBLIC_READ_ALLOW_HEADERS = { ...PUBLIC_READ_HEADERS, Allow: "GET" };
 
 function factoryJson<T>(body: T, status = 200) {
   return NextResponse.json(body, { status, headers: PUBLIC_READ_HEADERS });
 }
+
+function factoryMethodNotAllowed() {
+  return NextResponse.json(
+    { error: "Factory public source is read-only", detail: "This public campaign document route exposes GET behaviour only." },
+    { status: 405, headers: PUBLIC_READ_ALLOW_HEADERS },
+  );
+}
+
+export const HEAD = factoryMethodNotAllowed;
+export const OPTIONS = factoryMethodNotAllowed;
+export const POST = factoryMethodNotAllowed;
+export const PUT = factoryMethodNotAllowed;
+export const PATCH = factoryMethodNotAllowed;
+export const DELETE = factoryMethodNotAllowed;
 
 function factoryReadUnavailable() {
   return factoryJson(
