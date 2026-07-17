@@ -3166,6 +3166,9 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
               ? "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing."
               : "Read-only source matches the baseline acknowledged for this local workspace.",
             requiredRecheckViews: SOURCE_RECHECK_REQUIRED_VIEWS.map((view) => sourceRecheckViewLabels[view]),
+            checkedRecheckViews: sourceBaselineChanged
+              ? SOURCE_RECHECK_REQUIRED_VIEWS.filter((view) => sourceRecheckVisitedViews.has(view)).map((view) => sourceRecheckViewLabels[view])
+              : [],
             missingRecheckViews: missingSourceRecheckViews.map((view) => sourceRecheckViewLabels[view]),
             localItemCount: sourceRecheckItemCount,
             localActionsToRecheck: sourceBaselineChanged ? state.localActions.map((action) => ({ title: action.title, source: action.source, status: localActionStatusCopy[action.status] })) : [],
@@ -3252,6 +3255,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
               `- Previous source baseline: state v${pack.sourceChangeReview.previousStateVersion}, event #${pack.sourceChangeReview.previousLastSequence}`,
               `- Current source baseline: state v${pack.sourceChangeReview.currentStateVersion}, event #${pack.sourceChangeReview.currentLastSequence}`,
               `- Required source re-check views: ${pack.sourceChangeReview.requiredRecheckViews.join(", ")}`,
+              `- Source re-check views reopened: ${pack.sourceChangeReview.checkedRecheckViews.length ? pack.sourceChangeReview.checkedRecheckViews.join(", ") : "none yet"}`,
               `- Source re-check views still to inspect: ${pack.sourceChangeReview.missingRecheckViews.length ? pack.sourceChangeReview.missingRecheckViews.join(", ") : "none"}`,
               `- Local items requiring re-check: ${pack.sourceChangeReview.localItemCount}`,
               ...(pack.sourceChangeReview.localActionsToRecheck.length

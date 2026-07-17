@@ -9126,6 +9126,7 @@ test("operations workbench: source updates preserve browser-local work and requi
       currentDocumentSignature: string | null;
       warning: string;
       requiredRecheckViews: string[];
+      checkedRecheckViews: string[];
       missingRecheckViews: string[];
       localItemCount: number;
       localActionsToRecheck: Array<{ title: string; source: string; status: string }>;
@@ -9140,6 +9141,7 @@ test("operations workbench: source updates preserve browser-local work and requi
     currentDocumentSignature: expect.stringContaining("media_pack:ready:1"),
     warning: "Read-only source changed after this local workspace started; re-check local actions and drafts before approval or queueing.",
     requiredRecheckViews: ["Evidence & checks", "Strategy & tactics", "Drafts"],
+    checkedRecheckViews: ["Evidence & checks", "Drafts"],
     missingRecheckViews: ["Strategy & tactics"],
     localItemCount: 2,
   });
@@ -9165,6 +9167,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   expect(changedMarkdown).toContain("Previous source baseline: state v44, event #1909");
   expect(changedMarkdown).toContain("Current source baseline: state v45, event #1918");
   expect(changedMarkdown).toContain("Required source re-check views: Evidence & checks, Strategy & tactics, Drafts");
+  expect(changedMarkdown).toContain("Source re-check views reopened: Evidence & checks, Drafts");
   expect(changedMarkdown).toContain("Source re-check views still to inspect: Strategy & tactics");
   expect(changedMarkdown).toContain("Local items requiring re-check: 2");
   expect(changedMarkdown).toContain("Source update warning: read-only source changed after this local workspace started");
