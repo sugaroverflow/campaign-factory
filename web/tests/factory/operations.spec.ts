@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { readFile } from "node:fs/promises";
+import { GET as getOperationsSource } from "@/app/api/operations/sources/[id]/route";
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -81,6 +82,42 @@ test("operations source API: non-GET methods are blocked as read-only no-store r
     expect(body.error).toBe("Operations source is read-only");
     expect(body.detail).toContain("read-only GET behaviour only");
     expect(body.sourceOrigin).toBeUndefined();
+  }
+});
+
+test("operations source API: upstream run redirects fail closed before document hydration", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestedUrls.push(String(input));
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual({ accept: "application/json" });
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response(null, {
+        status: 302,
+        headers: { Location: "https://example.invalid/api/factory/runs/redirected" },
+      });
+    }
+
+    throw new Error("Documents should not be requested after a redirected source run header.");
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(502);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+
+    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string };
+    expect(body.error).toBe("Campaign source contract mismatch");
+    expect(body.detail).toContain("redirected");
+    expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
+    expect(requestedUrls).toEqual([`https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`]);
+  } finally {
+    globalThis.fetch = originalFetch;
   }
 });
 

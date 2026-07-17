@@ -46,6 +46,10 @@ function sourceOrigin(): { ok: true; origin: string } | { ok: false } {
   return origin ? { ok: true, origin } : { ok: false };
 }
 
+function isRedirectStatus(status: number) {
+  return status >= 300 && status < 400;
+}
+
 async function fetchSourceJson<T>(origin: string, path: string): Promise<{ ok: true; value: T } | { ok: false; status: number; message: string; path: string }> {
   const controller = new AbortController();
   let timedOut = false;
@@ -58,10 +62,12 @@ async function fetchSourceJson<T>(origin: string, path: string): Promise<{ ok: t
     const response = await fetch(`${origin}${path}`, {
       headers: { accept: "application/json" },
       cache: "no-store",
+      redirect: "manual",
       signal: controller.signal,
     });
     if (!response.ok) {
-      return { ok: false, status: response.status, path, message: `Read-only source ${path} returned HTTP ${response.status}.` };
+      const redirectDetail = isRedirectStatus(response.status) ? " Redirects are not followed for preview-safe source reads." : "";
+      return { ok: false, status: response.status, path, message: `Read-only source ${path} returned HTTP ${response.status}.${redirectDetail}` };
     }
     try {
       return { ok: true, value: (await response.json()) as T };
@@ -133,6 +139,11 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     }
   } else if (run.status === 404) {
     return sourceJson({ error: "Campaign source run unavailable", detail: run.message, sourceOrigin: origin }, 404);
+  } else if (isRedirectStatus(run.status)) {
+    return sourceJson(
+      { error: "Campaign source contract mismatch", detail: "The public source run redirected instead of returning the allow-listed read-only run contract.", sourceOrigin: origin },
+      502,
+    );
   }
 
   const docs = await fetchSourceJson<Pick<OperationsSourcePayload, "documents" | "evidence">>(origin, `/api/factory/runs/${encodeURIComponent(id)}/documents`);
