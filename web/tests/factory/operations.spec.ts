@@ -3939,6 +3939,46 @@ test("operations workbench: encoded compiled-document disclaimer hydrates as the
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
+test("operations workbench: encoded rendered verification notes hydrate as the same source warning", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const documents = canonicalOperationsDocuments("Encoded warning Ormskirk");
+  const plainText = `Encoded warning Ormskirk\n\n${COMPILED_DOCUMENT_NEEDS_VERIFICATION_NOTE}\n\n${COMPILED_DOCUMENT_DISCLAIMER}`;
+  documents[0] = {
+    ...documents[0],
+    html: `<p>Encoded warning Ormskirk</p><p>${COMPILED_DOCUMENT_NEEDS_VERIFICATION_NOTE.replace("couldn't", "couldn&rsquo;t")}</p><p>${COMPILED_DOCUMENT_DISCLAIMER.replace("AI-generated draft — please verify", "AI-generated draft &mdash; please verify")}</p>`,
+    plainText,
+    flags: ["A source section is flagged needs verification."],
+  };
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 13, lastSequence: 103, events: [] },
+        documents,
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Keep encoded verification warnings visible", reason: "HTML entities should not look like stripped warning notes", claimIds: [], affectedSections: ["campaign_brief"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Encoded warning Ormskirk" }).first()).toBeVisible();
+  await expect(page.getByText("Real campaign source", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Keep encoded verification warnings visible").first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
 test("operations workbench: document verification flags must match rendered source notes before hydration", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const documents = canonicalOperationsDocuments();
