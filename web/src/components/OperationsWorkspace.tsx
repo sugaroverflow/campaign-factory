@@ -1032,18 +1032,24 @@ function workingDraftLooksFixtureBound(draft: WorkingDraft) {
   ].join("\n"));
 }
 
+function activityLooksFixtureBound(activity: Activity) {
+  return hasFixtureLeakage([activity.id, activity.label].join("\n"));
+}
+
 function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: string): DemoState {
   if (!UUID_RE.test(expectedWorkspaceKey)) return state;
   const selectedSegment = isSourceSegmentId(state.selectedSegment) ? state.selectedSegment : SOURCE_PRIMARY_SEGMENT_ID;
   const contactFilter = state.contactFilter === "all" || isSourceSegmentId(state.contactFilter) ? state.contactFilter : "all";
   const localActions = state.localActions.filter((action) => localActionMatchesWorkspace(action, expectedWorkspaceKey) && !localActionLooksFixtureBound(action));
   const workingDrafts = state.workingDrafts.filter((draft) => draft.sourceWorkingCopy.campaignId === expectedWorkspaceKey && !workingDraftLooksFixtureBound(draft));
+  const activity = state.activity.filter((item) => !activityLooksFixtureBound(item));
   const activeWorkingDraftId = workingDrafts.some((draft) => draft.id === state.activeWorkingDraftId)
     ? state.activeWorkingDraftId
     : workingDrafts[0]?.id ?? null;
   const sourceWorkingCopy = state.sourceWorkingCopy?.campaignId === expectedWorkspaceKey && !sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy) ? state.sourceWorkingCopy : null;
   const removedFixtureAudienceState = selectedSegment !== state.selectedSegment || contactFilter !== state.contactFilter;
   const removedMismatchedLocalWork = localActions.length !== state.localActions.length || workingDrafts.length !== state.workingDrafts.length;
+  const removedFixtureActivity = activity.length !== state.activity.length;
   const removedFixtureSourceWorkingCopy = Boolean(state.sourceWorkingCopy && sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy));
   const removedMismatchedTopLevelSourceCopy = Boolean(state.sourceWorkingCopy && !sourceWorkingCopy && !removedFixtureSourceWorkingCopy);
   const removedFixtureTopLevelCopy = !sourceWorkingCopy && topLevelDraftLooksFixtureBound(state);
@@ -1063,7 +1069,8 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     contactFilter === state.contactFilter &&
     !removedFixtureTopLevelCopy &&
     !removedUnprovenancedTopLevelReviewState &&
-    !removedFixtureSourceBaseline
+    !removedFixtureSourceBaseline &&
+    !removedFixtureActivity
   ) {
     return state;
   }
@@ -1096,8 +1103,8 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     activeWorkingDraftId,
     sourceWorkingCopy,
     activity:
-      removedMismatchedLocalWork || resetTopLevelDraft || removedFixtureSourceBaseline
-        ? [{ id: "workspace-sanitized", label: "Browser-local state was sanitized for this real campaign workspace; public source data was not changed." }]
+      removedMismatchedLocalWork || resetTopLevelDraft || removedFixtureSourceBaseline || removedFixtureActivity
+        ? [{ id: "workspace-sanitized", label: "Browser-local state was sanitized for this real campaign workspace; public source data was not changed." }, ...activity].slice(0, 7)
         : state.activity,
   };
 }
