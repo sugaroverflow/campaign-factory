@@ -38,6 +38,16 @@ function hasJsonResponseContentType(response: Response) {
   return mediaType === "application/json" || mediaType.endsWith("+json");
 }
 
+function sanitizeSourceRetryAfter(value: string | null) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return /^\d{1,5}$/.test(trimmed) ? trimmed : undefined;
+}
+
+function retryAfterMessage(retryAfter?: string) {
+  return retryAfter ? `Source retry guidance: try again after ${retryAfter} second${retryAfter === "1" ? "" : "s"}.` : null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -216,8 +226,8 @@ type SourceState =
   | { status: "fixture" }
   | { status: "invalid"; campaignId: string }
   | { status: "loading"; campaignId: string }
-  | { status: "error"; campaignId: string; title: string; message: string; sourceOrigin?: string }
-  | { status: "unavailable"; campaignId: string; title: string; message: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string }
+  | { status: "error"; campaignId: string; title: string; message: string; sourceOrigin?: string; retryAfter?: string }
+  | { status: "unavailable"; campaignId: string; title: string; message: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string; retryAfter?: string }
   | { status: "ready"; source: CampaignSource };
 
 type PortfolioCampaign = {
@@ -236,7 +246,7 @@ type PortfolioLocalCounts = {
 type PortfolioItem =
   | { campaign: PortfolioCampaign; status: "loading"; local: PortfolioLocalCounts }
   | { campaign: PortfolioCampaign; status: "ready"; source: CampaignSource; local: PortfolioLocalCounts }
-  | { campaign: PortfolioCampaign; status: "error"; title: string; message: string; sourceOrigin?: string; local: PortfolioLocalCounts };
+  | { campaign: PortfolioCampaign; status: "error"; title: string; message: string; sourceOrigin?: string; retryAfter?: string; local: PortfolioLocalCounts };
 
 type CampaignSwitcherItem =
   | { campaign: PortfolioCampaign; status: "loading" }
@@ -1508,9 +1518,11 @@ async function fetchCampaignSource(campaignId: string, signal: AbortSignal): Pro
     const fallbackMessage = sourceRes.status === 404 && !hasSourceOriginField
       ? "No curated public campaign source was found for that campaign ID."
       : `The public campaign source could not be loaded (HTTP ${sourceRes.status}).`;
+    const retryAfter = sanitizeSourceRetryAfter(sourceRes.headers.get("retry-after"));
     const err = new Error(canUseSourceErrorDetail ? errorBody?.detail || errorBody?.error || fallbackMessage : fallbackMessage);
     if (canUseSourceErrorDetail && errorBody?.runStatus) (err as Error & { runStatus?: RunReadModel["status"] }).runStatus = errorBody.runStatus;
     if (sourceOrigin) (err as Error & { sourceOrigin?: string }).sourceOrigin = sourceOrigin;
+    if (retryAfter) (err as Error & { retryAfter?: string }).retryAfter = retryAfter;
     throw err;
   }
   if (!sourceBody) {
@@ -1647,10 +1659,11 @@ function OperationsPortfolio() {
           if (controller.signal.aborted || currentRefreshId !== portfolioRefreshId.current) return;
           const message = error instanceof Error ? error.message : "This campaign source could not be loaded.";
           const sourceOrigin = (error as { sourceOrigin?: string } | null)?.sourceOrigin;
+          const retryAfter = (error as { retryAfter?: string } | null)?.retryAfter;
           setItems((current) =>
             current.map((item) =>
               item.campaign.id === campaign.id
-                ? { campaign, status: "error", title: "Campaign source unavailable", message, sourceOrigin, local: portfolioLocalCounts(campaign.id) }
+                ? { campaign, status: "error", title: "Campaign source unavailable", message, sourceOrigin, retryAfter, local: portfolioLocalCounts(campaign.id) }
                 : item,
             ),
           );
@@ -1728,6 +1741,9 @@ function OperationsPortfolio() {
                         Checked read-only source: <span className="font-medium text-foreground">{item.sourceOrigin}</span>
                       </p>
                     ) : null}
+                    {item.status === "error" && retryAfterMessage(item.retryAfter) ? (
+                      <p className="mt-2 text-xs font-medium text-ops-ink">{retryAfterMessage(item.retryAfter)}</p>
+                    ) : null}
                     {source ? (
                       <div className="mt-4 grid gap-3 text-sm md:grid-cols-3">
                         <p className="rounded-[var(--r-xl)] border border-ops-line bg-background/75 p-3"><span className="block font-medium">{source.readyCount}/{source.documents.length} documents ready</span><span className="text-muted-foreground">{source.incompleteDocuments.map((doc) => `${doc.name}: ${doc.status}`).join(" · ") || "All compiled documents ready"}</span></p>
@@ -1775,6 +1791,7 @@ function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fi
         ? "Operations accepts a Campaign Factory UUID in the campaignId query parameter. No fixture campaign has been substituted."
         : state.message;
   const sourceOrigin = "sourceOrigin" in state ? state.sourceOrigin : undefined;
+  const retryMessage = "retryAfter" in state ? retryAfterMessage(state.retryAfter) : null;
 
   return (
     <div className="min-h-screen bg-ops-paper text-foreground">
@@ -1801,6 +1818,11 @@ function SourceStateShell({ state }: { state: Exclude<SourceState, { status: "fi
           {sourceOrigin ? (
             <p className="mt-3 max-w-3xl rounded-[var(--r-xl)] border border-ops-line bg-background/80 px-3 py-2 text-sm text-muted-foreground">
               Checked read-only source: <span className="font-medium text-foreground">{sourceOrigin}</span>
+            </p>
+          ) : null}
+          {retryMessage ? (
+            <p className="mt-3 max-w-3xl rounded-[var(--r-xl)] border border-ops-line bg-ops-yellow/60 px-3 py-2 text-sm font-medium text-ops-ink">
+              {retryMessage}
             </p>
           ) : null}
           {state.status === "loading" ? (
@@ -1883,11 +1905,12 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         const message = error instanceof Error ? error.message : "The public campaign source could not be loaded.";
         const runStatus = (error as { runStatus?: RunReadModel["status"] } | null)?.runStatus;
         const sourceOrigin = (error as { sourceOrigin?: string } | null)?.sourceOrigin;
+        const retryAfter = (error as { retryAfter?: string } | null)?.retryAfter;
         if (runStatus && runStatus !== "completed" && runStatus !== "partial") {
-          setSourceState({ status: "unavailable", campaignId, title: "Campaign not usable yet", message, runStatus, sourceOrigin });
+          setSourceState({ status: "unavailable", campaignId, title: "Campaign not usable yet", message, runStatus, sourceOrigin, retryAfter });
           return;
         }
-        setSourceState({ status: "error", campaignId, title: "Campaign source unavailable", message, sourceOrigin });
+        setSourceState({ status: "error", campaignId, title: "Campaign source unavailable", message, sourceOrigin, retryAfter });
       });
     return () => controller.abort();
   }, [campaignId]);

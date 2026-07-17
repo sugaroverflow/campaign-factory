@@ -1465,29 +1465,36 @@ test("operations portfolio: one failed source does not blank usable campaigns", 
     const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] as keyof typeof campaigns;
     if (id === "57678ae0-29fd-4b4b-8a53-5c711cdb21cf") {
       await route.fulfill({
-        status: 502,
+        status: 429,
+        headers: { "Retry-After": "90" },
         contentType: "application/json",
-        body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 500.", sourceOrigin: "https://campaign-factory.vercel.app" }),
+        body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 429.", sourceOrigin: "https://campaign-factory.vercel.app" }),
       });
       return;
     }
     const campaign = campaigns[id];
+    const documents = canonicalOperationsDocuments(campaign.title).map((document) =>
+      document.key === "campaign_brief"
+        ? {
+            ...document,
+            html: `<p>${withCompiledDocumentDisclaimer(`${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`)}</p>`,
+            plainText: withCompiledDocumentDisclaimer(`${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`),
+          }
+        : document,
+    );
     await route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
         sourceOrigin: "https://campaign-factory.vercel.app",
         run: { campaignId: id, status: campaign.status, stateVersion: 1, lastSequence: 1, events: [] },
-        documents: [
-          { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`, isPack: false, sectionKeys: ["problem", "evidence", "objective", "decision_route", "power", "pressure", "strategy", "tactics", "organising"], resourceCount: 0, flags: [] },
-          { key: "media_pack", num: 8, name: "Media Pack", status: "ready", html: "", plainText: "MEDIA PACK", isPack: true, sectionKeys: [], resourceCount: 0, flags: [] },
-        ],
+        documents,
         evidence: {
           groups: [],
           conflicts: [],
           nextChecks: [{ id: "next", description: campaign.next, reason: "Portfolio next gate", claimIds: [], affectedSections: [] }],
           terminalGaps: [],
           draftNotes: [],
-          totals: { claims: 90, loadBearing: 70, verifiedLoadBearing: 70 - campaign.unresolved, unresolvedLoadBearing: campaign.unresolved },
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
         },
       }),
     });
@@ -1499,8 +1506,9 @@ test("operations portfolio: one failed source does not blank usable campaigns", 
   await expect(page.getByText("Keep KFC Out of Ormskirk", { exact: true })).toBeVisible();
   await expect(page.getByText("Stop the leisure park redevelopment in Barnet", { exact: true })).toBeVisible();
   await expect(page.getByText("Campaign source unavailable", { exact: true })).toBeVisible();
-  await expect(page.getByText(/Preview source returned HTTP 500/)).toBeVisible();
+  await expect(page.getByText(/Preview source returned HTTP 429/)).toBeVisible();
   await expect(page.getByText("Checked read-only source:")).toBeVisible();
+  await expect(page.getByText("Source retry guidance: try again after 90 seconds.")).toBeVisible();
   await expect(page.getByText("https://campaign-factory.vercel.app", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Open workspace" })).toHaveCount(3);
   await expect(page.getByRole("link", { name: "Open workspace" }).nth(0)).toHaveAttribute("href", "/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95");
@@ -1537,6 +1545,25 @@ test("operations workspace: failed direct source load keeps canonical source bri
     "href",
     "https://campaign-factory.vercel.app/factory/c/57678ae0-29fd-4b4b-8a53-5c711cdb21cf",
   );
+});
+
+test("operations workspace: source retry guidance is visible without fixture fallback", async ({ page }) => {
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      status: 429,
+      headers: { "Retry-After": "120" },
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Campaign source run unavailable", detail: "Read-only source is rate-limited.", sourceOrigin: "https://campaign-factory.vercel.app" }),
+    });
+  });
+
+  await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95");
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("Read-only source is rate-limited.")).toBeVisible();
+  await expect(page.getByText("Source retry guidance: try again after 120 seconds.")).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
 });
 
 test("operations workspace: non-JSON source responses stay as no-fixture-fallback failures", async ({ page }) => {
