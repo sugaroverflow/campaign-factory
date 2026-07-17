@@ -1052,9 +1052,13 @@ function portfolioLocalCounts(campaignId: string): PortfolioLocalCounts {
   };
 }
 
-function localSignalPhrases(counts: PortfolioLocalCounts, sourceRecheckItemCount = 0) {
+function localSignalPhrases(counts: PortfolioLocalCounts, sourceRecheckItemCount = 0, sourceUpdateNeedsAcknowledgement = false) {
   return [
-    sourceRecheckItemCount ? `${sourceRecheckItemCount} source re-check${sourceRecheckItemCount === 1 ? "" : "s"} required` : null,
+    sourceRecheckItemCount
+      ? `${sourceRecheckItemCount} source re-check${sourceRecheckItemCount === 1 ? "" : "s"} required`
+      : sourceUpdateNeedsAcknowledgement
+        ? "source update acknowledgement needed"
+        : null,
     counts.actions ? `${counts.actions} action${counts.actions === 1 ? "" : "s"}` : null,
     counts.drafts ? `${counts.drafts} working draft${counts.drafts === 1 ? "" : "s"}` : null,
     counts.reviews ? `${counts.reviews} review${counts.reviews === 1 ? "" : "s"}` : null,
@@ -1062,18 +1066,29 @@ function localSignalPhrases(counts: PortfolioLocalCounts, sourceRecheckItemCount
   ].filter(Boolean);
 }
 
-function storedSourceRecheckItemCount(campaignId: string, source: CampaignSource) {
-  if (typeof window === "undefined") return 0;
+function storedSourceRecheckSummary(campaignId: string, source: CampaignSource) {
+  if (typeof window === "undefined") return null;
   const loaded = loadState(localStorageKeyFor(campaignId));
-  if (loaded.workspaceKey !== campaignId) return 0;
+  if (loaded.workspaceKey !== campaignId) return null;
   const state = sanitizeStateForWorkspace(loaded, campaignId);
+  const currentDocumentSignature = sourceDocumentSignature(source);
   const baselineChanged = Boolean(
     state.sourceStateVersion !== null &&
-      (state.sourceStateVersion !== source.stateVersion || state.sourceLastSequence !== source.lastSequence || state.sourceDocumentSignature !== sourceDocumentSignature(source)),
+      (state.sourceStateVersion !== source.stateVersion || state.sourceLastSequence !== source.lastSequence || state.sourceDocumentSignature !== currentDocumentSignature),
   );
-  if (!baselineChanged) return 0;
+  if (!baselineChanged) return null;
   const sourceBoundPrimaryDraftCount = state.status !== "draft" || state.sourceWorkingCopy ? 1 : 0;
-  return state.localActions.length + sourceBoundPrimaryDraftCount + state.workingDrafts.length;
+  const recheckMatchesCurrentSource =
+    state.sourceRecheckStateVersion === source.stateVersion && state.sourceRecheckLastSequence === source.lastSequence && state.sourceRecheckDocumentSignature === currentDocumentSignature;
+  const visitedViews = new Set(recheckMatchesCurrentSource ? state.sourceRecheckVisitedViews : []);
+  const checkedViews = SOURCE_RECHECK_REQUIRED_VIEWS.filter((view) => visitedViews.has(view));
+  const missingViews = SOURCE_RECHECK_REQUIRED_VIEWS.filter((view) => !visitedViews.has(view));
+  return {
+    itemCount: state.localActions.length + sourceBoundPrimaryDraftCount + state.workingDrafts.length,
+    checkedCount: checkedViews.length,
+    requiredCount: SOURCE_RECHECK_REQUIRED_VIEWS.length,
+    missingLabels: missingViews.map((view) => sourceRecheckViewLabels[view]),
+  };
 }
 
 function initialCampaignSwitcherItems(): CampaignSwitcherItem[] {
@@ -2127,8 +2142,9 @@ function OperationsPortfolio() {
         <section className="mt-5 space-y-3" aria-label="Campaign operations portfolio">
           {items.map((item) => {
             const source = item.status === "ready" ? item.source : null;
-            const sourceRecheckItemCount = source ? storedSourceRecheckItemCount(item.campaign.id, source) : 0;
-            const localSignals = localSignalPhrases(item.local, sourceRecheckItemCount);
+            const sourceRecheckSummary = source ? storedSourceRecheckSummary(item.campaign.id, source) : null;
+            const sourceRecheckItemCount = sourceRecheckSummary?.itemCount ?? 0;
+            const localSignals = localSignalPhrases(item.local, sourceRecheckItemCount, Boolean(sourceRecheckSummary));
             return (
               <article key={item.campaign.id} className={`rounded-[var(--r-2xl)] border p-4 shadow-sm ${item.campaign.conferenceHero ? "border-ops-ink bg-ops-yellow/50" : "border-ops-line bg-background"}`}>
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px] lg:items-center">
@@ -2176,6 +2192,14 @@ function OperationsPortfolio() {
                     <p className="mt-3 text-sm text-muted-foreground">
                       Local signals: {localSignals.length ? localSignals.join(" · ") : "no browser-local operations work yet for this campaign"}.
                     </p>
+                    {sourceRecheckSummary ? (
+                      <p className="mt-2 rounded-[var(--r-lg)] border border-ops-coral bg-ops-coral/35 px-3 py-2 text-xs text-ops-ink" aria-label="Portfolio source re-check progress">
+                        Source re-check progress: {sourceRecheckSummary.checkedCount}/{sourceRecheckSummary.requiredCount} required source views checked
+                        {sourceRecheckSummary.missingLabels.length
+                          ? `; ${sourceRecheckSummary.missingLabels.join(", ")} still needed before acknowledgement.`
+                          : "; ready to acknowledge in the workspace Overview."}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="flex flex-col gap-3">
                     {item.status === "error" ? (

@@ -9113,6 +9113,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   const portfolio = page.getByLabel("Campaign operations portfolio");
   const ormskirkRow = portfolio.locator("article", { hasText: "Keep KFC Out of Ormskirk" });
   await expect(ormskirkRow).toContainText("Local signals: 2 source re-checks required · 1 action · 1 review.");
+  await expect(ormskirkRow.getByLabel("Portfolio source re-check progress")).toContainText("Source re-check progress: 2/3 required source views checked; Strategy & tactics still needed before acknowledgement.");
   await page.goto(`/operations?campaignId=${campaignId}&view=actions`);
 
   await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
