@@ -169,6 +169,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
       { error: "Campaign source contract mismatch", detail: "The public source run redirected instead of returning the allow-listed read-only run contract.", sourceOrigin: origin },
       502,
     );
+  } else if (run.status === 504) {
+    return sourceJson({ error: "Campaign source run unavailable", detail: run.message, sourceOrigin: origin }, 504);
   } else if (run.contractMismatch) {
     return sourceJson(
       { error: "Campaign source contract mismatch", detail: run.message, sourceOrigin: origin },
