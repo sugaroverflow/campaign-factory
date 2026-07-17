@@ -246,20 +246,26 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!docs.ok) {
     if (isRedirectStatus(docs.status)) {
       return sourceJson(
-        sourceFailureBody("documents", { error: "Campaign source contract mismatch", detail: "The public source documents redirected instead of returning the allow-listed read-only document contract.", sourceOrigin: origin, ...upstreamFailureMetadata(docs) }),
+        sourceFailureBody("documents", {
+          error: "Campaign source contract mismatch",
+          detail: "The public source documents redirected instead of returning the allow-listed read-only document contract.",
+          runStatus: run.value.status,
+          sourceOrigin: origin,
+          ...upstreamFailureMetadata(docs),
+        }),
         502,
       );
     }
 
     if (docs.contractMismatch) {
       return sourceJson(
-        sourceFailureBody("documents", { error: "Campaign source contract mismatch", detail: docs.message, sourceOrigin: origin, ...upstreamFailureMetadata(docs) }),
+        sourceFailureBody("documents", { error: "Campaign source contract mismatch", detail: docs.message, runStatus: run.value.status, sourceOrigin: origin, ...upstreamFailureMetadata(docs) }),
         502,
       );
     }
 
     return sourceJson(
-      sourceFailureBody("documents", { error: "Campaign source documents unavailable", detail: docs.message, sourceOrigin: origin, ...upstreamFailureMetadata(docs) }),
+      sourceFailureBody("documents", { error: "Campaign source documents unavailable", detail: docs.message, runStatus: run.value.status, sourceOrigin: origin, ...upstreamFailureMetadata(docs) }),
       unavailableSourceStatus(docs.status),
       sourceFailureHeaders(docs),
     );
@@ -271,7 +277,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     !hasConsistentOperationsDocumentEvidence(docs.value.documents, docs.value.evidence)
   ) {
     return sourceJson(
-      sourceFailureBody("documents", { error: "Campaign source contract mismatch", detail: "The public source did not return compiled documents and evidence in the expected shape.", sourceOrigin: origin }),
+      sourceFailureBody("documents", { error: "Campaign source contract mismatch", detail: "The public source did not return compiled documents and evidence in the expected shape.", runStatus: run.value.status, sourceOrigin: origin }),
       502,
     );
   }

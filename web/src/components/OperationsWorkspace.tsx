@@ -1236,6 +1236,10 @@ function statusPhrase(status: RunReadModel["status"]) {
   return "Cancelled";
 }
 
+function isSourceRunNotReadyStatus(status?: RunReadModel["status"]): status is Exclude<RunReadModel["status"], "partial" | "completed"> {
+  return Boolean(status && status !== "partial" && status !== "completed");
+}
+
 function sourceStatusPhrase(source: CampaignSource) {
   return statusPhrase(source.runStatus);
 }
@@ -1793,7 +1797,7 @@ function OperationsPortfolio() {
         setItems((current) =>
           current.map((item) =>
             item.campaign.id === campaign.id
-              ? { campaign, status: "error", title: runStatus ? "Campaign not usable yet" : "Campaign source unavailable", message, runStatus, sourceOrigin, sourceStep, retryAfter, sourceHttpStatus, sourceRequestId, checkedAt: new Date().toISOString(), local: portfolioLocalCounts(campaign.id) }
+              ? { campaign, status: "error", title: isSourceRunNotReadyStatus(runStatus) ? "Campaign not usable yet" : "Campaign source unavailable", message, runStatus, sourceOrigin, sourceStep, retryAfter, sourceHttpStatus, sourceRequestId, checkedAt: new Date().toISOString(), local: portfolioLocalCounts(campaign.id) }
               : item,
           ),
         );
@@ -1871,7 +1875,7 @@ function OperationsPortfolio() {
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       {item.campaign.conferenceHero ? <span className="rounded-full bg-ops-ink px-2.5 py-1 text-xs font-medium text-white">Conference deep dive</span> : null}
-                      <span className="rounded-full bg-ops-blue px-2.5 py-1 text-xs text-ops-ink">{source ? sourceStatusPhrase(source) : item.status === "loading" ? "Loading source" : item.status === "error" && item.runStatus ? `Source ${statusPhrase(item.runStatus).toLowerCase()}` : "Source issue"}</span>
+                      <span className="rounded-full bg-ops-blue px-2.5 py-1 text-xs text-ops-ink">{source ? sourceStatusPhrase(source) : item.status === "loading" ? "Loading source" : item.status === "error" && isSourceRunNotReadyStatus(item.runStatus) ? `Source ${statusPhrase(item.runStatus).toLowerCase()}` : "Source issue"}</span>
                       <span className="rounded-full border border-ops-line bg-background/80 px-2.5 py-1 text-xs text-muted-foreground">Browser-local state separate</span>
                     </div>
                     <h2 className="mt-3 text-2xl font-medium tracking-tight">{item.status === "ready" ? item.source.title : item.status === "loading" ? "Loading campaign…" : item.title}</h2>
@@ -2104,7 +2108,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           setSourceState({ status: "unavailable", campaignId, title: "Campaign not usable yet", message, runStatus, sourceOrigin, sourceStep, retryAfter, sourceHttpStatus, sourceRequestId, checkedAt: new Date().toISOString() });
           return;
         }
-        setSourceState({ status: "error", campaignId, title: "Campaign source unavailable", message, sourceOrigin, sourceStep, retryAfter, sourceHttpStatus, sourceRequestId, checkedAt: new Date().toISOString() });
+        setSourceState({ status: "error", campaignId, title: "Campaign source unavailable", message, runStatus, sourceOrigin, sourceStep, retryAfter, sourceHttpStatus, sourceRequestId, checkedAt: new Date().toISOString() });
       });
     return () => controller.abort();
   }, [campaignId, sourceRetryCount]);
@@ -4383,7 +4387,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                       ? compactCampaignLabel(item.source.title)
                       : item.status === "loading"
                         ? "Loading campaign"
-                        : item.runStatus
+                        : isSourceRunNotReadyStatus(item.runStatus)
                           ? `Source ${statusPhrase(item.runStatus).toLowerCase()}`
                           : "Source issue";
                   const title = item.status === "ready" ? `${item.source.title}${item.source.place ? ` · ${item.source.place}` : ""}` : item.status === "error" ? failureDetails ?? item.message : "Loading public campaign name";

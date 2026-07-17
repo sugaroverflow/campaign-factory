@@ -842,9 +842,10 @@ test("operations source API: unavailable source documents preserve read-store st
     expect(response.status).toBe(503);
     expectPublicSourceJsonBoundary(response.headers, "document read store unavailable");
 
-    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string; sourceStep?: string; documents?: unknown[]; sourceRunUnavailable?: boolean };
+    const body = (await response.json()) as { error?: string; detail?: string; runStatus?: string; sourceOrigin?: string; sourceStep?: string; documents?: unknown[]; sourceRunUnavailable?: boolean };
     expect(body.error).toBe("Campaign source documents unavailable");
     expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId}/documents returned HTTP 503`);
+    expect(body.runStatus).toBe("partial");
     expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
     expect(body.sourceStep).toBe("documents");
     expect(body.documents).toBeUndefined();
@@ -885,9 +886,10 @@ test("operations source API: empty upstream document failures stay source-unavai
     expect(response.status).toBe(500);
     expectPublicSourceJsonBoundary(response.headers, "empty document source failure");
 
-    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string; sourceStep?: string; documents?: unknown[]; sourceRunUnavailable?: boolean };
+    const body = (await response.json()) as { error?: string; detail?: string; runStatus?: string; sourceOrigin?: string; sourceStep?: string; documents?: unknown[]; sourceRunUnavailable?: boolean };
     expect(body.error).toBe("Campaign source documents unavailable");
     expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId}/documents returned HTTP 500`);
+    expect(body.runStatus).toBe("partial");
     expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
     expect(body.sourceStep).toBe("documents");
     expect(body.documents).toBeUndefined();
@@ -1900,7 +1902,7 @@ test("operations portfolio: one failed source does not blank usable campaigns", 
         status: 429,
         headers: { "Retry-After": "90" },
         contentType: "application/json",
-        body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 429.", sourceOrigin: "https://campaign-factory.vercel.app", sourceStep: "documents", sourceHttpStatus: 429, sourceRequestId: "lhr1::iad1::portfolio-429" }),
+        body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 429.", runStatus: "partial", sourceOrigin: "https://campaign-factory.vercel.app", sourceStep: "documents", sourceHttpStatus: 429, sourceRequestId: "lhr1::iad1::portfolio-429" }),
       });
       return;
     }
@@ -1940,6 +1942,7 @@ test("operations portfolio: one failed source does not blank usable campaigns", 
   await expect(page.getByText("Campaign source unavailable", { exact: true })).toBeVisible();
   await expect(page.getByText(/Preview source returned HTTP 429/)).toBeVisible();
   await expect(page.getByText("Checked read-only source:")).toBeVisible();
+  await expect(page.getByText("Source run status: Partial but usable")).toBeVisible();
   await expect(page.getByText("Failed source step:")).toBeVisible();
   await expect(page.getByText("compiled documents", { exact: true })).toBeVisible();
   await expect(page.getByText("Source response:")).toBeVisible();
@@ -2003,7 +2006,7 @@ test("operations workspace: failed direct source load keeps canonical source bri
     await route.fulfill({
       status: 502,
       contentType: "application/json",
-      body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 500.", sourceOrigin: "https://campaign-factory.vercel.app", sourceStep: "documents", sourceHttpStatus: 500, sourceRequestId: "lhr1::iad1::direct-500" }),
+      body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 500.", runStatus: "partial", sourceOrigin: "https://campaign-factory.vercel.app", sourceStep: "documents", sourceHttpStatus: 500, sourceRequestId: "lhr1::iad1::direct-500" }),
     });
   });
 
@@ -2012,6 +2015,7 @@ test("operations workspace: failed direct source load keeps canonical source bri
   await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
   await expect(page.getByText(/Preview source returned HTTP 500/)).toBeVisible();
   await expect(page.getByText("Checked read-only source:")).toBeVisible();
+  await expect(page.getByText(/source run status: Partial but usable/)).toBeVisible();
   await expect(page.getByText(/failed source step: compiled documents/)).toBeVisible();
   await expect(page.getByText("Source response:")).toBeVisible();
   await expect(page.getByText("upstream HTTP 500 · request lhr1::iad1::direct-500")).toBeVisible();
