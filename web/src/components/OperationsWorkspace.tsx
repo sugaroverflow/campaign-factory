@@ -991,16 +991,22 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
   };
 }
 
+const FIXTURE_LEAKAGE_RE = /St John the Baptist|school street|school-run|school gates|Leicester City Council|Campaign Factory demo workspace|seeded campaign brief|local fixture contacts|fixture evidence check|fixture timing check|fixture media boundary|fixture campaign copy/i;
+
 function topLevelDraftLooksFixtureBound(state: DemoState) {
   const fixtureText = [state.subject, state.body, state.reviewerNote, ...state.activity.map((item) => item.label)].join("\n");
-  return /St John the Baptist|school street|school-run|school gates|Leicester City Council|Campaign Factory demo workspace|seeded campaign brief|local fixture contacts/i.test(fixtureText);
+  return FIXTURE_LEAKAGE_RE.test(fixtureText);
+}
+
+function localActionLooksFixtureBound(action: LocalAction) {
+  return FIXTURE_LEAKAGE_RE.test([action.id, action.title, action.source, action.owner, action.timing, action.provenance].join("\n"));
 }
 
 function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: string): DemoState {
   if (!UUID_RE.test(expectedWorkspaceKey)) return state;
   const selectedSegment = isSourceSegmentId(state.selectedSegment) ? state.selectedSegment : SOURCE_PRIMARY_SEGMENT_ID;
   const contactFilter = state.contactFilter === "all" || isSourceSegmentId(state.contactFilter) ? state.contactFilter : "all";
-  const localActions = state.localActions.filter((action) => localActionMatchesWorkspace(action, expectedWorkspaceKey));
+  const localActions = state.localActions.filter((action) => localActionMatchesWorkspace(action, expectedWorkspaceKey) && !localActionLooksFixtureBound(action));
   const workingDrafts = state.workingDrafts.filter((draft) => draft.sourceWorkingCopy.campaignId === expectedWorkspaceKey);
   const activeWorkingDraftId = workingDrafts.some((draft) => draft.id === state.activeWorkingDraftId)
     ? state.activeWorkingDraftId

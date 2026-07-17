@@ -5973,6 +5973,94 @@ test("operations workbench resets fixture top-level drafts even after source aud
   expect(stored).not.toContain("fixture contacts");
 });
 
+test("operations workbench removes legacy fixture actions from real campaign state", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          status: "completed",
+          next: "Check Barnet decision records",
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check Barnet decision records", reason: "Fixture-action guard", claimIds: [], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: 14,
+        sourceLastSequence: 25,
+        sourceDocumentSignature: "legacy-fixture-action",
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "Use this real campaign's source material before review or local queueing.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "actions",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [
+          {
+            id: "fixture:council-timing-check",
+            title: "Verify council order status for the school street",
+            source: "Fixture evidence check",
+            owner: "Reviewer",
+            timing: "Before school-run claims are used",
+            priority: "High",
+            status: "next",
+            provenance: "Derived from the fixture timing check for St John the Baptist and stored only in this browser.",
+          },
+        ],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        activity: [{ id: "legacy", label: "Fixture school street action was created." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto("/operations");
+  const portfolio = page.getByLabel("Campaign operations portfolio");
+  const barnetRow = portfolio.locator("article").nth(2);
+  await expect(barnetRow).toContainText("Stop the leisure park redevelopment");
+  await expect(barnetRow).not.toContainText("1 action");
+  await expect(barnetRow).not.toContainText("school street");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=actions`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("school street");
+  await expect(page.locator("main")).not.toContainText("Fixture evidence check");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).not.toContain("fixture:council-timing-check");
+  expect(stored).not.toContain("St John the Baptist");
+  expect(stored).not.toContain("school street");
+  expect(stored).not.toContain("Fixture evidence check");
+});
+
 test("operations workbench: failed or not-yet-usable real source loads do not fall back to the fixture", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
