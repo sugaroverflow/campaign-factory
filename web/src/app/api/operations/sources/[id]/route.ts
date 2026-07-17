@@ -171,6 +171,10 @@ function sanitizeSourceContentLength(value: string | null) {
   return Number.isSafeInteger(bytes) ? bytes : undefined;
 }
 
+function hasMalformedSourceContentLength(response: Response) {
+  return response.headers.has("content-length") && sanitizeSourceContentLength(response.headers.get("content-length")) === undefined;
+}
+
 function sanitizeSourceContentRange(value: string | null) {
   if (!value) return undefined;
   const trimmed = value.trim().toLowerCase().replace(/\s+/g, " ");
@@ -402,6 +406,18 @@ async function fetchSourceJson<T>(
         sourceFailureKind: "encoded_body",
         contractMismatch: true,
         message: `Read-only source ${path} returned a content-encoded body despite the identity encoding requirement.`,
+        ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), undefined, path, true),
+      };
+    }
+    if (hasMalformedSourceContentLength(response)) {
+      response.body?.cancel().catch(() => undefined);
+      return {
+        ok: false,
+        status: 502,
+        path,
+        sourceFailureKind: "contract_mismatch",
+        contractMismatch: true,
+        message: `Read-only source ${path} returned a malformed Content-Length header despite the complete-response JSON contract.`,
         ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), undefined, path, true),
       };
     }
