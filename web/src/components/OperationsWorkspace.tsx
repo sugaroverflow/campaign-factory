@@ -138,6 +138,7 @@ function sourceFailureKindLabel(kind?: SourceFailureKind) {
   if (kind === "redirect") return "source failure redirect blocked";
   if (kind === "non_json") return "source failure non-JSON";
   if (kind === "malformed_json") return "source failure malformed JSON";
+  if (kind === "oversized_json") return "source failure oversized JSON";
   if (kind === "contract_mismatch") return "source failure contract mismatch";
   if (kind === "not_ready") return "source status not usable yet";
   if (kind === "timeout") return "source failure timeout";
@@ -151,6 +152,7 @@ function sanitizeSourceFailureKind(value: unknown): SourceFailureKind | undefine
     value === "redirect" ||
     value === "non_json" ||
     value === "malformed_json" ||
+    value === "oversized_json" ||
     value === "contract_mismatch" ||
     value === "not_ready" ||
     value === "timeout" ||
@@ -176,7 +178,7 @@ function upstreamDiagnosticPhrase(sourceFailureKind?: SourceFailureKind, sourceH
 }
 
 type SourceFailureStep = "run" | "documents" | "configuration";
-type SourceFailureKind = "configuration" | "http_error" | "redirect" | "non_json" | "malformed_json" | "contract_mismatch" | "not_ready" | "timeout" | "network";
+type SourceFailureKind = "configuration" | "http_error" | "redirect" | "non_json" | "malformed_json" | "oversized_json" | "contract_mismatch" | "not_ready" | "timeout" | "network";
 
 function sourceFailureStepLabel(step?: SourceFailureStep) {
   if (step === "run") return "run header";

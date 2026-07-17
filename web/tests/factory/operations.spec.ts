@@ -583,6 +583,54 @@ test("operations source API: truncated whitespace upstream failures are not repo
   }
 });
 
+test("operations source API: oversized JSON source runs are bounded before parsing", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response(`{"status":"partial","oversized":"${"x".repeat(2_100_000)}"}`, {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "content-length": "2100035",
+          "x-matched-path": "/api/factory/runs/[id]",
+          "x-vercel-id": "lhr1::iad1::ops-oversized-json",
+        },
+      });
+    }
+
+    throw new Error("Documents must not hydrate when the source run JSON body is oversized.");
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(502);
+    expectPublicSourceJsonBoundary(response.headers, "oversized JSON source run body");
+
+    const bodyText = await response.text();
+    expect(bodyText).not.toContain("x".repeat(512));
+    const body = JSON.parse(bodyText) as { error?: string; detail?: string; sourceStep?: string; sourceFailureKind?: string; sourcePath?: string; sourceHttpStatus?: number; sourceContentLength?: number; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; documents?: unknown[] };
+    expect(body.error).toBe("Campaign source contract mismatch");
+    expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId} returned a JSON body larger than the preview-safe limit.`);
+    expect(body.sourceStep).toBe("run");
+    expect(body.sourceFailureKind).toBe("oversized_json");
+    expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}`);
+    expect(body.sourceHttpStatus).toBe(200);
+    expect(body.sourceContentLength).toBe(2100035);
+    expect(body.sourceBodyEmpty).toBeUndefined();
+    expect(body.sourceBodyTruncated).toBe(true);
+    expect(body.sourceContentType).toBe("application/json");
+    expect(body.documents).toBeUndefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: rate-limited source runs preserve retry guidance and stop document hydration", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;
@@ -2373,6 +2421,37 @@ test("operations workspace: oversized upstream source bodies show bounded diagno
   await expect(page.getByText(/Preview source returned HTTP 500 with an oversized body/)).toBeVisible();
   await expect(page.getByText(/source failure HTTP error · upstream HTTP 500/)).toBeVisible();
   await expect(page.getByText(/content length 70000 bytes · upstream body truncated · upstream content type text\/html/)).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+});
+
+
+test("operations workspace: oversized JSON diagnostics survive client sanitization without fixture fallback", async ({ page }) => {
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Campaign source contract mismatch",
+        detail: "Read-only source /api/factory/runs/69f257b6-9913-4395-94f7-5c25b4b5fe95 returned a JSON body larger than the preview-safe limit.",
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        sourceStep: "run",
+        sourceFailureKind: "oversized_json",
+        sourcePath: "/api/factory/runs/69f257b6-9913-4395-94f7-5c25b4b5fe95",
+        sourceHttpStatus: 200,
+        sourceContentLength: 2100035,
+        sourceBodyTruncated: true,
+        sourceContentType: "application/json",
+      }),
+    });
+  });
+
+  await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95");
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText(/JSON body larger than the preview-safe limit/)).toBeVisible();
+  await expect(page.getByText(/source failure oversized JSON · upstream HTTP 200/)).toBeVisible();
+  await expect(page.getByText(/content length 2100035 bytes · upstream body truncated · upstream content type application\/json/)).toBeVisible();
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
 });

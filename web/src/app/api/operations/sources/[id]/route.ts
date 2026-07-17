@@ -32,6 +32,7 @@ const SOURCE_FETCH_HEADERS = {
 };
 const SOURCE_FETCH_TIMEOUT_MS = 10_000;
 const SOURCE_DIAGNOSTIC_BODY_LIMIT_BYTES = 64 * 1024;
+const SOURCE_JSON_BODY_LIMIT_BYTES = 2 * 1024 * 1024;
 
 function sourceJson<T>(body: T, status = 200, headers: Record<string, string> = NO_STORE_HEADERS) {
   return NextResponse.json(body, { status, headers });
@@ -157,15 +158,7 @@ function hasEmptyObservedBody(response: Response, bodyText?: string) {
   return bodyText !== undefined && bodyText.trim().length === 0;
 }
 
-async function safeReadFullResponseText(response: Response) {
-  try {
-    return await response.text();
-  } catch {
-    return undefined;
-  }
-}
-
-async function safeReadDiagnosticResponseText(response: Response) {
+async function safeReadBoundedResponseText(response: Response, limitBytes: number) {
   const reader = response.body?.getReader();
   if (!reader) return { text: undefined, truncated: false };
   const decoder = new TextDecoder();
@@ -178,7 +171,7 @@ async function safeReadDiagnosticResponseText(response: Response) {
       const { value, done } = await reader.read();
       if (done) break;
       if (!value) continue;
-      const remaining = SOURCE_DIAGNOSTIC_BODY_LIMIT_BYTES - bytes;
+      const remaining = limitBytes - bytes;
       if (remaining <= 0) {
         truncated = true;
         await reader.cancel();
@@ -199,6 +192,14 @@ async function safeReadDiagnosticResponseText(response: Response) {
   }
 
   return { text: text + decoder.decode(), truncated };
+}
+
+async function safeReadDiagnosticResponseText(response: Response) {
+  return safeReadBoundedResponseText(response, SOURCE_DIAGNOSTIC_BODY_LIMIT_BYTES);
+}
+
+async function safeReadJsonResponseText(response: Response) {
+  return safeReadBoundedResponseText(response, SOURCE_JSON_BODY_LIMIT_BYTES);
 }
 
 function upstreamResponseMetadata(response: Response, elapsedMs: number | undefined, bodyText?: string, sourcePath?: string, bodyTruncated = false) {
@@ -229,7 +230,7 @@ function sourceFailureHeaders(result: { retryAfter?: string }) {
 }
 
 type SourceStep = "run" | "documents" | "configuration";
-type SourceFailureKind = "configuration" | "http_error" | "redirect" | "non_json" | "malformed_json" | "contract_mismatch" | "not_ready" | "timeout" | "network";
+type SourceFailureKind = "configuration" | "http_error" | "redirect" | "non_json" | "malformed_json" | "oversized_json" | "contract_mismatch" | "not_ready" | "timeout" | "network";
 
 function sourceFailureBody(step: SourceStep, body: Record<string, unknown>) {
   return { ...body, sourceStep: step };
@@ -310,10 +311,21 @@ async function fetchSourceJson<T>(
         ...upstreamResponseMetadata(response, sourceElapsedMs(startedAt), diagnosticBody.text, path, diagnosticBody.truncated),
       };
     }
-    const responseText = await safeReadFullResponseText(response);
-    const metadata = upstreamResponseMetadata(response, sourceElapsedMs(startedAt), responseText, path);
+    const responseBody = await safeReadJsonResponseText(response);
+    const metadata = upstreamResponseMetadata(response, sourceElapsedMs(startedAt), responseBody.text, path, responseBody.truncated);
+    if (responseBody.truncated) {
+      return {
+        ok: false,
+        status: 502,
+        path,
+        sourceFailureKind: "oversized_json",
+        contractMismatch: true,
+        message: `Read-only source ${path} returned a JSON body larger than the preview-safe limit.`,
+        ...metadata,
+      };
+    }
     try {
-      return { ok: true, value: JSON.parse(responseText ?? "") as T, metadata };
+      return { ok: true, value: JSON.parse(responseBody.text ?? "") as T, metadata };
     } catch {
       return {
         ok: false,
