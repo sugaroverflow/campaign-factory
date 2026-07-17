@@ -354,9 +354,9 @@ function isOperationsTerminalGap(value: unknown) {
   return (
     isRecord(value) &&
     isNonEmptyString(value.id) &&
-    typeof value.description === "string" &&
+    isNonEmptyString(value.description) &&
     isOptionalString(value.agentRunId) &&
-    isOptionalNonNegativeInteger(value.step) &&
+    isOptionalJourneyStep(value.step) &&
     isIsoDateTimeString(value.at)
   );
 }

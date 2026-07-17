@@ -1008,22 +1008,19 @@ test("operations workbench: real source working copies move through local review
       body: JSON.stringify({
         sourceOrigin: "https://campaign-factory.vercel.app",
         run: { campaignId: id, status: campaign.status, stateVersion: 18, lastSequence: 31, events: [] },
-        documents: [
-          { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.`, isPack: false, sectionKeys: ["problem", "evidence", "objective", "decision_route", "power", "pressure", "strategy", "tactics", "organising"], resourceCount: 0, flags: [] },
-          {
-            key: "digital_pack",
-            num: 9,
-            name: "Digital Campaign Pack",
-            status: "ready",
-            html: "",
-            plainText: [`DIGITAL CAMPAIGN PACK`, "", campaign.packTitle, "", `Subject: ${campaign.subject}`, "", campaign.body, "", "Before you send this, check", "", "- Keep the public source boundary attached."].join("\n"),
-            isPack: true,
-            sectionKeys: [],
-            resourceCount: 1,
-            flags: [],
-          },
-          { key: "media_pack", num: 8, name: "Media Pack", status: "ready", html: "", plainText: "MEDIA PACK", isPack: true, sectionKeys: [], resourceCount: 0, flags: [] },
-        ],
+        documents: canonicalOperationsDocuments(campaign.title).map((doc) => {
+          if (doc.key === "campaign_brief") {
+            return { ...doc, html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-backed campaign problem.` };
+          }
+          if (doc.key === "digital_pack") {
+            return {
+              ...doc,
+              html: "",
+              plainText: [`DIGITAL CAMPAIGN PACK`, "", campaign.packTitle, "", `Subject: ${campaign.subject}`, "", campaign.body, "", "Before you send this, check", "", "- Keep the public source boundary attached."].join("\n"),
+            };
+          }
+          return doc;
+        }),
         evidence: {
           groups: [],
           conflicts: [],
@@ -2546,6 +2543,67 @@ test("operations workbench: source next checks and draft notes require public te
   await expect(page.getByText(/typed public document contract/i)).toBeVisible();
   await expect(page.getByText("Known source claim should stay hidden when checks or draft notes are blank")).toHaveCount(0);
   await expect(page.getByText("Contract validation must not allow a blank public next-check description")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
+test("operations workbench: source terminal gaps require public text and journey steps", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 10, lastSequence: 100, events: [] },
+        documents: canonicalOperationsDocuments("Keep KFC Out of Ormskirk"),
+        evidence: {
+          groups: [
+            {
+              label: "Verification incomplete",
+              count: 1,
+              claims: [
+                {
+                  id: "known-claim",
+                  text: "Known source claim should stay hidden when terminal gaps are malformed",
+                  type: "other",
+                  label: "Verification incomplete",
+                  loadBearing: true,
+                  confidence: "medium",
+                  sourceCount: 1,
+                  affectedOutputs: ["campaign_brief"],
+                },
+              ],
+            },
+          ],
+          conflicts: [],
+          nextChecks: [
+            {
+              id: "next",
+              description: "Terminal gap contract validation",
+              reason: "Contract validation",
+              claimIds: ["known-claim"],
+              affectedSections: ["problem"],
+            },
+          ],
+          terminalGaps: [
+            { id: "blank-terminal-gap", description: "   ", step: 3, at: "2026-07-16T20:30:00Z" },
+            { id: "zero-step-terminal-gap", description: "Terminal gap step must be a real journey step", step: 0, at: "2026-07-16T20:31:00Z" },
+          ],
+          draftNotes: [],
+          totals: { claims: 1, loadBearing: 1, verifiedLoadBearing: 0, unresolvedLoadBearing: 1 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/typed public document contract/i)).toBeVisible();
+  await expect(page.getByText("Known source claim should stay hidden when terminal gaps are malformed")).toHaveCount(0);
+  await expect(page.getByText("Terminal gap step must be a real journey step")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
