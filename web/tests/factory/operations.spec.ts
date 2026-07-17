@@ -3793,24 +3793,45 @@ test("operations workbench: source updates preserve browser-local work and requi
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   let sourceVersion = 44;
   let lastSequence = 1909;
-  const sourcePayload = () => ({
-    sourceOrigin: "https://campaign-factory.vercel.app",
-    run: { campaignId, status: "partial", stateVersion: sourceVersion, lastSequence, events: [] },
-    documents: [
-      { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: "Keep KFC Out of Ormskirk\n\nPlace: Ormskirk, Lancashire\n\nTHE PROBLEM\nPublic source changed safely.", isPack: false, sectionKeys: ["problem", "evidence", "objective", "decision_route", "power", "pressure", "strategy", "tactics", "organising"], resourceCount: 0, flags: [] },
-      { key: "campaign_strategy", num: 4, name: "Campaign Strategy", status: "ready", html: "", plainText: "CAMPAIGN STRATEGY\n\nPriority audiences\n\n- Residents directly affected by amenity", isPack: false, sectionKeys: ["strategy"], resourceCount: 0, flags: [] },
-      { key: "tactics_timeline", num: 5, name: "Tactics and Timeline", status: "ready", html: "", plainText: "TACTICS AND TIMELINE\n\nP0 Official status verification\n\nType: research\n\nTarget: Planning Inspectorate", isPack: false, sectionKeys: ["tactics"], resourceCount: 0, flags: [] },
-      { key: "media_pack", num: 8, name: "Media Pack", status: sourceVersion === 44 ? "assembling" : "ready", html: "", plainText: "MEDIA PACK", isPack: true, sectionKeys: [], resourceCount: sourceVersion === 44 ? 0 : 1, flags: [] },
-    ],
-    evidence: {
-      groups: [],
-      conflicts: [],
-      nextChecks: [{ id: "appeal-check", description: sourceVersion === 44 ? "Check the Planning Inspectorate appeals database" : "Check the updated Planning Inspectorate and council appeal records", reason: "Source version changed", claimIds: ["C3"], affectedSections: ["strategy"] }],
-      terminalGaps: [],
-      draftNotes: [],
-      totals: { claims: 12, loadBearing: 10, verifiedLoadBearing: sourceVersion === 44 ? 5 : 6, unresolvedLoadBearing: sourceVersion === 44 ? 5 : 4 },
-    },
-  });
+  const sourcePayload = () => {
+    const documents = canonicalOperationsDocuments();
+    documents[0] = {
+      ...documents[0],
+      html: "<p>Keep KFC Out of Ormskirk</p><p>Place: Ormskirk, Lancashire</p><p>THE PROBLEM</p><p>Public source changed safely.</p>",
+      plainText: "Keep KFC Out of Ormskirk\n\nPlace: Ormskirk, Lancashire\n\nTHE PROBLEM\nPublic source changed safely.",
+    };
+    documents[3] = {
+      ...documents[3],
+      html: "<p>CAMPAIGN STRATEGY</p><p>Priority audiences</p><p>Residents directly affected by amenity</p>",
+      plainText: "CAMPAIGN STRATEGY\n\nPriority audiences\n\n- Residents directly affected by amenity",
+    };
+    documents[4] = {
+      ...documents[4],
+      html: "<p>TACTICS AND TIMELINE</p><p>P0 Official status verification</p><p>Type: research</p><p>Target: Planning Inspectorate</p>",
+      plainText: "TACTICS AND TIMELINE\n\nP0 Official status verification\n\nType: research\n\nTarget: Planning Inspectorate",
+    };
+    documents[7] = {
+      ...documents[7],
+      status: sourceVersion === 44 ? "assembling" : "ready",
+      html: "<p>MEDIA PACK</p><p>Source update version media pack.</p>",
+      plainText: "MEDIA PACK\n\nSource update version media pack.",
+      resourceCount: sourceVersion === 44 ? 0 : 1,
+    };
+
+    return {
+      sourceOrigin: "https://campaign-factory.vercel.app",
+      run: { campaignId, status: "partial", stateVersion: sourceVersion, lastSequence, events: [] },
+      documents,
+      evidence: {
+        groups: [],
+        conflicts: [],
+        nextChecks: [{ id: "appeal-check", description: sourceVersion === 44 ? "Check the Planning Inspectorate appeals database" : "Check the updated Planning Inspectorate and council appeal records", reason: "Source version changed", claimIds: ["C3"], affectedSections: ["strategy"] }],
+        terminalGaps: [],
+        draftNotes: [],
+        totals: { claims: 12, loadBearing: 10, verifiedLoadBearing: sourceVersion === 44 ? 5 : 6, unresolvedLoadBearing: sourceVersion === 44 ? 5 : 4 },
+      },
+    };
+  };
 
   await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(sourcePayload()) });
@@ -3892,12 +3913,25 @@ test("operations workbench: all real campaign routes export source-specific loca
       body: JSON.stringify({
         sourceOrigin: "https://campaign-factory.vercel.app",
         run: { campaignId: id, status: campaign.status, stateVersion: 7, lastSequence: 21, events: [] },
-        documents: [
-          { key: "campaign_brief", num: 1, name: "Campaign Brief", status: "ready", html: "", plainText: `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-specific export fixture for ${campaign.title}.`, isPack: false, sectionKeys: ["problem", "evidence", "objective", "decision_route", "power", "pressure", "strategy", "tactics", "organising"], resourceCount: 0, flags: [] },
-          { key: "objective_theory_of_change", num: 2, name: "Objective and Theory of Change", status: "ready", html: "", plainText: `OBJECTIVE AND THEORY OF CHANGE\n\nDecision-maker: Local decision route for ${campaign.title}\n\nMinimum viable win: Verified public evidence boundary before any local operations work is approved.`, isPack: false, sectionKeys: ["objective"], resourceCount: 0, flags: [] },
-          { key: "organising_plan", num: 6, name: "Organising Plan", status: "ready", html: "", plainText: `ORGANISING PLAN\n\nResidents and campaign supporters for ${campaign.place} are source audience clues only.`, isPack: false, sectionKeys: ["organising"], resourceCount: 0, flags: [] },
-          { key: "digital_pack", num: 9, name: "Digital Campaign Pack", status: "ready", html: "", plainText: `DIGITAL CAMPAIGN PACK\n\nSupporter email — ${campaign.title}\n\nSubject: Source update for ${campaign.place}\n\nUse verified source boundaries before outreach.`, isPack: true, sectionKeys: [], resourceCount: 1, flags: [] },
-        ],
+        documents: canonicalOperationsDocuments(campaign.title).map((document) => {
+          if (document.key === "campaign_brief") {
+            const plainText = `${campaign.title}\n\nPlace: ${campaign.place}\n\nTHE PROBLEM\nSource-specific export fixture for ${campaign.title}.`;
+            return { ...document, html: `<p>${plainText}</p>`, plainText };
+          }
+          if (document.key === "objective_theory_of_change") {
+            const plainText = `OBJECTIVE AND THEORY OF CHANGE\n\nDecision-maker: Local decision route for ${campaign.title}\n\nMinimum viable win: Verified public evidence boundary before any local operations work is approved.`;
+            return { ...document, html: `<p>${plainText}</p>`, plainText };
+          }
+          if (document.key === "organising_plan") {
+            const plainText = `ORGANISING PLAN\n\nResidents and campaign supporters for ${campaign.place} are source audience clues only.`;
+            return { ...document, html: `<p>${plainText}</p>`, plainText };
+          }
+          if (document.key === "digital_pack") {
+            const plainText = `DIGITAL CAMPAIGN PACK\n\nSupporter email — ${campaign.title}\n\nSubject: Source update for ${campaign.place}\n\nUse verified source boundaries before outreach.`;
+            return { ...document, html: `<p>${plainText}</p>`, plainText, resourceCount: 1 };
+          }
+          return document;
+        }),
         evidence: {
           groups: [],
           conflicts: [],
