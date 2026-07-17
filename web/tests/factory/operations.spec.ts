@@ -2680,6 +2680,47 @@ test("operations workbench: source next checks cannot reference claims when the 
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
+test("operations workbench: source evidence totals must match public ledger groups", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 10, lastSequence: 100, events: [] },
+        documents: canonicalOperationsDocuments("Phantom evidence totals Ormskirk"),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [
+            {
+              id: "phantom-totals-check",
+              description: "Phantom evidence totals should fail closed",
+              reason: "Contract validation",
+              claimIds: [],
+              affectedSections: ["problem"],
+            },
+          ],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 77, loadBearing: 66, verifiedLoadBearing: 32, unresolvedLoadBearing: 34 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/typed public document contract/i)).toBeVisible();
+  await expect(page.getByText("Phantom evidence totals Ormskirk")).toHaveCount(0);
+  await expect(page.getByText("Phantom evidence totals should fail closed")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
 test("operations workbench: source next checks and draft notes require public text", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 

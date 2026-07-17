@@ -363,8 +363,6 @@ function hasConsistentOperationsEvidenceTotals(value: EvidenceAndNextChecks) {
     }
   }
 
-  if (groupedClaims === 0) return true;
-
   return (
     groupedClaims === value.totals.claims &&
     groupedLoadBearing === value.totals.loadBearing &&
