@@ -421,7 +421,7 @@ test("operations source API: empty upstream run failures stay source-unavailable
     expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
 
     if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
-      return new Response(null, { status: 500, headers: { "content-length": "0", "cache-control": "public, max-age=0, must-revalidate", date: "Fri, 17 Jul 2026 11:53:48 GMT", "x-matched-path": "/api/factory/runs/[id]", "age": "0", "x-vercel-cache": "MISS", "x-vercel-id": "lhr1::iad1::ops-500" } });
+      return new Response(null, { status: 500, headers: { "content-length": "0", "cache-control": "public, max-age=0, must-revalidate", date: "Fri, 17 Jul 2026 11:53:48 GMT", "x-matched-path": "/api/factory/runs/[id]", "age": "0", "x-vercel-cache": "MISS", server: "Vercel", "x-vercel-id": "lhr1::iad1::ops-500" } });
     }
 
     throw new Error("Documents must not hydrate when the source run returns an empty upstream failure.");
@@ -432,7 +432,7 @@ test("operations source API: empty upstream run failures stay source-unavailable
     expect(response.status).toBe(500);
     expectPublicSourceJsonBoundary(response.headers, "empty source run failure");
 
-    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string; sourceStep?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceBodyEmpty?: boolean; sourceContentTypeMissing?: boolean; documents?: unknown[]; sourceRunUnavailable?: boolean };
+    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string; sourceStep?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceServer?: string; sourceBodyEmpty?: boolean; sourceContentTypeMissing?: boolean; documents?: unknown[]; sourceRunUnavailable?: boolean };
     expect(body.error).toBe("Campaign source run unavailable");
     expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId} returned HTTP 500`);
     expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
@@ -445,6 +445,7 @@ test("operations source API: empty upstream run failures stay source-unavailable
     expect(body.sourceAgeSeconds).toBe(0);
     expect(body.sourceResponseDate).toBe("Fri, 17 Jul 2026 11:53:48 GMT");
     expect(body.sourceContentLength).toBe(0);
+    expect(body.sourceServer).toBe("Vercel");
     expect(body.sourceBodyEmpty).toBe(true);
     expect(body.sourceContentTypeMissing).toBe(true);
     expect(body.documents).toBeUndefined();
@@ -2094,7 +2095,7 @@ test("operations workspace: failed direct source load keeps canonical source bri
     await route.fulfill({
       status: 502,
       contentType: "application/json",
-      body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 500.", runStatus: "partial", sourceOrigin: "https://campaign-factory.vercel.app", sourceStep: "documents", sourceHttpStatus: 500, sourceRequestId: "lhr1::iad1::direct-500", sourceMatchedPath: "/api/factory/runs/[id]/documents", sourceCacheStatus: "MISS", sourceCacheControl: "public, max-age=0, must-revalidate", sourceAgeSeconds: 0, sourceResponseDate: "Fri, 17 Jul 2026 11:53:49 GMT", sourceContentLength: 0, sourceBodyEmpty: true, sourceContentTypeMissing: true }),
+      body: JSON.stringify({ error: "Campaign source documents unavailable", detail: "Preview source returned HTTP 500.", runStatus: "partial", sourceOrigin: "https://campaign-factory.vercel.app", sourceStep: "documents", sourceHttpStatus: 500, sourceRequestId: "lhr1::iad1::direct-500", sourceMatchedPath: "/api/factory/runs/[id]/documents", sourceCacheStatus: "MISS", sourceCacheControl: "public, max-age=0, must-revalidate", sourceAgeSeconds: 0, sourceResponseDate: "Fri, 17 Jul 2026 11:53:49 GMT", sourceContentLength: 0, sourceServer: "Vercel", sourceBodyEmpty: true, sourceContentTypeMissing: true }),
     });
   });
 
@@ -2106,7 +2107,7 @@ test("operations workspace: failed direct source load keeps canonical source bri
   await expect(page.getByText(/source run status: Partial but usable/)).toBeVisible();
   await expect(page.getByText(/failed source step: compiled documents/)).toBeVisible();
   await expect(page.getByText("Source response:")).toBeVisible();
-  await expect(page.getByText("upstream HTTP 500 · request lhr1::iad1::direct-500 · matched /api/factory/runs/[id]/documents · cache MISS · cache policy public, max-age=0, must-revalidate · age 0s · source date Fri, 17 Jul 2026 11:53:49 GMT · content length 0 bytes · empty upstream body · no upstream content type")).toBeVisible();
+  await expect(page.getByText("upstream HTTP 500 · request lhr1::iad1::direct-500 · matched /api/factory/runs/[id]/documents · cache MISS · cache policy public, max-age=0, must-revalidate · age 0s · source date Fri, 17 Jul 2026 11:53:49 GMT · content length 0 bytes · server Vercel · empty upstream body · no upstream content type")).toBeVisible();
   await expect(page.getByText(/last attempt/)).toBeVisible();
   await expect(page.getByText("https://campaign-factory.vercel.app", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Stored local operations summary")).toContainText("no browser-local operations work yet");

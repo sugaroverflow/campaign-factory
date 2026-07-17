@@ -134,6 +134,12 @@ function sanitizeSourceContentLength(value: string | null) {
   return Number.isSafeInteger(bytes) ? bytes : undefined;
 }
 
+function sanitizeSourceServer(value: string | null) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return /^[A-Za-z0-9 ._-]{1,80}$/.test(trimmed) ? trimmed.replace(/\s+/g, " ") : undefined;
+}
+
 function hasEmptyObservedBody(response: Response, bodyText?: string) {
   if (hasExplicitEmptyBody(response)) return true;
   return bodyText !== undefined && bodyText.trim().length === 0;
@@ -158,6 +164,7 @@ function upstreamResponseMetadata(response: Response, bodyText?: string) {
     sourceAgeSeconds: sanitizeSourceAgeSeconds(response.headers.get("age")),
     sourceResponseDate: sanitizeSourceResponseDate(response.headers.get("date")),
     sourceContentLength: sanitizeSourceContentLength(response.headers.get("content-length")),
+    sourceServer: sanitizeSourceServer(response.headers.get("server")),
     sourceBodyEmpty: hasEmptyObservedBody(response, bodyText),
     ...("value" in contentType ? { sourceContentType: contentType.value } : {}),
     ...("missing" in contentType ? { sourceContentTypeMissing: true } : {}),
@@ -178,7 +185,7 @@ function hasExplicitEmptyBody(response: Response) {
   return response.headers.get("content-length")?.trim() === "0";
 }
 
-function upstreamFailureMetadata(result: { sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }) {
+function upstreamFailureMetadata(result: { sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceServer?: string; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }) {
   return {
     ...(result.sourceHttpStatus ? { sourceHttpStatus: result.sourceHttpStatus } : {}),
     ...(result.sourceRequestId ? { sourceRequestId: result.sourceRequestId } : {}),
@@ -188,6 +195,7 @@ function upstreamFailureMetadata(result: { sourceHttpStatus?: number; sourceRequ
     ...(result.sourceAgeSeconds !== undefined ? { sourceAgeSeconds: result.sourceAgeSeconds } : {}),
     ...(result.sourceResponseDate ? { sourceResponseDate: result.sourceResponseDate } : {}),
     ...(result.sourceContentLength !== undefined ? { sourceContentLength: result.sourceContentLength } : {}),
+    ...(result.sourceServer ? { sourceServer: result.sourceServer } : {}),
     ...(result.sourceBodyEmpty ? { sourceBodyEmpty: true } : {}),
     ...(result.sourceContentType ? { sourceContentType: result.sourceContentType } : {}),
     ...(result.sourceContentTypeMissing ? { sourceContentTypeMissing: true } : {}),
@@ -199,7 +207,7 @@ async function fetchSourceJson<T>(
   path: string,
 ): Promise<
   | { ok: true; value: T }
-  | { ok: false; status: number; message: string; path: string; contractMismatch?: boolean; retryAfter?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }
+  | { ok: false; status: number; message: string; path: string; contractMismatch?: boolean; retryAfter?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceServer?: string; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }
 > {
   const controller = new AbortController();
   let timedOut = false;
