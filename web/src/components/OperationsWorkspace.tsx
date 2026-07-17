@@ -1051,28 +1051,44 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
   const contactFilter = state.contactFilter === "all" || isSourceSegmentId(state.contactFilter) ? state.contactFilter : "all";
   const localActions = state.localActions.filter((action) => localActionMatchesWorkspace(action, expectedWorkspaceKey) && !localActionLooksFixtureBound(action));
   const workingDrafts = state.workingDrafts.filter((draft) => draft.sourceWorkingCopy.campaignId === expectedWorkspaceKey && !workingDraftLooksFixtureBound(draft));
+  const sourceWorkingCopyCandidate = state.sourceWorkingCopy?.campaignId === expectedWorkspaceKey && !sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy) ? state.sourceWorkingCopy : null;
   const removedLocalWorkReferences = [
     ...state.localActions
       .filter((action) => !localActions.some((keptAction) => keptAction.id === action.id))
-      .flatMap((action) => [action.id, action.title, action.source, action.owner, action.provenance]),
+      .flatMap((action) => [action.id, action.title, action.source, action.owner, action.timing, action.provenance]),
     ...state.workingDrafts
       .filter((draft) => !workingDrafts.some((keptDraft) => keptDraft.id === draft.id))
       .flatMap((draft) => [
         draft.id,
         draft.title,
+        draft.channel,
         draft.subject,
+        draft.body,
+        draft.reviewerNote,
         draft.sourceWorkingCopy.id,
         draft.sourceWorkingCopy.title,
+        draft.sourceWorkingCopy.channel,
         draft.sourceWorkingCopy.sourceDocument,
         draft.sourceWorkingCopy.sourceDocumentKey,
         draft.sourceWorkingCopy.provenance,
+        ...draft.sourceWorkingCopy.warnings,
       ]),
+    ...(state.sourceWorkingCopy && !sourceWorkingCopyCandidate
+      ? [
+          state.sourceWorkingCopy.id,
+          state.sourceWorkingCopy.title,
+          state.sourceWorkingCopy.channel,
+          state.sourceWorkingCopy.sourceDocument,
+          state.sourceWorkingCopy.sourceDocumentKey,
+          state.sourceWorkingCopy.provenance,
+          ...state.sourceWorkingCopy.warnings,
+        ]
+      : []),
   ];
   const activity = state.activity.filter((item) => !activityLooksFixtureBound(item) && !activityLooksTiedToRemovedLocalWork(item, removedLocalWorkReferences));
   const activeWorkingDraftId = workingDrafts.some((draft) => draft.id === state.activeWorkingDraftId)
     ? state.activeWorkingDraftId
     : workingDrafts[0]?.id ?? null;
-  const sourceWorkingCopyCandidate = state.sourceWorkingCopy?.campaignId === expectedWorkspaceKey && !sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy) ? state.sourceWorkingCopy : null;
   const removedDuplicatedTopLevelSourceCopy = Boolean(sourceWorkingCopyCandidate && workingDrafts.some((draft) => draft.id === sourceWorkingCopyCandidate.id));
   const sourceWorkingCopy = removedDuplicatedTopLevelSourceCopy ? null : sourceWorkingCopyCandidate;
   const removedFixtureAudienceState = selectedSegment !== state.selectedSegment || contactFilter !== state.contactFilter;
