@@ -123,7 +123,12 @@ function isJourneySectionKeyArray(value: unknown): value is string[] {
 
 function isOperationsAffectedOutputArray(value: unknown): value is string[] {
   if (!Array.isArray(value)) return false;
-  return value.every((item) => typeof item === "string" && (OPERATIONS_JOURNEY_SECTION_KEYS.has(item) || OPERATIONS_DOCUMENT_KEYS.has(item)));
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (typeof item !== "string" || seen.has(item) || (!OPERATIONS_JOURNEY_SECTION_KEYS.has(item) && !OPERATIONS_DOCUMENT_KEYS.has(item))) return false;
+    seen.add(item);
+  }
+  return true;
 }
 
 function isOperationsAffectedSectionArray(value: unknown): value is string[] {
