@@ -863,6 +863,53 @@ test("operations source API: comma-separated content encodings fail closed befor
   }
 });
 
+test("operations source API: malformed content-encoding headers fail closed with a safe diagnostic", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response('{"status":"partial"}', {
+        status: 200,
+        headers: {
+          "content-type": "application/json; charset=utf-8",
+          "content-encoding": "gzip; br",
+          "content-length": "20",
+          "x-matched-path": "/api/factory/runs/[id]",
+          "x-vercel-id": "lhr1::iad1::ops-malformed-encoding",
+        },
+      });
+    }
+
+    throw new Error("Documents must not hydrate when the source run returns a malformed content-encoding header.");
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(502);
+    expectPublicSourceJsonBoundary(response.headers, "malformed content-encoding source run body");
+
+    const body = (await response.json()) as { error?: string; detail?: string; sourceStep?: string; sourceFailureKind?: string; sourcePath?: string; sourceHttpStatus?: number; sourceContentLength?: number; sourceContentEncoding?: string; sourceBodyTruncated?: boolean; sourceContentType?: string; documents?: unknown[] };
+    expect(body.error).toBe("Campaign source contract mismatch");
+    expect(body.detail).toContain("returned a content-encoded body despite the identity encoding requirement");
+    expect(body.sourceStep).toBe("run");
+    expect(body.sourceFailureKind).toBe("encoded_body");
+    expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}`);
+    expect(body.sourceHttpStatus).toBe(200);
+    expect(body.sourceContentLength).toBe(20);
+    expect(body.sourceContentEncoding).toBe("malformed");
+    expect(body.sourceBodyTruncated).toBe(true);
+    expect(body.sourceContentType).toBe("application/json");
+    expect(body.documents).toBeUndefined();
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: rate-limited source runs preserve retry guidance and stop document hydration", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;

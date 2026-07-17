@@ -120,6 +120,7 @@ function sourceContentEncodingTokens(value: string | null) {
 
 function sanitizeSourceContentEncoding(value: string | null) {
   const tokens = sourceContentEncodingTokens(value);
+  if (tokens === null) return "malformed";
   return tokens?.join(", ") || undefined;
 }
 
