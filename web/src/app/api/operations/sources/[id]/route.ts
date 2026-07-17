@@ -90,11 +90,18 @@ function sanitizeSourceContentType(value: string | null) {
   return /^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(mediaType) && mediaType.length <= 80 ? { value: mediaType } : {};
 }
 
+function sanitizeSourceMatchedPath(value: string | null) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return /^\/[A-Za-z0-9/_.\[\]-]{1,160}$/.test(trimmed) ? trimmed : undefined;
+}
+
 function upstreamResponseMetadata(response: Response) {
   const contentType = sanitizeSourceContentType(response.headers.get("content-type"));
   return {
     sourceHttpStatus: response.status,
     sourceRequestId: sanitizeSourceRequestId(response.headers.get("x-vercel-id")),
+    sourceMatchedPath: sanitizeSourceMatchedPath(response.headers.get("x-matched-path")),
     sourceBodyEmpty: hasExplicitEmptyBody(response),
     ...("value" in contentType ? { sourceContentType: contentType.value } : {}),
     ...("missing" in contentType ? { sourceContentTypeMissing: true } : {}),
@@ -115,10 +122,11 @@ function hasExplicitEmptyBody(response: Response) {
   return response.headers.get("content-length")?.trim() === "0";
 }
 
-function upstreamFailureMetadata(result: { sourceHttpStatus?: number; sourceRequestId?: string; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }) {
+function upstreamFailureMetadata(result: { sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }) {
   return {
     ...(result.sourceHttpStatus ? { sourceHttpStatus: result.sourceHttpStatus } : {}),
     ...(result.sourceRequestId ? { sourceRequestId: result.sourceRequestId } : {}),
+    ...(result.sourceMatchedPath ? { sourceMatchedPath: result.sourceMatchedPath } : {}),
     ...(result.sourceBodyEmpty ? { sourceBodyEmpty: true } : {}),
     ...(result.sourceContentType ? { sourceContentType: result.sourceContentType } : {}),
     ...(result.sourceContentTypeMissing ? { sourceContentTypeMissing: true } : {}),
@@ -130,7 +138,7 @@ async function fetchSourceJson<T>(
   path: string,
 ): Promise<
   | { ok: true; value: T }
-  | { ok: false; status: number; message: string; path: string; contractMismatch?: boolean; retryAfter?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }
+  | { ok: false; status: number; message: string; path: string; contractMismatch?: boolean; retryAfter?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceBodyEmpty?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }
 > {
   const controller = new AbortController();
   let timedOut = false;
