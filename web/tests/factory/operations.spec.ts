@@ -2465,6 +2465,64 @@ test("operations portfolio: source labels carry through workspace switching with
   await expect(page.getByRole("link", { name: "Portfolio" })).toHaveAttribute("href", "/operations");
 });
 
+test("operations workbench: campaign switcher shows not-ready source status diagnostics", async ({ page }) => {
+  const campaigns: Record<string, { title: string; place: string; status: "partial" | "completed"; next: string }> = {
+    "69f257b6-9913-4395-94f7-5c25b4b5fe95": {
+      title: "Keep KFC Out of Ormskirk",
+      place: "Ormskirk, Lancashire",
+      status: "partial",
+      next: "Confirm the appeal status before stronger public claims",
+    },
+    "6b54225d-afa3-41d1-b053-89741094f153": {
+      title: "Stop the leisure park redevelopment in Barnet",
+      place: "Barnet, London",
+      status: "completed",
+      next: "Review the completed Barnet campaign pack",
+    },
+  };
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? "";
+    if (id === "57678ae0-29fd-4b4b-8a53-5c711cdb21cf") {
+      await route.fulfill({
+        status: 409,
+        headers: { "content-type": "application/json", "retry-after": "75" },
+        body: JSON.stringify({
+          error: "Campaign source not ready",
+          detail: "This campaign is queued, so compiled operations source material is not available yet.",
+          runStatus: "queued",
+          sourceOrigin: "https://campaign-factory.vercel.app",
+          sourceStep: "run",
+        }),
+      });
+      return;
+    }
+
+    const campaign = campaigns[id] ?? campaigns["69f257b6-9913-4395-94f7-5c25b4b5fe95"];
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: campaign.status, stateVersion: 3, lastSequence: 2, events: [] },
+        documents: campaignOperationsDocuments(campaign),
+        evidence: campaignEvidence([{ id: `check-${id}`, description: campaign.next, reason: "Switcher diagnostics regression", affectedSections: ["strategy"] }], 1),
+      }),
+    });
+  });
+
+  await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95&view=overview");
+
+  const switcher = page.getByLabel("Campaign switcher");
+  await expect(switcher).toContainText("Current: KFC Out of Ormskirk");
+  await expect(switcher).toContainText("Source queued");
+  const queuedSwitcherLink = switcher.getByRole("link", { name: /Source queued: This campaign is queued/ });
+  await expect(queuedSwitcherLink).toHaveAttribute("href", "/operations?campaignId=57678ae0-29fd-4b4b-8a53-5c711cdb21cf&view=overview");
+  await expect(queuedSwitcherLink).toHaveAttribute("title", /source run status: Queued/);
+  await expect(queuedSwitcherLink).toHaveAttribute("title", /failed source step: run header/);
+  await expect(queuedSwitcherLink).toHaveAttribute("title", /try again after 75 seconds/);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+});
+
 test("operations workbench: source problem and theory fields hydrate the full context views", async ({ page }) => {
   const campaignId = "57678ae0-29fd-4b4b-8a53-5c711cdb21cf";
   const campaign = {

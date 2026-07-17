@@ -265,7 +265,7 @@ type PortfolioItem =
 type CampaignSwitcherItem =
   | { campaign: PortfolioCampaign; status: "loading" }
   | { campaign: PortfolioCampaign; status: "ready"; source: CampaignSource }
-  | { campaign: PortfolioCampaign; status: "error"; message: string };
+  | { campaign: PortfolioCampaign; status: "error"; message: string; runStatus?: RunReadModel["status"]; sourceOrigin?: string; sourceStep?: SourceFailureStep; retryAfter?: string; checkedAt?: string };
 
 type ContactFixture = {
   id: string;
@@ -2137,8 +2137,16 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         .catch((error: unknown) => {
           if (controller.signal.aborted) return;
           const message = error instanceof Error ? error.message : "Campaign source could not be loaded.";
+          const runStatus = (error as { runStatus?: RunReadModel["status"] } | null)?.runStatus;
+          const sourceOrigin = (error as { sourceOrigin?: string } | null)?.sourceOrigin;
+          const sourceStep = (error as { sourceStep?: SourceFailureStep } | null)?.sourceStep;
+          const retryAfter = (error as { retryAfter?: string } | null)?.retryAfter;
           setSwitcherItems((current) =>
-            current.map((item) => (item.campaign.id === campaign.id ? { campaign, status: "error", message } : item)),
+            current.map((item) =>
+              item.campaign.id === campaign.id
+                ? { campaign, status: "error", message, runStatus, sourceOrigin, sourceStep, retryAfter, checkedAt: new Date().toISOString() }
+                : item,
+            ),
           );
         });
       return controller;
@@ -4320,20 +4328,35 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
               <div className="flex flex-wrap items-center gap-1" aria-label="Campaign switcher">
                 {switcherItems.map((item) => {
                   const active = item.campaign.id === source.campaignId;
+                  const failureStep = item.status === "error" ? sourceFailureStepLabel(item.sourceStep) : null;
+                  const retryMessage = item.status === "error" ? retryAfterMessage(item.retryAfter) : null;
+                  const failureDetails = item.status === "error"
+                    ? [
+                        item.message,
+                        item.runStatus ? `source run status: ${statusPhrase(item.runStatus)}` : null,
+                        failureStep ? `failed source step: ${failureStep}` : null,
+                        item.sourceOrigin ? `checked source: ${item.sourceOrigin}` : null,
+                        item.checkedAt ? `last attempt ${formatQueuedTime(item.checkedAt)}` : null,
+                        retryMessage,
+                      ].filter(Boolean).join(" · ")
+                    : null;
                   const label = active
                     ? `Current: ${compactCampaignLabel(source.title)}`
                     : item.status === "ready"
                       ? compactCampaignLabel(item.source.title)
                       : item.status === "loading"
                         ? "Loading campaign"
-                        : "Source issue";
-                  const title = item.status === "ready" ? `${item.source.title}${item.source.place ? ` · ${item.source.place}` : ""}` : item.status === "error" ? item.message : "Loading public campaign name";
+                        : item.runStatus
+                          ? `Source ${statusPhrase(item.runStatus).toLowerCase()}`
+                          : "Source issue";
+                  const title = item.status === "ready" ? `${item.source.title}${item.source.place ? ` · ${item.source.place}` : ""}` : item.status === "error" ? failureDetails ?? item.message : "Loading public campaign name";
                   return (
                     <Link
                       key={item.campaign.id}
                       href={`/operations?campaignId=${item.campaign.id}&view=${state.activeView}`}
                       className={`rounded-full px-2.5 py-1 text-xs focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${active ? "bg-ops-ink text-white" : "border border-ops-line bg-background/70 text-muted-foreground hover:bg-secondary"}`}
                       aria-current={active ? "page" : undefined}
+                      aria-label={item.status === "error" ? `${label}: ${title}` : undefined}
                       title={title}
                     >
                       {label}
