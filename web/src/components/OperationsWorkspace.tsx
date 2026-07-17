@@ -1513,14 +1513,31 @@ function buildSourceDraftLibrary(source: CampaignSource): DraftLibraryItem[] {
   ];
 }
 
+function sourceSignatureHash(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function sourceSignatureText(value: string) {
+  return value.replace(/\r\n?/g, "\n").replace(/[\t ]+/g, " ").trim();
+}
+
 function sourceDocumentSignature(source: CampaignSource) {
+  const sourceIdentity = sourceSignatureHash(sourceSignatureText(`${source.title}\n${source.place ?? ""}`));
   const documentStatuses = source.documents
-    .map((doc) => `${doc.key}:${doc.status}:${doc.resourceCount}`)
+    .map((doc) => {
+      const documentText = sourceSignatureText(`${doc.name}\n${doc.plainText}\n${doc.html}`);
+      return `${doc.key}:${doc.status}:${doc.resourceCount}:${sourceSignatureHash(documentText)}`;
+    })
     .sort()
     .join("|");
   const evidenceTotals = source.evidence.totals;
   const nextChecks = source.evidence.nextChecks.map((check) => `${check.id}:${check.description}`).join("|");
-  return `${documentStatuses}::${evidenceTotals.claims}/${evidenceTotals.loadBearing}/${evidenceTotals.verifiedLoadBearing}/${evidenceTotals.unresolvedLoadBearing}::${nextChecks}`;
+  return `source:${sourceIdentity}::${documentStatuses}::${evidenceTotals.claims}/${evidenceTotals.loadBearing}/${evidenceTotals.verifiedLoadBearing}/${evidenceTotals.unresolvedLoadBearing}::${nextChecks}`;
 }
 
 function buildInitialStateForSource(source: CampaignSource): DemoState {
@@ -3996,7 +4013,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
                   <p className="mt-1">Your browser-local actions and drafts were preserved. Re-check Evidence, Strategy, and Drafts before approving or queueing local work.</p>
                   <div className="mt-3 rounded-[var(--r-lg)] border border-ops-ink/15 bg-background/65 p-3" aria-label="Local work requiring source re-check">
                     <p className="text-xs font-semibold uppercase tracking-[0.1em] text-ops-ink/70">
-                      {sourceChangedActionsToRecheck.length + sourceChangedDraftsToRecheck.length} local item{sourceChangedActionsToRecheck.length + sourceChangedDraftsToRecheck.length === 1 ? "" : "s"} need source re-check
+                      {sourceChangedActionsToRecheck.length + sourceChangedDraftsToRecheck.length} local item{sourceChangedActionsToRecheck.length + sourceChangedDraftsToRecheck.length === 1 ? "" : "s"} {sourceChangedActionsToRecheck.length + sourceChangedDraftsToRecheck.length === 1 ? "needs" : "need"} source re-check
                     </p>
                     {sourceChangedActionsToRecheck.length || sourceChangedDraftsToRecheck.length ? (
                       <ul className="mt-2 space-y-1 text-xs text-ops-ink/75">

@@ -9134,6 +9134,49 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByLabel("Campaign operations portfolio").locator("article", { hasText: "Keep KFC Out of Ormskirk" })).toContainText("Local signals: no browser-local operations work yet for this campaign.");
 });
 
+test("operations workbench: content-only source title changes preserve local work but require source re-check", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  let ormskirkTitle = "Keep KFC Out of Ormskirk";
+  const campaigns = {
+    [campaignId]: { title: () => ormskirkTitle, place: "Ormskirk, Lancashire", status: "partial", next: "Check the Planning Inspectorate appeals database" },
+    "57678ae0-29fd-4b4b-8a53-5c711cdb21cf": { title: () => "Build 5,000 affordable houses in Tower Hamlets in the next 3 years", place: "Tower Hamlets, London", status: "partial", next: "Verify Tower Hamlets housing targets" },
+    "6b54225d-afa3-41d1-b053-89741094f153": { title: () => "Stop the leisure park redevelopment in Barnet", place: "Barnet, London", status: "completed", next: "Check Barnet decision records" },
+  } as const;
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const requestedCampaignId = route.request().url().match(/sources\/([^/]+)$/)?.[1] as keyof typeof campaigns;
+    const campaign = campaigns[requestedCampaignId] ?? campaigns[campaignId];
+    const title = campaign.title();
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: requestedCampaignId, status: campaign.status, stateVersion: 44, lastSequence: 1909, events: [] },
+        documents: campaignOperationsDocuments({ title, place: campaign.place, next: campaign.next }),
+        evidence: campaignEvidence([{ id: "appeal-check", description: campaign.next, reason: "Source content-only title regression", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+  await expect(page.getByRole("heading", { name: /Keep KFC Out of Ormskirk into operations/i })).toBeVisible();
+  await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
+  await page.getByRole("button", { name: "Create appeal-status action" }).click();
+  await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
+
+  ormskirkTitle = "Stop the KFC being built in Ormskirk";
+  await page.reload();
+  await page.getByRole("button", { name: /Overview/ }).first().click();
+  await expect(page.getByRole("heading", { name: /Stop the KFC being built in Ormskirk into operations/i })).toBeVisible();
+  await expect(page.getByText("Read-only source has changed since this local workspace started.")).toBeVisible();
+  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("1 local item needs source re-check");
+  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("Action: Confirm Planning Inspectorate appeal status");
+
+  await page.goto("/operations");
+  const ormskirkRow = page.getByLabel("Campaign operations portfolio").locator("article", { hasText: "Stop the KFC being built in Ormskirk" });
+  await expect(ormskirkRow).toContainText("Local signals: 1 source re-check required · 1 action.");
+});
+
 test("operations workbench: all real campaign routes export source-specific local packs", async ({ page }) => {
   const campaigns = {
     "69f257b6-9913-4395-94f7-5c25b4b5fe95": {
