@@ -9059,6 +9059,14 @@ test("operations workbench: source updates preserve browser-local work and requi
     "Acknowledge the updated read-only source before creating new source-derived local actions.",
   );
 
+  await page.getByRole("button", { name: /Audiences/ }).first().click();
+  await expect(page.getByText("Audience selection is paused until the updated read-only source is acknowledged, so local drafts cannot be retargeted against stale campaign material.")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Residents directly affected by amenity/ })).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Residents directly affected by amenity/ })).toHaveAttribute(
+    "title",
+    "Acknowledge the updated read-only source before changing the local audience intent.",
+  );
+
   await page.getByRole("button", { name: /Drafts/ }).first().click();
   await expect(page.getByText("New editable copies from source resources are paused until the updated source is acknowledged; existing working copies stay selectable for review.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Acknowledge source update" }).first()).toBeDisabled();
@@ -9141,6 +9149,8 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByText("Read-only source has changed since this local workspace started.")).toHaveCount(0);
   await expect(page.getByText(/Local approval baseline: acknowledged/)).toBeVisible();
   await expect(page.getByLabel("Source document baseline state")).toContainText("matches local acknowledgement");
+  await page.getByRole("button", { name: /Audiences/ }).first().click();
+  await expect(page.getByRole("button", { name: /Residents directly affected by amenity/ })).toBeEnabled();
   await page.getByRole("button", { name: /Action plan/ }).first().click();
   await expect(page.getByLabel("Status for Confirm Planning Inspectorate appeal status")).toBeEnabled();
   await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();

@@ -2532,6 +2532,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const canApproveCommunication = communicationStatus === "review" && !sourceBaselineChanged;
   const canQueueCommunication = communicationStatus === "approved" && !sourceBaselineChanged;
   const canChangeLocalQueueSchedule = !sourceBaselineChanged;
+  const canSelectAudienceWithCurrentSource = !sourceBaselineChanged;
   const reviewBlocked = !canRequestReview;
   const reviewItemCount = (state.status === "review" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "review").length;
   const queuedItemCount = (state.status === "queued" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "queued").length;
@@ -2778,6 +2779,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   };
 
   const selectSegment = (segment: Segment) => {
+    if (!canSelectAudienceWithCurrentSource) return;
     setState((current) => ({
       ...current,
       selectedSegment: segment.id,
@@ -3409,6 +3411,11 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         <p className="mt-4 rounded-[var(--r-xl)] bg-tint-yellow px-4 py-3 text-sm">
           {source ? "Campaign-specific planning is read-only source plus browser-local selections; real import and consent matching are " : "Real import and consent matching are "}<span className="font-semibold">Coming soon</span>; this view does not contact people.
         </p>
+        {sourceBaselineChanged ? (
+          <p id="operations-audience-source-pause" className="mt-4 rounded-[var(--r-xl)] border border-ops-coral bg-ops-coral/55 px-4 py-3 text-sm text-ops-ink" role="status">
+            Audience selection is paused until the updated read-only source is acknowledged, so local drafts cannot be retargeted against stale campaign material.
+          </p>
+        ) : null}
         {sourceAudienceSignals.length ? (
           <div className="mt-5 space-y-3" aria-label="Source audience signals">
             {sourceAudienceSignals.map((signal) => (
@@ -3431,7 +3438,10 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
               key={segment.id}
               type="button"
               onClick={() => selectSegment(segment)}
-              className={`w-full rounded-[var(--r-2xl)] border p-4 text-left motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ops-ink focus-visible:ring-0 ${
+              disabled={!canSelectAudienceWithCurrentSource}
+              aria-describedby={!canSelectAudienceWithCurrentSource ? "operations-audience-source-pause" : undefined}
+              title={!canSelectAudienceWithCurrentSource ? "Acknowledge the updated read-only source before changing the local audience intent." : undefined}
+              className={`w-full rounded-[var(--r-2xl)] border p-4 text-left motion-safe:transition-colors motion-safe:duration-200 motion-safe:ease-out focus-visible:outline-[3px] focus-visible:outline-offset-2 focus-visible:outline-ops-ink focus-visible:ring-0 disabled:cursor-not-allowed disabled:opacity-65 ${
                 active ? "border-foreground bg-tint-blue" : "border-border bg-background hover:bg-secondary"
               }`}
               aria-pressed={active}
