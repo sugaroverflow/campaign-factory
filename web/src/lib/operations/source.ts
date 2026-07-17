@@ -335,33 +335,53 @@ function isOperationsDraftNote(value: unknown) {
   return isRecord(value) && typeof value.text === "string" && typeof value.section === "string";
 }
 
+function sameStringArray(left: string[] | undefined, right: string[] | undefined) {
+  if (left === undefined || right === undefined) return left === right;
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function matchesOperationsEvidenceClaim(left: EvidenceAndNextChecks["groups"][number]["claims"][number], right: EvidenceAndNextChecks["groups"][number]["claims"][number]) {
+  return (
+    left.id === right.id &&
+    left.text === right.text &&
+    left.type === right.type &&
+    left.label === right.label &&
+    left.loadBearing === right.loadBearing &&
+    left.confidence === right.confidence &&
+    left.excerpt === right.excerpt &&
+    left.sourceCount === right.sourceCount &&
+    sameStringArray(left.affectedOutputs, right.affectedOutputs) &&
+    sameStringArray(left.contradictsClaimIds, right.contradictsClaimIds)
+  );
+}
+
 function hasConsistentOperationsEvidenceReferences(value: EvidenceAndNextChecks) {
-  const seenClaimIds = new Set<string>();
+  const claimsById = new Map<string, EvidenceAndNextChecks["groups"][number]["claims"][number]>();
   for (const group of value.groups) {
     for (const claim of group.claims) {
-      if (seenClaimIds.has(claim.id)) return false;
-      seenClaimIds.add(claim.id);
+      if (claimsById.has(claim.id)) return false;
+      claimsById.set(claim.id, claim);
     }
   }
 
-  if (seenClaimIds.size > 0) {
-    for (const group of value.groups) {
-      for (const claim of group.claims) {
-        if (claim.contradictsClaimIds?.some((claimId) => claimId === claim.id || !seenClaimIds.has(claimId))) return false;
-      }
+  if (claimsById.size > 0) {
+    for (const claim of claimsById.values()) {
+      if (claim.contradictsClaimIds?.some((claimId) => claimId === claim.id || !claimsById.has(claimId))) return false;
     }
   }
 
   const seenConflictIds = new Set<string>();
   for (const conflict of value.conflicts) {
-    if (seenConflictIds.has(conflict.id)) return false;
+    const sourceClaim = claimsById.get(conflict.id);
+    if (seenConflictIds.has(conflict.id) || !sourceClaim || !matchesOperationsEvidenceClaim(conflict, sourceClaim)) return false;
+    if (conflict.label !== "Conflicting evidence" && !conflict.contradictsClaimIds?.length) return false;
     seenConflictIds.add(conflict.id);
   }
 
   const seenNextCheckIds = new Set<string>();
   for (const check of value.nextChecks) {
     if (seenNextCheckIds.has(check.id)) return false;
-    if (seenClaimIds.size > 0 && check.claimIds?.some((claimId) => !seenClaimIds.has(claimId))) return false;
+    if (claimsById.size > 0 && check.claimIds?.some((claimId) => !claimsById.has(claimId))) return false;
     seenNextCheckIds.add(check.id);
   }
 

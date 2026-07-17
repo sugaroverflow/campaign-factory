@@ -2276,6 +2276,82 @@ test("operations workbench: source next checks must reference known claims when 
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
+test("operations workbench: source evidence conflicts must match ledger claims", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 10, lastSequence: 100, events: [] },
+        documents: [
+          {
+            key: "campaign_brief",
+            num: 1,
+            name: "Campaign Brief",
+            status: "ready",
+            html: "<p>Orphaned evidence conflict should not hydrate Ormskirk</p>",
+            plainText: "Orphaned evidence conflict should not hydrate Ormskirk",
+            isPack: false,
+            sectionKeys: ["problem", "evidence", "objective", "decision_route", "power", "pressure", "strategy", "tactics", "organising"],
+            resourceCount: 0,
+            flags: [],
+          },
+        ],
+        evidence: {
+          groups: [
+            {
+              label: "Verification incomplete",
+              count: 1,
+              claims: [
+                {
+                  id: "known-claim",
+                  text: "Known source claim should stay hidden with orphaned conflict metadata",
+                  type: "other",
+                  label: "Verification incomplete",
+                  loadBearing: true,
+                  confidence: "medium",
+                  sourceCount: 1,
+                  affectedOutputs: ["campaign_brief"],
+                },
+              ],
+            },
+          ],
+          conflicts: [
+            {
+              id: "orphan-conflict",
+              text: "Orphaned conflict should fail closed",
+              type: "other",
+              label: "Conflicting evidence",
+              loadBearing: true,
+              confidence: "medium",
+              sourceCount: 1,
+              affectedOutputs: ["campaign_brief"],
+            },
+          ],
+          nextChecks: [{ id: "next", description: "Orphaned conflict regression", reason: "Contract validation", claimIds: ["known-claim"], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 1, loadBearing: 1, verifiedLoadBearing: 0, unresolvedLoadBearing: 1 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/typed public document contract/i)).toBeVisible();
+  await expect(page.getByText("Orphaned evidence conflict should not hydrate Ormskirk")).toHaveCount(0);
+  await expect(page.getByText("Known source claim should stay hidden with orphaned conflict metadata")).toHaveCount(0);
+  await expect(page.getByText("Orphaned conflict should fail closed")).toHaveCount(0);
+  await expect(page.getByText("Orphaned conflict regression")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
 test("operations workbench: source evidence ids must be non-empty before hydration", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 
