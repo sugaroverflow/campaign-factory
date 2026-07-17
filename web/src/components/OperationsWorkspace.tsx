@@ -320,7 +320,7 @@ type DemoState = {
   activeView: ViewId;
   contactFilter: SegmentId | "all";
   contactReadinessFilter: "all" | "ready" | "review" | "blocked";
-  scheduleIntent: "after_approval" | "tomorrow_morning" | "school_run";
+  scheduleIntent: "after_approval" | "tomorrow_morning" | "after_next_check";
   queuedAt: string | null;
   localActions: LocalAction[];
   workingDrafts: WorkingDraft[];
@@ -979,9 +979,12 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     contactReadinessFilter: ["all", "ready", "review", "blocked"].includes(parsed.contactReadinessFilter || "")
       ? (parsed.contactReadinessFilter as DemoState["contactReadinessFilter"])
       : initialState.contactReadinessFilter,
-    scheduleIntent: ["after_approval", "tomorrow_morning", "school_run"].includes(parsed.scheduleIntent || "")
-      ? (parsed.scheduleIntent as DemoState["scheduleIntent"])
-      : initialState.scheduleIntent,
+    scheduleIntent:
+      (parsed as { scheduleIntent?: unknown }).scheduleIntent === "school_run"
+        ? "after_next_check"
+        : ["after_approval", "tomorrow_morning", "after_next_check"].includes(parsed.scheduleIntent || "")
+          ? (parsed.scheduleIntent as DemoState["scheduleIntent"])
+          : initialState.scheduleIntent,
     localActions: normaliseLocalActions(parsed.localActions),
     workingDrafts,
     activeWorkingDraftId,
@@ -2696,12 +2699,12 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     ? {
         after_approval: "Hold until a campaigner connects a provider after review",
         tomorrow_morning: "Demo intent: next campaign review window after provider setup",
-        school_run: "Demo intent: after the next source check and consent import",
+        after_next_check: "Demo intent: after the next source check and consent import",
       }
     : {
         after_approval: "Hold until a campaigner connects a provider after review",
         tomorrow_morning: "Demo intent: next school-run morning after provider setup",
-        school_run: "Demo intent: school-run reminder window after consent import",
+        after_next_check: "Demo intent: school-run reminder window after consent import",
       };
   const runwayStages: RunwayStage[] = [
     {
@@ -4248,7 +4251,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           >
             <option value="after_approval">Hold after approval</option>
             <option value="tomorrow_morning">{source ? "Next campaign review window" : "Next school-run morning"}</option>
-            <option value="school_run">{source ? "After next source check" : "School-run reminder window"}</option>
+            <option value="after_next_check">{source ? "After next source check" : "School-run reminder window"}</option>
           </select>
           <p className="text-sm text-muted-foreground">{scheduleCopy[state.scheduleIntent]}</p>
           {sourceBaselineChanged ? (
