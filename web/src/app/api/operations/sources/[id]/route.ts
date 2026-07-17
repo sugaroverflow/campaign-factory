@@ -329,6 +329,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
           detail: `This campaign is ${run.value.status}, so compiled operations source material is not available yet.`,
           runStatus: run.value.status,
           sourceOrigin: origin,
+          ...upstreamFailureMetadata(run.metadata),
         }),
         409,
       );

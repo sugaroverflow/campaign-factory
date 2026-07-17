@@ -628,7 +628,10 @@ test("operations source API: non-terminal source runs fail closed before documen
     expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
 
     if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
-      return Response.json({ campaignId: curatedId, status: "running", stateVersion: 1, lastSequence: 1, events: [] });
+      return Response.json(
+        { campaignId: curatedId, status: "running", stateVersion: 1, lastSequence: 1, events: [] },
+        { headers: { "content-type": "application/json", "x-matched-path": "/api/factory/runs/[id]", "x-vercel-cache": "MISS", "x-vercel-id": "lhr1::iad1::ops-running" } },
+      );
     }
 
     throw new Error("Documents must not hydrate while the source run is still non-terminal.");
@@ -645,11 +648,19 @@ test("operations source API: non-terminal source runs fail closed before documen
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
 
-    const body = (await response.json()) as { error?: string; detail?: string; runStatus?: string; sourceOrigin?: string; documents?: unknown[] };
+    const body = (await response.json()) as { error?: string; detail?: string; runStatus?: string; sourceOrigin?: string; sourceStep?: string; sourcePath?: string; sourceHttpStatus?: number; sourceElapsedMs?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceContentType?: string; documents?: unknown[] };
     expect(body.error).toBe("Campaign source not ready");
     expect(body.detail).toContain("This campaign is running");
     expect(body.runStatus).toBe("running");
     expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
+    expect(body.sourceStep).toBe("run");
+    expect(body.sourcePath).toBe(`/api/factory/runs/${curatedId}`);
+    expect(body.sourceHttpStatus).toBe(200);
+    expect(body.sourceElapsedMs).toEqual(expect.any(Number));
+    expect(body.sourceRequestId).toBe("lhr1::iad1::ops-running");
+    expect(body.sourceMatchedPath).toBe("/api/factory/runs/[id]");
+    expect(body.sourceCacheStatus).toBe("MISS");
+    expect(body.sourceContentType).toBe("application/json");
     expect(body.documents).toBeUndefined();
     expect(requestedUrls).toEqual([`https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`]);
   } finally {
@@ -2171,6 +2182,13 @@ test("operations portfolio: not-yet-usable source rows show run status without f
           runStatus: "queued",
           sourceOrigin: "https://campaign-factory.vercel.app",
           sourceStep: "run",
+          sourcePath: `/api/factory/runs/${id}`,
+          sourceHttpStatus: 200,
+          sourceElapsedMs: 26,
+          sourceRequestId: "lhr1::iad1::queued-run",
+          sourceMatchedPath: "/api/factory/runs/[id]",
+          sourceCacheStatus: "MISS",
+          sourceContentType: "application/json",
         }),
       });
       return;
@@ -2195,6 +2213,7 @@ test("operations portfolio: not-yet-usable source rows show run status without f
   await expect(towerHamletsRow).toContainText("This campaign is queued");
   await expect(towerHamletsRow).toContainText("Source run status: Queued");
   await expect(towerHamletsRow).toContainText("Failed source step: run header");
+  await expect(towerHamletsRow).toContainText("Source response: upstream HTTP 200 · source fetch 26ms · request lhr1::iad1::queued-run · source path /api/factory/runs/57678ae0-29fd-4b4b-8a53-5c711cdb21cf · matched /api/factory/runs/[id] · cache MISS · upstream content type application/json");
   await expect(towerHamletsRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
 });
