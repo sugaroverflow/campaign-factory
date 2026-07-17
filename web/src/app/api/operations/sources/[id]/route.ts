@@ -318,7 +318,7 @@ async function safeReadJsonResponseText(response: Response) {
   return safeReadBoundedResponseText(response, SOURCE_JSON_BODY_LIMIT_BYTES);
 }
 
-function upstreamResponseMetadata(response: Response, elapsedMs: number | undefined, bodyText?: string, sourcePath?: string, bodyTruncated = false) {
+function upstreamResponseMetadata(response: Response, elapsedMs: number | undefined, bodyText?: string, sourcePath?: string, bodyTruncated = false, sourceTextEncoding?: "malformed") {
   const contentType = sanitizeSourceContentType(response.headers.get("content-type"));
   return {
     sourcePath: sanitizeSourcePath(sourcePath),
@@ -337,6 +337,7 @@ function upstreamResponseMetadata(response: Response, elapsedMs: number | undefi
     sourceContentCharset: sanitizeSourceJsonCharset(response.headers.get("content-type")),
     sourceBodyEmpty: !bodyTruncated && hasEmptyObservedBody(response, bodyText),
     ...(bodyTruncated ? { sourceBodyTruncated: true } : {}),
+    ...(sourceTextEncoding ? { sourceTextEncoding } : {}),
     ...("value" in contentType ? { sourceContentType: contentType.value } : {}),
     ...("missing" in contentType ? { sourceContentTypeMissing: true } : {}),
   };
@@ -359,7 +360,7 @@ function hasExplicitEmptyBody(response: Response) {
   return response.headers.get("content-length")?.trim() === "0";
 }
 
-function upstreamFailureMetadata(result: { sourceFailureKind?: SourceFailureKind; sourcePath?: string; sourceHttpStatus?: number; sourceElapsedMs?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceContentRange?: string; sourceServer?: string; sourceContentEncoding?: string; sourceContentCharset?: string; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }) {
+function upstreamFailureMetadata(result: { sourceFailureKind?: SourceFailureKind; sourcePath?: string; sourceHttpStatus?: number; sourceElapsedMs?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceContentRange?: string; sourceServer?: string; sourceContentEncoding?: string; sourceContentCharset?: string; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean; sourceTextEncoding?: "malformed" }) {
   return {
     ...(result.sourceFailureKind ? { sourceFailureKind: result.sourceFailureKind } : {}),
     ...(result.sourcePath ? { sourcePath: result.sourcePath } : {}),
@@ -380,6 +381,7 @@ function upstreamFailureMetadata(result: { sourceFailureKind?: SourceFailureKind
     ...(result.sourceBodyTruncated ? { sourceBodyTruncated: true } : {}),
     ...(result.sourceContentType ? { sourceContentType: result.sourceContentType } : {}),
     ...(result.sourceContentTypeMissing ? { sourceContentTypeMissing: true } : {}),
+    ...(result.sourceTextEncoding ? { sourceTextEncoding: result.sourceTextEncoding } : {}),
   };
 }
 
@@ -388,7 +390,7 @@ async function fetchSourceJson<T>(
   path: string,
 ): Promise<
   | { ok: true; value: T; metadata: UpstreamMetadata }
-  | { ok: false; status: number; message: string; path: string; sourceFailureKind: SourceFailureKind; contractMismatch?: boolean; retryAfter?: string; sourcePath?: string; sourceHttpStatus?: number; sourceElapsedMs?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceContentRange?: string; sourceServer?: string; sourceContentEncoding?: string; sourceContentCharset?: string; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean }
+  | { ok: false; status: number; message: string; path: string; sourceFailureKind: SourceFailureKind; contractMismatch?: boolean; retryAfter?: string; sourcePath?: string; sourceHttpStatus?: number; sourceElapsedMs?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceCacheStatus?: string; sourceCacheControl?: string; sourceAgeSeconds?: number; sourceResponseDate?: string; sourceContentLength?: number; sourceContentRange?: string; sourceServer?: string; sourceContentEncoding?: string; sourceContentCharset?: string; sourceBodyEmpty?: boolean; sourceBodyTruncated?: boolean; sourceContentType?: string; sourceContentTypeMissing?: boolean; sourceTextEncoding?: "malformed" }
 > {
   const controller = new AbortController();
   const startedAt = Date.now();
@@ -512,7 +514,7 @@ async function fetchSourceJson<T>(
     }
 
     const responseBody = await safeReadJsonResponseText(response);
-    const metadata = upstreamResponseMetadata(response, sourceElapsedMs(startedAt), responseBody.text, path, responseBody.truncated);
+    const metadata = upstreamResponseMetadata(response, sourceElapsedMs(startedAt), responseBody.text, path, responseBody.truncated, responseBody.invalidTextEncoding ? "malformed" : undefined);
     if (responseBody.truncated) {
       return {
         ok: false,

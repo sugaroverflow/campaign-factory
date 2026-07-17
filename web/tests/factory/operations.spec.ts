@@ -1653,12 +1653,13 @@ test("operations source API: invalid UTF-8 source runs fail closed before docume
     expect(response.status).toBe(502);
     expectPublicSourceJsonBoundary(response.headers, "invalid UTF-8 source run");
 
-    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string; sourceFailureKind?: string; sourceContentLength?: number; sourceBodyEmpty?: boolean; documents?: unknown[]; sourceRunUnavailable?: boolean };
+    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string; sourceFailureKind?: string; sourceContentLength?: number; sourceTextEncoding?: string; sourceBodyEmpty?: boolean; documents?: unknown[]; sourceRunUnavailable?: boolean };
     expect(body.error).toBe("Campaign source contract mismatch");
     expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId} returned JSON that was not valid UTF-8.`);
     expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
     expect(body.sourceFailureKind).toBe("malformed_json");
     expect(body.sourceContentLength).toBe(invalidUtf8Body.byteLength);
+    expect(body.sourceTextEncoding).toBe("malformed");
     expect(body.sourceBodyEmpty).toBeUndefined();
     expect(body.documents).toBeUndefined();
     expect(body.sourceRunUnavailable).toBeUndefined();
@@ -1907,7 +1908,7 @@ test("operations source API: invalid UTF-8 source documents fail closed after th
     expect(response.status).toBe(502);
     expectPublicSourceJsonBoundary(response.headers, "invalid UTF-8 source documents");
 
-    const body = (await response.json()) as { error?: string; detail?: string; runStatus?: string; sourceOrigin?: string; sourceStep?: string; sourceFailureKind?: string; sourcePath?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceContentLength?: number; sourceContentType?: string; sourceBodyEmpty?: boolean; documents?: unknown[]; sourceRunUnavailable?: boolean };
+    const body = (await response.json()) as { error?: string; detail?: string; runStatus?: string; sourceOrigin?: string; sourceStep?: string; sourceFailureKind?: string; sourcePath?: string; sourceHttpStatus?: number; sourceRequestId?: string; sourceMatchedPath?: string; sourceContentLength?: number; sourceContentType?: string; sourceTextEncoding?: string; sourceBodyEmpty?: boolean; documents?: unknown[]; sourceRunUnavailable?: boolean };
     expect(body.error).toBe("Campaign source contract mismatch");
     expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId}/documents returned JSON that was not valid UTF-8.`);
     expect(body.runStatus).toBe("partial");
@@ -1920,6 +1921,7 @@ test("operations source API: invalid UTF-8 source documents fail closed after th
     expect(body.sourceMatchedPath).toBe("/api/factory/runs/[id]/documents");
     expect(body.sourceContentLength).toBe(invalidJsonBytes.byteLength);
     expect(body.sourceContentType).toBe("application/json");
+    expect(body.sourceTextEncoding).toBe("malformed");
     expect(body.sourceBodyEmpty).toBeUndefined();
     expect(body.documents).toBeUndefined();
     expect(body.sourceRunUnavailable).toBeUndefined();
@@ -4228,6 +4230,37 @@ test("operations workspace: malformed content-encoding diagnostics survive clien
   await expect(page.getByText(/content-encoded body despite the identity encoding requirement/)).toBeVisible();
   await expect(page.getByText(/source failure encoded body · upstream HTTP 200/)).toBeVisible();
   await expect(page.getByText(/content length 20 bytes · content encoding malformed · upstream body truncated · upstream content type application\/json/)).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+});
+
+
+test("operations workspace: invalid UTF-8 source diagnostics survive client sanitization without fixture fallback", async ({ page }) => {
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      status: 502,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Campaign source contract mismatch",
+        detail: "Read-only source /api/factory/runs/69f257b6-9913-4395-94f7-5c25b4b5fe95/documents returned JSON that was not valid UTF-8.",
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        sourceStep: "documents",
+        sourceFailureKind: "malformed_json",
+        sourcePath: "/api/factory/runs/69f257b6-9913-4395-94f7-5c25b4b5fe95/documents",
+        sourceHttpStatus: 200,
+        sourceContentLength: 181,
+        sourceTextEncoding: "malformed",
+        sourceContentType: "application/json",
+      }),
+    });
+  });
+
+  await page.goto("/operations?campaignId=69f257b6-9913-4395-94f7-5c25b4b5fe95");
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText(/returned JSON that was not valid UTF-8/)).toBeVisible();
+  await expect(page.getByText(/source failure malformed JSON · upstream HTTP 200/)).toBeVisible();
+  await expect(page.getByText(/content length 181 bytes · text encoding malformed · upstream content type application\/json/)).toBeVisible();
   await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
 });
