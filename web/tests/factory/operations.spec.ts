@@ -805,6 +805,66 @@ test("operations source API: upstream run timeouts fail closed before document h
   }
 });
 
+test("operations source API: upstream document timeouts fail closed after the validated run header", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const originalFetch = globalThis.fetch;
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
+  const requestedUrls: string[] = [];
+  const clearedTimers: unknown[] = [];
+  let timeoutIndex = 0;
+
+  globalThis.setTimeout = ((callback: TimerHandler) => {
+    timeoutIndex += 1;
+    if (timeoutIndex === 2 && typeof callback === "function") callback();
+    return timeoutIndex as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
+  globalThis.clearTimeout = ((timer?: Parameters<typeof clearTimeout>[0]) => {
+    clearedTimers.push(timer);
+  }) as typeof clearTimeout;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestedUrls.push(String(input));
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      expect(init?.signal?.aborted).toBe(false);
+      return Response.json({ campaignId: curatedId, status: "partial", stateVersion: 1, lastSequence: 0, events: [] });
+    }
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}/documents`)) {
+      expect(init?.signal?.aborted).toBe(true);
+      throw new Error("Timed-out document source should not leak this detail.");
+    }
+
+    throw new Error(`Unexpected source request: ${String(input)}`);
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(504);
+    expectPublicSourceJsonBoundary(response.headers, "document timeout");
+
+    const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string; documents?: unknown[]; sourceRunUnavailable?: boolean };
+    expect(body.error).toBe("Campaign source documents unavailable");
+    expect(body.detail).toContain(`Read-only source /api/factory/runs/${curatedId}/documents timed out after 10 seconds.`);
+    expect(body.detail).not.toContain("Timed-out document source");
+    expect(body.sourceOrigin).toBe("https://campaign-factory.vercel.app");
+    expect(body.documents).toBeUndefined();
+    expect(body.sourceRunUnavailable).toBeUndefined();
+    expect(requestedUrls).toEqual([
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
+    ]);
+    expect(clearedTimers).toEqual([1, 2]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  }
+});
+
 test("operations source API: successful source responses keep same-origin resource policy", async () => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const originalFetch = globalThis.fetch;
