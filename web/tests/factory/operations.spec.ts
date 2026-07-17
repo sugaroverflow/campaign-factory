@@ -49,7 +49,9 @@ test("operations source API: invalid and non-curated ids are allow-list misses w
     const response = await request.get(`/api/operations/sources/${id}`);
     expect(response.status()).toBe(404);
     expect(response.headers()["cache-control"]).toBe("no-store");
+    expect(response.headers()["content-security-policy"]).toBe("default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
     expect(response.headers()["cross-origin-resource-policy"]).toBe("same-origin");
+    expect(response.headers()["referrer-policy"]).toBe("no-referrer");
     expect(response.headers()["x-content-type-options"]).toBe("nosniff");
 
     const body = (await response.json()) as { error?: string; detail?: string; sourceOrigin?: string };
@@ -73,7 +75,9 @@ test("operations source API: non-GET methods are blocked as read-only no-store r
     const response = await makeRequest();
     expect(response.status()).toBe(405);
     expect(response.headers()["cache-control"]).toBe("no-store");
+    expect(response.headers()["content-security-policy"]).toBe("default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
     expect(response.headers()["cross-origin-resource-policy"]).toBe("same-origin");
+    expect(response.headers()["referrer-policy"]).toBe("no-referrer");
     expect(response.headers()["x-content-type-options"]).toBe("nosniff");
     expect(response.headers().allow).toBe("GET");
 
@@ -277,7 +281,9 @@ test("operations source API: successful source responses keep same-origin resour
     const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
     expect(response.headers.get("cross-origin-resource-policy")).toBe("same-origin");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
 
     const body = (await response.json()) as { sourceOrigin?: string; documents?: unknown[]; sourceRunUnavailable?: boolean };
