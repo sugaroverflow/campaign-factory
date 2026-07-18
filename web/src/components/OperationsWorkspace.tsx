@@ -1262,7 +1262,7 @@ function activityLooksTiedToRemovedLocalWork(activity: Activity, removedLocalWor
 }
 
 function activityLooksLikeTopLevelDraftWorkflow(activity: Activity) {
-  return /\b(marked the draft ready|human approval recorded|placed approved draft|approved draft|local demo queue|queued local draft|queued\b.{0,80}\blocally|submitted for review|ready for human review)\b/i.test(
+  return /\b(marked the draft ready|human approval recorded|placed approved draft|approved draft|local demo queue|queued local draft|queued\b.{0,80}\blocally|submitted(?:\b.{0,80}\bdraft)?\b.{0,40}\bfor review|ready for human review)\b/i.test(
     activity.label,
   );
 }
@@ -1360,7 +1360,6 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     : workingDrafts[0]?.id ?? null;
   const removedDuplicatedTopLevelSourceCopy = Boolean(sourceWorkingCopyCandidate && workingDrafts.some((draft) => draft.id === sourceWorkingCopyCandidate.id));
   const sourceWorkingCopy = removedDuplicatedTopLevelSourceCopy ? null : sourceWorkingCopyCandidate;
-  const activeDraft = activeWorkingDraftId || sourceWorkingCopy || state.status !== "draft" || state.queuedAt ? "supporter_email" : state.activeDraft;
   const removedMismatchedLocalWork = localActions.length !== state.localActions.length || workingDrafts.length !== state.workingDrafts.length;
   const removedFixtureSourceWorkingCopy = Boolean(state.sourceWorkingCopy && sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy));
   const removedMismatchedTopLevelSourceCopy = Boolean(state.sourceWorkingCopy && !sourceWorkingCopyCandidate && !removedFixtureSourceWorkingCopy);
@@ -1396,7 +1395,12 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     removedUnprovenancedTopLevelReviewState ||
     removedResetTopLevelWorkflowState ||
     removedDuplicatedTopLevelSourceCopy;
-  const hasRetainedLocalWork = Boolean(localActions.length || workingDrafts.length || sourceWorkingCopy || state.status !== "draft" || state.queuedAt);
+  const activeDraft = resetTopLevelDraft
+    ? initialState.activeDraft
+    : activeWorkingDraftId || sourceWorkingCopy || state.status !== "draft" || state.queuedAt
+      ? "supporter_email"
+      : state.activeDraft;
+  const hasRetainedLocalWork = Boolean(localActions.length || workingDrafts.length || sourceWorkingCopy || (!resetTopLevelDraft && (state.status !== "draft" || state.queuedAt)));
   const removedOrphanedDraftWorkflowActivity = !hasRetainedLocalWork && state.activity.some(activityLooksLikeDraftWorkflow);
   const removedQueuedWorkingDraft = state.workingDrafts.some((draft) => draft.status === "queued" && !workingDrafts.some((keptDraft) => keptDraft.id === draft.id));
   const hasQueuedWorkingDraft = workingDrafts.some((draft) => hasRecordedLocalQueue(draft.status, draft.queuedAt));

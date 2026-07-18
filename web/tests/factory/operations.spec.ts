@@ -13932,6 +13932,126 @@ test("operations workbench clears queued state from an already reset top-level d
   expect(storedState).not.toContain("queued-reset-draft");
 });
 
+test("operations workbench resets active draft when orphaned top-level source workflow is scrubbed", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const foreignCampaignId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 65, lastSequence: 2150, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Keep KFC Out of Ormskirk",
+          place: "Ormskirk, Lancashire",
+          next: "Check Ormskirk appeal records before public escalation",
+        }),
+        evidence: campaignEvidence([{ id: "orphaned-active-draft", description: "Check Ormskirk appeal records", reason: "Orphaned active top-level draft scrub guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate(
+    ({ id, foreignId }) => {
+      localStorage.setItem(
+        `cf_operations_demo_v3:${id}`,
+        JSON.stringify({
+          workspaceKey: id,
+          sourceStateVersion: 65,
+          sourceLastSequence: 2150,
+          sourceDocumentSignature: `source:${id}:current-baseline`,
+          sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+          selectedSegment: "source_primary",
+          subject: "Foreign campaign source draft should be scrubbed",
+          body: `This top-level review state points at a removed source working draft from campaign ${foreignId}, so it must not stay active local work for Ormskirk.`,
+          reviewerNote: "Review note from the orphaned active draft.",
+          status: "review",
+          mode: "preview",
+          activeDraft: "press_pitch",
+          activeView: "drafts",
+          contactFilter: "all",
+          contactReadinessFilter: "all",
+          scheduleIntent: "tomorrow_morning",
+          queuedAt: null,
+          localActions: [],
+          workingDrafts: [
+            {
+              id: `source:${foreignId}:digital-pack-foreign-active`,
+              title: "Barnet source draft that should not hydrate Ormskirk",
+              channel: "Email",
+              subject: "Barnet source draft should be removed",
+              body: "Foreign browser-local draft text must not appear in the Ormskirk workspace or export.",
+              reviewerNote: "Foreign review note.",
+              status: "review",
+              queuedAt: null,
+              createdAt: "2026-07-17T20:05:00.000Z",
+              updatedAt: "2026-07-17T20:10:00.000Z",
+              sourceWorkingCopy: {
+                id: `source:${foreignId}:digital-pack-foreign-active`,
+                campaignId: foreignId,
+                title: "Barnet source draft that should not hydrate Ormskirk",
+                channel: "Email",
+                sourceDocument: "Digital Campaign Pack",
+                sourceDocumentKey: "digital_campaign_pack",
+                createdAt: "2026-07-17T20:05:00.000Z",
+                warnings: ["Foreign warning should be scrubbed."],
+                provenance: `Source campaign ${foreignId}; copied from Digital Campaign Pack into browser-local operations.`,
+              },
+            },
+          ],
+          activeWorkingDraftId: `source:${foreignId}:digital-pack-foreign-active`,
+          sourceWorkingCopy: null,
+          sourceRecheckStateVersion: null,
+          sourceRecheckLastSequence: null,
+          sourceRecheckDocumentSignature: null,
+          sourceRecheckVisitedViews: [],
+          activity: [
+            { id: "foreign-active-draft", label: "Submitted foreign active draft for review." },
+            { id: "foreign-draft-copy", label: "Created editable local copy from source resource: Barnet source draft that should not hydrate Ormskirk." },
+          ],
+        }),
+      );
+    },
+    { id: campaignId, foreignId: foreignCampaignId },
+  );
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=drafts`);
+  await expect(page.getByText("Keep KFC Out of Ormskirk · Ormskirk, Lancashire")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Barnet source draft that should not hydrate Ormskirk");
+  await expect(page.locator("main")).not.toContainText("Foreign browser-local draft text must not appear");
+  await page.goto(`/operations?campaignId=${campaignId}&view=outbox`);
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+
+  const [jsonDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download JSON" }).click(),
+  ]);
+  const jsonPath = await jsonDownload.path();
+  expect(jsonPath).toBeTruthy();
+  const packText = await readFile(jsonPath!, "utf8");
+  expect(packText).toContain('"drafts": []');
+  expect(packText).not.toContain("Foreign browser-local draft text must not appear");
+  expect(packText).not.toContain("Barnet source draft that should not hydrate Ormskirk");
+
+  await page.goto("/operations");
+  await expect(page.getByText("Keep KFC Out of Ormskirk")).toBeVisible();
+  await expect(page.getByText("no browser-local operations work yet for this campaign").first()).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("1 working draft");
+  await expect(page.locator("main")).not.toContainText("1 review");
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "";
+  expect(storedState).toContain("workspace-sanitized");
+  expect(storedState).toContain('"activeDraft":"supporter_email"');
+  expect(storedState).toContain('"activeWorkingDraftId":null');
+  expect(storedState).toContain('"workingDrafts":[]');
+  expect(storedState).toContain('"status":"draft"');
+  expect(storedState).not.toContain("press_pitch");
+  expect(storedState).not.toContain(foreignCampaignId);
+  expect(storedState).not.toContain("Foreign browser-local draft text must not appear");
+});
+
 test("operations workbench demotes queued working drafts without queue timestamps", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 
