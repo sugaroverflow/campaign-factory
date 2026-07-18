@@ -1006,7 +1006,7 @@ function sourceWorkingCopyHasMalformedOptionalField(copy: Partial<SourceWorkingC
   const sourceDocumentKey = typeof copy.sourceDocumentKey === "string" ? copy.sourceDocumentKey.trim() : "";
   return ["channel", "sourceDocumentKey", "provenance"].some((field) => {
     const value = copy[field as keyof SourceWorkingCopy];
-    return (value !== undefined && typeof value !== "string") || storedTextIsInvisible(value) || storedSourceMetadataTextIsMalformed(value);
+    return (value !== undefined && (typeof value !== "string" || !storedTextHasVisibleText(value) || storedSourceMetadataTextIsMalformed(value)));
   }) ||
     storedSourceMetadataTextIsMalformed(copy.title) ||
     storedSourceMetadataTextIsMalformed(copy.sourceDocument) ||
@@ -1022,7 +1022,7 @@ function sourceWorkingCopyHasMalformedOptionalField(copy: Partial<SourceWorkingC
     (typeof copy.id === "string" && !sourceWorkingCopyIdTitleMatchesSourceTitle(copy.id, title)) ||
     typeof createdAt !== "string" ||
     !isCurrentOrPastStoredTimestamp(createdAt) ||
-    (copy.warnings !== undefined && (!Array.isArray(copy.warnings) || copy.warnings.some((warning) => typeof warning !== "string" || storedTextIsInvisible(warning) || storedSourceMetadataTextIsMalformed(warning))));
+    (copy.warnings !== undefined && (!Array.isArray(copy.warnings) || copy.warnings.some((warning) => typeof warning !== "string" || !storedTextHasVisibleText(warning) || storedSourceMetadataTextIsMalformed(warning))));
 }
 
 function normaliseSourceWorkingCopy(value: unknown): SourceWorkingCopy | null {
