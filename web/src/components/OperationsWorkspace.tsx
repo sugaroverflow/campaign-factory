@@ -942,11 +942,14 @@ function textReferencesOnlyExpectedCampaign(value: string, expectedWorkspaceKey:
   return referencedCampaignIds(value).every((campaignId) => campaignId.toLowerCase() === expectedWorkspaceKey.toLowerCase());
 }
 
+function textFieldsReferenceOnlyExpectedCampaign(values: string[], expectedWorkspaceKey: string) {
+  return values.every((value) => textReferencesOnlyExpectedCampaign(value, expectedWorkspaceKey));
+}
+
 function localActionMatchesWorkspace(action: LocalAction, expectedWorkspaceKey: string) {
   const idCampaignId = action.id.match(/^source:([0-9a-f-]{36})(?::|$)/i)?.[1];
   if (idCampaignId && idCampaignId !== expectedWorkspaceKey) return false;
-  if (!textReferencesOnlyExpectedCampaign(action.id, expectedWorkspaceKey)) return false;
-  if (!textReferencesOnlyExpectedCampaign(action.provenance, expectedWorkspaceKey)) return false;
+  if (!textFieldsReferenceOnlyExpectedCampaign([action.id, action.title, action.source, action.owner, action.timing, action.provenance], expectedWorkspaceKey)) return false;
   const provenanceCampaignId = action.provenance.match(/Source campaign\s+([0-9a-f-]{36})/i)?.[1];
   if (provenanceCampaignId && provenanceCampaignId !== expectedWorkspaceKey) return false;
   return Boolean(idCampaignId === expectedWorkspaceKey || provenanceCampaignId === expectedWorkspaceKey);
@@ -956,8 +959,7 @@ function sourceWorkingCopyMatchesWorkspace(copy: SourceWorkingCopy, expectedWork
   if (copy.campaignId !== expectedWorkspaceKey) return false;
   const idCampaignId = copy.id.match(/^source:([0-9a-f-]{36})(?::|$)/i)?.[1];
   if (idCampaignId && idCampaignId !== expectedWorkspaceKey) return false;
-  if (!textReferencesOnlyExpectedCampaign(copy.id, expectedWorkspaceKey)) return false;
-  if (!textReferencesOnlyExpectedCampaign(copy.provenance, expectedWorkspaceKey)) return false;
+  if (!textFieldsReferenceOnlyExpectedCampaign([copy.id, copy.title, copy.channel, copy.sourceDocument, copy.sourceDocumentKey, copy.provenance, ...copy.warnings], expectedWorkspaceKey)) return false;
   const provenanceCampaignId = copy.provenance.match(/Source campaign\s+([0-9a-f-]{36})/i)?.[1];
   if (provenanceCampaignId && provenanceCampaignId !== expectedWorkspaceKey) return false;
   return true;
@@ -966,7 +968,7 @@ function sourceWorkingCopyMatchesWorkspace(copy: SourceWorkingCopy, expectedWork
 function workingDraftMatchesWorkspace(draft: WorkingDraft, expectedWorkspaceKey: string) {
   const idCampaignId = draft.id.match(/^source:([0-9a-f-]{36})(?::|$)/i)?.[1];
   if (idCampaignId && idCampaignId !== expectedWorkspaceKey) return false;
-  if (!textReferencesOnlyExpectedCampaign(draft.id, expectedWorkspaceKey)) return false;
+  if (!textFieldsReferenceOnlyExpectedCampaign([draft.id, draft.title, draft.channel, draft.subject, draft.body, draft.reviewerNote], expectedWorkspaceKey)) return false;
   return sourceWorkingCopyMatchesWorkspace(draft.sourceWorkingCopy, expectedWorkspaceKey);
 }
 

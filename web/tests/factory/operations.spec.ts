@@ -7540,6 +7540,125 @@ test("operations workbench rejects cross-campaign UUIDs in source provenance tex
   expect(stored).not.toContain(otherCampaignId);
 });
 
+test("operations workbench rejects cross-campaign UUIDs in visible local-work fields", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+  const otherCampaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check Barnet decision records", reason: "Visible-field UUID guard", claimIds: [], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate(
+    ({ campaignId, otherId }) => {
+      localStorage.setItem(
+        `cf_operations_demo_v3:${campaignId}`,
+        JSON.stringify({
+          workspaceKey: campaignId,
+          sourceStateVersion: 14,
+          sourceLastSequence: 25,
+          sourceDocumentSignature: "real-barnet-source-baseline",
+          sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+          selectedSegment: "source_primary",
+          subject: "Barnet local update",
+          body: "Hi — can you support the campaign after the next source check?",
+          reviewerNote: "",
+          status: "draft",
+          mode: "compose",
+          activeDraft: "supporter_email",
+          activeView: "outbox",
+          contactFilter: "source_primary",
+          contactReadinessFilter: "all",
+          scheduleIntent: "tomorrow_morning",
+          queuedAt: null,
+          localActions: [
+            {
+              id: `source:${campaignId}:action:visible-cross-campaign`,
+              title: "Barnet action with visible foreign UUID",
+              source: `Lobbying Pack copied beside campaign ${otherId}`,
+              owner: "Campaigner",
+              timing: "Next",
+              priority: "High",
+              status: "next",
+              provenance: `Source campaign ${campaignId}; browser-local action for Barnet only.`,
+            },
+          ],
+          workingDrafts: [
+            {
+              id: `${campaignId}:lobbying_pack:visible-field-copy`,
+              title: "Barnet visible-field source copy",
+              channel: "Briefing note",
+              subject: "Visible-field cross-campaign copy should not render",
+              body: `This body mentions another campaign ${otherId} and must be treated as unsafe local work for Barnet.`,
+              reviewerNote: "",
+              status: "queued",
+              queuedAt: "2026-07-16T18:02:30.000Z",
+              createdAt: "2026-07-16T17:52:30.000Z",
+              updatedAt: "2026-07-16T18:02:30.000Z",
+              sourceWorkingCopy: {
+                id: `${campaignId}:lobbying_pack:visible-field-copy`,
+                campaignId,
+                title: "Barnet visible-field source copy",
+                channel: "Briefing note",
+                sourceDocument: "Lobbying Pack",
+                sourceDocumentKey: "lobbying_pack",
+                createdAt: "2026-07-16T17:52:30.000Z",
+                warnings: [`Confirm this was not copied from ${otherId}.`],
+                provenance: `Copied from Lobbying Pack in campaign ${campaignId}; this editable copy is browser-local.`,
+              },
+            },
+          ],
+          activeWorkingDraftId: `${campaignId}:lobbying_pack:visible-field-copy`,
+          sourceWorkingCopy: null,
+          activity: [
+            { id: "visible-cross-campaign-action", label: "Created action: Barnet action with visible foreign UUID" },
+            { id: "visible-cross-campaign-copy", label: "Placed approved draft into the local demo queue for Barnet visible-field source copy." },
+          ],
+        }),
+      );
+    },
+    { campaignId: barnetId, otherId: otherCampaignId },
+  );
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Barnet visible-field source copy");
+  await expect(page.locator("main")).not.toContainText("Barnet action with visible foreign UUID");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=actions`);
+  await expect(page.locator("main")).not.toContainText("Barnet action with visible foreign UUID");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain('"localActions":[]');
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain('"scheduleIntent":"after_approval"');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("Barnet visible-field source copy");
+  expect(stored).not.toContain("Barnet action with visible foreign UUID");
+  expect(stored).not.toContain(otherCampaignId);
+});
+
 test("operations workbench rejects malformed local-action fields from real campaign state", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 
