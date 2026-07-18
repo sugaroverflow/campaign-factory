@@ -682,9 +682,12 @@ function normalizeSourceNextCheck(value: Record<string, unknown>, claimIds: Set<
 function canonicalSourceDocumentFlag(value: unknown) {
   if (typeof value !== "string") return value;
   const normalized = normaliseOperationsSourceInlineText(value);
-  if (normalized === SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM.trim()) return value;
-  if (normalized.startsWith(SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM)) {
-    const claimText = normalized.slice(SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM.length).trim();
+  const claimPrefix = normaliseOperationsSourceInlineText(SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM);
+  const lowerNormalized = normalized.toLowerCase();
+  const lowerClaimPrefix = claimPrefix.toLowerCase();
+  if (lowerNormalized === lowerClaimPrefix) return value;
+  if (lowerNormalized.startsWith(`${lowerClaimPrefix} `)) {
+    const claimText = normalized.slice(claimPrefix.length).trim();
     return claimText ? `${SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM}${claimText}` : value;
   }
   return normalized || value;
