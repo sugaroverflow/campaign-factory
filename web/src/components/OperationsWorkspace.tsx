@@ -2932,6 +2932,41 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   ];
 
   useEffect(() => {
+    if (!sourceBaselineChanged || !source || !currentSourceDocumentSignature || sourceRecheckItemCount > 0) return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setState((current) => {
+        if (current.workspaceKey !== source.campaignId) return current;
+        const hasSourceBoundLocalWork = Boolean(current.localActions.length || current.workingDrafts.length || current.sourceWorkingCopy || current.status !== "draft" || current.queuedAt);
+        if (hasSourceBoundLocalWork) return current;
+        if (
+          current.sourceStateVersion === source.stateVersion &&
+          current.sourceLastSequence === source.lastSequence &&
+          current.sourceDocumentSignature === currentSourceDocumentSignature
+        ) {
+          return current;
+        }
+        return {
+          ...current,
+          sourceStateVersion: source.stateVersion,
+          sourceLastSequence: source.lastSequence,
+          sourceDocumentSignature: currentSourceDocumentSignature,
+          sourceAcknowledgedAt: source.loadedAt,
+          sourceRecheckStateVersion: null,
+          sourceRecheckLastSequence: null,
+          sourceRecheckDocumentSignature: null,
+          sourceRecheckVisitedViews: [],
+          activity: [record(`Updated read-only source baseline for ${source.title}; no local actions or drafts needed re-check.`), ...current.activity].slice(0, 7),
+        };
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSourceDocumentSignature, source, sourceBaselineChanged, sourceRecheckItemCount]);
+
+  useEffect(() => {
     if (!sourceBaselineChanged || !source || !currentSourceDocumentSignature || !SOURCE_RECHECK_REQUIRED_VIEWS.includes(state.activeView)) return;
     let cancelled = false;
     queueMicrotask(() => {

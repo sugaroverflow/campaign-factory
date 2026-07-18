@@ -10654,6 +10654,75 @@ test("operations workbench: legacy fixture top-level drafts are reset for real c
   expect(storedState).not.toContain("local fixture contacts");
 });
 
+test("operations workbench: source updates without local work refresh the baseline without a re-check lock", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 52, lastSequence: 2052, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Keep KFC Out of Ormskirk",
+          place: "Ormskirk, Lancashire",
+          next: "Check Ormskirk appeal records",
+        }),
+        evidence: campaignEvidence([{ id: "appeal-check", description: "Check Ormskirk appeal records", reason: "No local work source refresh", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 51,
+        sourceLastSequence: 2040,
+        sourceDocumentSignature: "source:previous-read-only-baseline",
+        sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local review or queue state was reset because it did not retain source-resource provenance for this real campaign.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "overview",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: 51,
+        sourceRecheckLastSequence: 2040,
+        sourceRecheckDocumentSignature: "source:previous-read-only-baseline",
+        sourceRecheckVisitedViews: ["evidence"],
+        activity: [{ id: "baseline-old", label: "Previous read-only source baseline acknowledged before any local work existed." }],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=overview`);
+  await expect(page.getByText("Keep KFC Out of Ormskirk · Ormskirk, Lancashire")).toBeVisible();
+  await expect(page.getByText("Read-only source has changed since this local workspace started.")).toHaveCount(0);
+  await expect(page.getByText("Updated read-only source baseline for Keep KFC Out of Ormskirk; no local actions or drafts needed re-check.")).toBeVisible();
+  await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
+  await expect(page.getByRole("button", { name: "Create appeal-status action" })).toBeEnabled();
+
+  const storedState = JSON.parse((await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "{}");
+  expect(storedState.sourceStateVersion).toBe(52);
+  expect(storedState.sourceLastSequence).toBe(2052);
+  expect(storedState.sourceDocumentSignature).not.toBe("source:previous-read-only-baseline");
+  expect(storedState.sourceRecheckVisitedViews).toEqual([]);
+  expect(JSON.stringify(storedState)).not.toContain("source update pause");
+});
+
 test("operations workbench: source updates preserve browser-local work and require acknowledgement", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   let sourceVersion = 44;
@@ -10742,10 +10811,10 @@ test("operations workbench: source updates preserve browser-local work and requi
     "Reopen Evidence & checks, Strategy & tactics, Drafts before acknowledging this source update.",
   );
   await expect(page.getByLabel("Six-stage campaign runway")).toContainText("Paused for source update");
-  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("2 local items need source re-check");
+  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("1 local item needs source re-check");
   await expect(page.getByLabel("Local work requiring source re-check")).toContainText("Action: Confirm Planning Inspectorate appeal status · Next · Campaign source · Evidence & checks · strategy");
-  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("Draft: Supporter email · Needs human review · Browser-local source workspace draft");
-  await expect(page.getByRole("button", { name: /Reviews & approvals: Open view, Source re-check gate, 2 items/ }).first()).toBeVisible();
+  await expect(page.getByLabel("Local work requiring source re-check")).not.toContainText("Draft: Supporter email · Needs human review · Browser-local source workspace draft");
+  await expect(page.getByRole("button", { name: /Reviews & approvals: Open view, Source re-check gate, 1 item/ }).first()).toBeVisible();
   await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();
   await expect(page.getByText("Read-only source baseline current")).toBeVisible();
   await expect(page.getByText("The public source changed after this local workspace started. Acknowledge the updated source on Overview after re-checking local actions and drafts before approval or queueing.")).toBeVisible();
@@ -10824,7 +10893,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await page.goto("/operations");
   const portfolio = page.getByLabel("Campaign operations portfolio");
   const ormskirkRow = portfolio.locator("article", { hasText: "Keep KFC Out of Ormskirk" });
-  await expect(ormskirkRow).toContainText("Local signals: 2 source re-checks required · 1 action · 1 review.");
+  await expect(ormskirkRow).toContainText("Local signals: 1 source re-check required · 1 action.");
   await expect(ormskirkRow.getByLabel("Portfolio source re-check progress")).toContainText("Source re-check progress: 2/3 required source views checked; Strategy & tactics still needed before acknowledgement.");
   await page.goto(`/operations?campaignId=${campaignId}&view=actions`);
 
@@ -10838,7 +10907,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByLabel("Local schedule intent")).toBeDisabled();
   await expect(page.getByLabel("Local schedule intent")).toHaveAttribute("title", "Acknowledge the updated read-only source before changing local schedule intent.");
   await expect(page.getByText("Local schedule intent is paused until the updated read-only source is acknowledged, so queued work cannot be retimed against stale campaign material.")).toBeVisible();
-  await expect(page.getByLabel("Reset local workspace scope")).toContainText("Reset clears this campaign's 2 browser-local items currently paused for source re-check");
+  await expect(page.getByLabel("Reset local workspace scope")).toContainText("Reset clears this campaign's 1 browser-local item currently paused for source re-check");
 
   await page.getByRole("button", { name: /Responses & results/ }).first().click();
   await expect(page.getByLabel("Responses source update boundary")).toContainText("Response planning stays empty while the source is re-checked.");
@@ -10883,18 +10952,14 @@ test("operations workbench: source updates preserve browser-local work and requi
     requiredRecheckViews: ["Evidence & checks", "Strategy & tactics", "Drafts"],
     checkedRecheckViews: ["Evidence & checks", "Drafts"],
     missingRecheckViews: ["Strategy & tactics"],
-    localItemCount: 2,
+    localItemCount: 1,
   });
   expect(changedPack.sourceChangeReview.localActionsToRecheck[0]).toMatchObject({
     title: "Confirm Planning Inspectorate appeal status",
     source: "Campaign source · Evidence & checks · strategy",
     status: "Next",
   });
-  expect(changedPack.sourceChangeReview.localDraftsToRecheck[0]).toMatchObject({
-    title: "Supporter email",
-    source: "Browser-local source workspace draft",
-    status: "Needs human review",
-  });
+  expect(changedPack.sourceChangeReview.localDraftsToRecheck).toEqual([]);
 
   const [changedMarkdownDownload] = await Promise.all([
     page.waitForEvent("download"),
@@ -10909,11 +10974,11 @@ test("operations workbench: source updates preserve browser-local work and requi
   expect(changedMarkdown).toContain("Required source re-check views: Evidence & checks, Strategy & tactics, Drafts");
   expect(changedMarkdown).toContain("Source re-check views reopened: Evidence & checks, Drafts");
   expect(changedMarkdown).toContain("Source re-check views still to inspect: Strategy & tactics");
-  expect(changedMarkdown).toContain("Local items requiring re-check: 2");
+  expect(changedMarkdown).toContain("Local items requiring re-check: 1");
   expect(changedMarkdown).toContain("Source update warning: read-only source changed after this local workspace started");
   expect(changedMarkdown).toContain("## Source update review");
   expect(changedMarkdown).toContain("Re-check action: Confirm Planning Inspectorate appeal status (Next) — Campaign source · Evidence & checks · strategy");
-  expect(changedMarkdown).toContain("Re-check draft: Supporter email (Needs human review) — Browser-local source workspace draft");
+  expect(changedMarkdown).toContain("No browser-local drafts currently require source re-check.");
   expect(changedMarkdown).toContain("Source update review: re-check this action against the updated read-only source before approving or queueing local work.");
 
   await page.getByRole("button", { name: /Strategy & tactics/ }).first().click();
@@ -10958,7 +11023,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   await expect(page.getByLabel("Message")).toBeEnabled();
   await page.getByRole("button", { name: /Reviews & approvals/ }).first().click();
   await expect(page.getByText("Local approvals are checking against the latest acknowledged read-only source baseline.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Approve as human reviewer" })).toBeEnabled();
+  await expect(page.getByLabel("Review source update pause")).toHaveCount(0);
   await expect(page.getByLabel("Optional reviewer note")).toBeEnabled();
   await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
   await expect(page.getByLabel("Outbox source update pause")).toHaveCount(0);
