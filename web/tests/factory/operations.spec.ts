@@ -3453,12 +3453,12 @@ test("operations source API: normalizes recoverable legacy source references bef
   evidence.groups.push({ label: "Verification incomplete", count: 1, claims: [{ ...evidence.groups[0].claims[1] }] });
   evidence.totals = { claims: 7, loadBearing: 7, verifiedLoadBearing: 5, unresolvedLoadBearing: 2 };
   const legacyClaim = evidence.groups[0].claims[0] as { affectedOutputs: string[]; contradictsClaimIds?: string[] };
-  legacyClaim.affectedOutputs = ["Campaign Brief", "campaign_brief", "Digital Campaign Pack", "digital_pack", "evidence base"];
+  legacyClaim.affectedOutputs = ["Campaign Brief", "campaign_brief", "Objective & Theory of Change document", "Power & Stakeholder Map document", "Digital Campaign Pack", "digital_pack", "evidence base"];
   legacyClaim.contradictsClaimIds = ["claim-2", "claim-2", "archived-claim-from-previous-build"];
   evidence.conflicts = [legacyClaim, legacyClaim, { ...legacyClaim, id: "archived-claim-from-previous-build", contradictsClaimIds: ["claim-1"] }];
   const legacyNextCheck = evidence.nextChecks[0] as { claimIds?: string[]; affectedSections: string[] };
   legacyNextCheck.claimIds = ["claim-1", "claim-1", "archived-claim-from-previous-build"];
-  legacyNextCheck.affectedSections = ["documents", "Lobbying Pack", "lobbying_pack", "evidence base"];
+  legacyNextCheck.affectedSections = ["documents", "Lobbying Pack", "lobbying_pack", "Tactics & Timeline document", "evidence base"];
   evidence.nextChecks.push({ ...legacyNextCheck, description: "Duplicate legacy source check should be ignored." });
   evidence.terminalGaps = [
     { id: "legacy-gap", description: "Stale duplicated terminal gap date is recoverable.", at: "2026-07-17" },
@@ -3493,12 +3493,12 @@ test("operations source API: normalizes recoverable legacy source references bef
     expect(body.evidence?.groups).toHaveLength(1);
     expect(body.evidence?.groups?.[0]?.count).toBe(2);
     expect(body.evidence?.totals).toEqual({ claims: 2, loadBearing: 2, verifiedLoadBearing: 0, unresolvedLoadBearing: 2 });
-    expect(body.evidence?.groups?.[0]?.claims?.[0]?.affectedOutputs).toEqual(["campaign_brief", "digital_pack", "evidence"]);
+    expect(body.evidence?.groups?.[0]?.claims?.[0]?.affectedOutputs).toEqual(["campaign_brief", "objective_theory_of_change", "power_stakeholder_map", "digital_pack", "evidence"]);
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.contradictsClaimIds).toEqual(["claim-2"]);
     expect(body.evidence?.conflicts).toEqual([{ ...body.evidence?.groups?.[0]?.claims?.[0], contradictsClaimIds: ["claim-2"] }]);
     expect(body.evidence?.nextChecks).toHaveLength(1);
     expect(body.evidence?.nextChecks?.[0]?.claimIds).toEqual(["claim-1"]);
-    expect(body.evidence?.nextChecks?.[0]?.affectedSections).toEqual(["lobbying_pack", "evidence"]);
+    expect(body.evidence?.nextChecks?.[0]?.affectedSections).toEqual(["lobbying_pack", "tactics_timeline", "evidence"]);
     expect(body.evidence?.terminalGaps).toEqual([{ id: "legacy-gap", description: "Legacy terminal gap appears once.", at: "2026-07-17T10:00:00.000Z" }]);
     expect(body.sourceFailureKind).toBeUndefined();
     expect(requestedUrls).toEqual([

@@ -442,7 +442,11 @@ function uniqueStrings(values: unknown) {
 
 function normalizeSourceAffectedSectionKey(value: string) {
   if (SOURCE_AFFECTED_SECTION_KEYS.has(value)) return value;
-  const folded = value.trim().toLowerCase().replace(/[\s_-]+/g, "");
+  const folded = value
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "");
   return SOURCE_AFFECTED_SECTION_ALIASES[folded] ?? value;
 }
 
