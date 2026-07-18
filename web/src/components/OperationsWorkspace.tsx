@@ -1285,6 +1285,15 @@ function sourceWorkingCopyProvenanceNamesOnlySourceDocument(provenance: string, 
   return namedDocuments.length > 0 && namedDocuments.every((documentName) => documentName === normalizedSourceDocument);
 }
 
+function sourceWorkingCopyProvenanceNamesOnlySourceResource(provenance: string, resource: SourceResource, resources: SourceResource[]) {
+  const normalizedProvenance = normaliseOperationsSourceInlineText(provenance).toLowerCase();
+  const normalizedResourceTitle = normaliseOperationsSourceInlineText(resource.title).toLowerCase();
+  const namedResourceTitles = resources
+    .map((candidate) => normaliseOperationsSourceInlineText(candidate.title).toLowerCase())
+    .filter((candidateTitle) => candidateTitle && normalizedProvenance.includes(candidateTitle));
+  return namedResourceTitles.length === 0 || namedResourceTitles.every((candidateTitle) => candidateTitle === normalizedResourceTitle);
+}
+
 function sourceWorkingCopyMatchesCurrentSourceResource(copy: SourceWorkingCopy, resources: SourceResource[]) {
   const copyDocumentKey = canonicalSourceDocumentKey(copy.sourceDocumentKey);
   const copyDocument = normaliseOperationsSourceInlineText(copy.sourceDocument).toLowerCase();
@@ -1303,6 +1312,7 @@ function sourceWorkingCopyMatchesCurrentSourceResource(copy: SourceWorkingCopy, 
         normaliseOperationsSourceInlineText(resource.channel).toLowerCase() === copyChannel &&
         copyProvenance.includes(resourceDocument) &&
         sourceWorkingCopyProvenanceNamesOnlySourceDocument(copy.provenance, resource.sourceDocument) &&
+        sourceWorkingCopyProvenanceNamesOnlySourceResource(copy.provenance, resource, resources) &&
         copyWarnings.length === resourceWarnings.length &&
         copyWarnings.every((warning, index) => warning === resourceWarnings[index])
       );
@@ -4210,7 +4220,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         sourceDocumentKey: resource.sourceDocumentKey,
         createdAt: new Date().toISOString(),
         warnings: resource.warnings,
-        provenance: `Source campaign ${source.campaignId}; copied from ${resource.sourceDocument} into a browser-local editable copy; this does not change the public source document.`,
+        provenance: `Source campaign ${source.campaignId}; copied ${resource.title} from ${resource.sourceDocument} into a browser-local editable copy; this does not change the public source document.`,
       };
       const newDraft: WorkingDraft = {
         id: resource.id,
