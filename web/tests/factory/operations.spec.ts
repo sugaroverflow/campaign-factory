@@ -13256,6 +13256,113 @@ test("operations portfolio sanitizes malformed browser-local state before local 
   expect(storedState).not.toContain("portfolio-malformed-action");
 });
 
+test("operations portfolio scrubs foreign place-name shorthand from local signals", async ({ page }) => {
+  const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const campaignTitles: Record<string, { title: string; place: string; status: "partial" | "completed" }> = {
+    [ormskirkId]: { title: "Keep KFC Out of Ormskirk", place: "Ormskirk, Lancashire", status: "partial" },
+    "57678ae0-29fd-4b4b-8a53-5c711cdb21cf": { title: "Build 5,000 affordable houses in Tower Hamlets in the next 3 years", place: "Tower Hamlets, London", status: "partial" },
+    "6b54225d-afa3-41d1-b053-89741094f153": { title: "Stop the leisure park redevelopment in Barnet", place: "Barnet, London", status: "completed" },
+  };
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const requestedCampaignId = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? ormskirkId;
+    const campaign = campaignTitles[requestedCampaignId] ?? campaignTitles[ormskirkId];
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: requestedCampaignId, status: campaign.status, stateVersion: 71, lastSequence: 2210, events: [] },
+        documents: campaignOperationsDocuments({ title: campaign.title, place: campaign.place, next: `Check ${campaign.place} source records` }),
+        evidence: campaignEvidence([{ id: "portfolio-place-name-scrub", description: `Check ${campaign.place} source records`, reason: "Portfolio foreign place-name scrub guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    const sourceCopy = {
+      id: `source:${id}:digital-pack-place-name-scrub`,
+      campaignId: id,
+      title: "Ormskirk supporter update",
+      channel: "Email",
+      sourceDocument: "Digital Campaign Pack",
+      sourceDocumentKey: "digital_campaign_pack",
+      createdAt: "2026-07-17T20:05:00.000Z",
+      warnings: ["Confirm Ormskirk appeal records before stronger claims."],
+      provenance: `Source campaign ${id}; copied from Digital Campaign Pack into browser-local operations.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: null,
+        sourceLastSequence: null,
+        sourceDocumentSignature: null,
+        sourceAcknowledgedAt: null,
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local portfolio state contains foreign place-name shorthand that should be scrubbed before counts render.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "overview",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [
+          {
+            id: `source:${id}:foreign-place-action`,
+            title: "Prepare Barnet supporter update",
+            source: "Campaign source · Evidence & checks",
+            owner: "Campaigner",
+            timing: "Next",
+            priority: "High",
+            status: "next",
+            provenance: `Source campaign ${id}; created from Evidence & checks.`,
+          },
+        ],
+        workingDrafts: [
+          {
+            id: sourceCopy.id,
+            title: sourceCopy.title,
+            channel: "Email",
+            subject: "Barnet supporter update",
+            body: "This stale browser-local working draft uses the foreign Barnet shorthand under the Ormskirk key.",
+            reviewerNote: "Review the Barnet wording before queueing.",
+            status: "review",
+            queuedAt: null,
+            createdAt: "2026-07-17T20:05:00.000Z",
+            updatedAt: "2026-07-17T20:06:00.000Z",
+            sourceWorkingCopy: sourceCopy,
+          },
+        ],
+        activeWorkingDraftId: sourceCopy.id,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "foreign-place-activity", label: "Created Barnet supporter update under Ormskirk local state." }],
+      }),
+    );
+  }, ormskirkId);
+
+  await page.goto("/operations");
+  await expect(page.getByRole("heading", { name: "Keep KFC Out of Ormskirk" })).toBeVisible();
+  const ormskirkRow = page.getByLabel("Campaign operations portfolio").locator("article", { hasText: "Keep KFC Out of Ormskirk" });
+  await expect(ormskirkRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
+  await expect(ormskirkRow).not.toContainText("1 action");
+  await expect(ormskirkRow).not.toContainText("1 working draft");
+  await expect(ormskirkRow).not.toContainText("Barnet supporter update");
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), ormskirkId)) ?? "";
+  expect(storedState).toContain("workspace-sanitized");
+  expect(storedState).not.toContain("Barnet supporter update");
+  expect(storedState).not.toContain("foreign-place-action");
+});
+
 test("operations portfolio counts legacy top-level source working copies as local drafts", async ({ page }) => {
   const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const campaignTitles: Record<string, { title: string; place: string; status: "partial" | "completed" }> = {
