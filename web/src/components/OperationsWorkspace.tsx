@@ -3182,12 +3182,20 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     queueMicrotask(() => {
       setState((current) => {
         if (sourceBoundLocalWorkCount(current) > 0) return current;
+        const refreshedBaselineActivity = `Updated read-only source baseline for ${source.title}; no local actions or drafts needed re-check.`;
         return {
           ...current,
           sourceStateVersion: source.stateVersion,
           sourceLastSequence: source.lastSequence,
           sourceDocumentSignature: signature,
           sourceAcknowledgedAt: source.loadedAt,
+          sourceRecheckStateVersion: null,
+          sourceRecheckLastSequence: null,
+          sourceRecheckDocumentSignature: null,
+          sourceRecheckVisitedViews: [],
+          activity: current.activity.some((item) => item.label === refreshedBaselineActivity)
+            ? current.activity
+            : [record(refreshedBaselineActivity), ...current.activity].slice(0, 7),
         };
       });
     });
