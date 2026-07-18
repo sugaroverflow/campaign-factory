@@ -8296,6 +8296,116 @@ Use this current Digital Campaign Pack copy only after campaign-outcome boundari
   expect(stored).not.toContain("false-campaign-win");
 });
 
+test("operations workbench removes browser-local activity that claims petition or deputation hand-in outcomes", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 35, lastSequence: 50, events: [] },
+        documents: campaignOperationsDocuments(
+          {
+            title: "Stop the leisure park redevelopment in Barnet",
+            place: "Barnet, London",
+            next: "Check Barnet decision records",
+          },
+          {
+            digital_pack: `Supporter email
+
+Subject: Barnet supporter source update
+
+Use this current Digital Campaign Pack copy only after petition and deputation boundaries are checked.`,
+          },
+        ),
+        evidence: campaignEvidence([{ id: "handover-activity-claim", description: "Check Barnet decision records", reason: "Petition hand-in activity guard", affectedSections: ["digital_pack"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    const copy = {
+      id: `source:${campaignId}:resource:digital_pack:supporter-email`,
+      campaignId,
+      title: "Supporter email",
+      channel: "Supporter email",
+      sourceDocument: "Digital Campaign Pack",
+      sourceDocumentKey: "digital_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: [],
+      provenance: `Source campaign ${campaignId}; copied Supporter email from Digital Campaign Pack into a browser-local editable copy; this does not change the public source document.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: null,
+        sourceLastSequence: null,
+        sourceDocumentSignature: null,
+        sourceAcknowledgedAt: null,
+        selectedSegment: "source_primary",
+        subject: "Barnet supporter source update",
+        body: "This valid local source copy should remain while false petition hand-in activity is scrubbed.",
+        reviewerNote: "Review before any petition hand-in claims.",
+        status: "queued",
+        mode: "preview",
+        activeDraft: "supporter_email",
+        activeView: "outbox",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_next_check",
+        queuedAt: "2026-07-16T18:02:30.000Z",
+        localActions: [],
+        workingDrafts: [
+          {
+            id: copy.id,
+            title: copy.title,
+            channel: copy.channel,
+            subject: "Barnet supporter source update",
+            body: "This valid local source copy should remain while false petition hand-in activity is scrubbed.",
+            reviewerNote: "Review before any petition hand-in claims.",
+            status: "queued",
+            queuedAt: "2026-07-16T18:02:30.000Z",
+            createdAt: "2026-07-16T17:52:30.000Z",
+            updatedAt: "2026-07-16T17:58:30.000Z",
+            sourceWorkingCopy: copy,
+          },
+        ],
+        activeWorkingDraftId: copy.id,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [
+          { id: "false-petition-handover", label: "Barnet petition handed in to council with supporter signatures." },
+          { id: "false-deputation", label: "Deputation presented to committee for Barnet redevelopment decision." },
+          { id: "valid-local-queue", label: "Placed approved draft into the local demo queue. No provider connection used." },
+        ],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: /local queue item/i })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Barnet supporter source update");
+  await expect(page.locator("main")).not.toContainText("petition handed in");
+  await expect(page.locator("main")).not.toContainText("Deputation presented");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain("Barnet supporter source update");
+  expect(stored).toContain('"status":"queued"');
+  expect(stored).toContain("Placed approved draft into the local demo queue. No provider connection used.");
+  expect(stored).not.toContain("petition handed in");
+  expect(stored).not.toContain("Deputation presented");
+  expect(stored).not.toContain("false-petition-handover");
+  expect(stored).not.toContain("false-deputation");
+});
+
 test("operations workbench removes fixture activity from real campaign state without dropping provenanced local work", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 
