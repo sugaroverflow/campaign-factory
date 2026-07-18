@@ -8200,6 +8200,96 @@ test("operations workbench rejects source working drafts with malformed draft ti
   expect(stored).not.toContain("Malformed updatedAt working draft should not render");
 });
 
+test("operations workbench rejects source working drafts with reversed local timestamps", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: campaignEvidence([{ id: "next", description: "Check Barnet decision records", reason: "Reversed local timestamp guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    const sourceCopy = {
+      id: `source:${campaignId}:resource:lobbying_pack:reversed-draft-timestamps`,
+      campaignId,
+      title: "Barnet source draft with reversed timestamps",
+      channel: "Briefing note",
+      sourceDocument: "Lobbying Pack",
+      sourceDocumentKey: "lobbying_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: ["Confirm the current Barnet decision record before any external use."],
+      provenance: `Source campaign ${campaignId}; copied from the read-only Lobbying Pack into this browser-local workspace.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: 14,
+        sourceLastSequence: 25,
+        sourceDocumentSignature: `source:${campaignId}:real-barnet-source-baseline`,
+        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local draft was already reset; only the reversed-timestamp working draft should be removed.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "drafts",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "tomorrow_morning",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [
+          {
+            id: sourceCopy.id,
+            title: sourceCopy.title,
+            channel: "Briefing note",
+            subject: "Reversed timestamp working draft should not render",
+            body: "This source-bound browser-local working draft should be removed because its saved updatedAt is earlier than its createdAt.",
+            reviewerNote: "Reversed local timestamp note.",
+            status: "review",
+            queuedAt: null,
+            createdAt: "2026-07-16T18:05:00.000Z",
+            updatedAt: "2026-07-16T18:01:00.000Z",
+            sourceWorkingCopy: sourceCopy,
+          },
+        ],
+        activeWorkingDraftId: sourceCopy.id,
+        sourceWorkingCopy: null,
+        activity: [{ id: "reversed-draft-timestamps", label: "Submitted reversed timestamp working draft for review." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=drafts`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Reversed timestamp working draft should not render");
+  await page.goto(`/operations?campaignId=${barnetId}&view=reviews`);
+  await expect(page.locator("main")).not.toContainText("Reversed local timestamp note");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain('"activeWorkingDraftId":null');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("reversed-draft-timestamps");
+  expect(stored).not.toContain("Reversed timestamp working draft should not render");
+});
+
 test("operations workbench rejects cross-campaign source-copy identifiers from real campaign state", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
   const otherCampaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";

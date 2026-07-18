@@ -1149,6 +1149,10 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
 const INVALID_LOCAL_DRAFT_SUBJECT = "Local draft unavailable";
 const INVALID_LOCAL_DRAFT_BODY = "This browser-local draft could not be restored because its saved subject or body was malformed.";
 
+function storedTimestampIsBefore(left: string, right: string) {
+  return new Date(left).getTime() < new Date(right).getTime();
+}
+
 function workingDraftHasMalformedField(draft: Partial<WorkingDraft>) {
   return ["channel", "subject", "body", "reviewerNote", "status", "createdAt", "updatedAt"].some((field) => {
     const value = draft[field as keyof WorkingDraft];
@@ -1158,6 +1162,8 @@ function workingDraftHasMalformedField(draft: Partial<WorkingDraft>) {
     !isValidStoredTimestamp(draft.createdAt) ||
     typeof draft.updatedAt !== "string" ||
     !isValidStoredTimestamp(draft.updatedAt) ||
+    storedTimestampIsBefore(draft.updatedAt, draft.createdAt) ||
+    (typeof draft.queuedAt === "string" && isValidStoredTimestamp(draft.queuedAt) && storedTimestampIsBefore(draft.queuedAt, draft.createdAt)) ||
     (draft.queuedAt !== undefined && draft.queuedAt !== null && typeof draft.queuedAt !== "string");
 }
 
