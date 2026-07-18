@@ -13629,6 +13629,7 @@ test("operations workbench deduplicates browser-local activity ids for real camp
         activity: [
           { id: "duplicate-local-note", label: "Kept Ormskirk local note from restored browser state." },
           { id: "duplicate-local-note", label: "Duplicate Ormskirk local note should be removed before rendering." },
+          { id: "DUPLICATE-LOCAL-NOTE", label: "Case-only duplicate Ormskirk local note should be removed before rendering." },
           { id: "unique-local-note", label: "Unique Ormskirk activity stays visible." },
         ],
       }),
@@ -13640,11 +13641,13 @@ test("operations workbench deduplicates browser-local activity ids for real camp
   await expect(page.getByText("Kept Ormskirk local note from restored browser state.")).toBeVisible();
   await expect(page.getByText("Unique Ormskirk activity stays visible.")).toBeVisible();
   await expect(page.getByText("Duplicate Ormskirk local note should be removed before rendering.")).toHaveCount(0);
+  await expect(page.getByText("Case-only duplicate Ormskirk local note should be removed before rendering.")).toHaveCount(0);
 
   const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "";
   const parsed = JSON.parse(storedState) as { activity: Array<{ id: string; label: string }> };
-  expect(parsed.activity.filter((item) => item.id === "duplicate-local-note")).toHaveLength(1);
+  expect(parsed.activity.filter((item) => item.id.toLowerCase() === "duplicate-local-note")).toHaveLength(1);
   expect(storedState).not.toContain("Duplicate Ormskirk local note should be removed before rendering");
+  expect(storedState).not.toContain("Case-only duplicate Ormskirk local note should be removed before rendering");
 });
 
 test("operations workbench keeps one sanitized activity note when state is cleaned again", async ({ page }) => {
@@ -13697,6 +13700,7 @@ test("operations workbench keeps one sanitized activity note when state is clean
         sourceRecheckDocumentSignature: null,
         sourceRecheckVisitedViews: [],
         activity: [
+          { id: "WORKSPACE-SANITIZED", label: "Older sanitized note with case-drifted id should collapse into the canonical audit row." },
           { id: "workspace-sanitized", label: "Browser-local state was sanitized for this real campaign workspace; public source data was not changed." },
           { id: "kept-local-note", label: "Kept Ormskirk local note after a second cleanup." },
           { id: "fixture-leak", label: "Fixture school street note should be scrubbed before rendering." },
@@ -13713,8 +13717,11 @@ test("operations workbench keeps one sanitized activity note when state is clean
 
   const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "";
   const parsed = JSON.parse(storedState) as { activity: Array<{ id: string; label: string }> };
-  expect(parsed.activity.filter((item) => item.id === "workspace-sanitized")).toHaveLength(1);
+  const sanitizedRows = parsed.activity.filter((item) => item.id.toLowerCase() === "workspace-sanitized");
+  expect(sanitizedRows).toHaveLength(1);
+  expect(sanitizedRows[0]?.id).toBe("workspace-sanitized");
   expect(storedState).toContain("Kept Ormskirk local note after a second cleanup");
+  expect(storedState).not.toContain("Older sanitized note with case-drifted id should collapse into the canonical audit row");
   expect(storedState).not.toContain("Fixture school street note should be scrubbed before rendering");
 });
 

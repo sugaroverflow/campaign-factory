@@ -898,15 +898,16 @@ function normaliseActivity(activity: unknown): Activity[] {
     const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
     const label = typeof candidate.label === "string" ? candidate.label.trim() : "";
     if (!id || !label) continue;
-    if (seenIds.has(id)) continue;
-    seenIds.add(id);
+    const idKey = id.toLowerCase();
+    if (seenIds.has(idKey)) continue;
+    seenIds.add(idKey);
     normalised.push({ id, label });
   }
   return normalised;
 }
 
 function withWorkspaceSanitizedActivity(activity: Activity[]) {
-  return [workspaceSanitizedActivity, ...activity.filter((item) => item.id !== workspaceSanitizedActivity.id)].slice(0, 7);
+  return [workspaceSanitizedActivity, ...activity.filter((item) => item.id.toLowerCase() !== workspaceSanitizedActivity.id)].slice(0, 7);
 }
 
 const INVALID_LOCAL_ACTION_TITLE = "Local action unavailable";
