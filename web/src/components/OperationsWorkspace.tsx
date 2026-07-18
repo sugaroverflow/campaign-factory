@@ -937,10 +937,11 @@ function normaliseLocalActions(actions: unknown): LocalAction[] {
 }
 
 function sourceWorkingCopyHasMalformedOptionalField(copy: Partial<SourceWorkingCopy>) {
-  return ["channel", "sourceDocumentKey", "createdAt", "provenance"].some((field) => {
+  const createdAt = copy.createdAt;
+  return ["channel", "sourceDocumentKey", "provenance"].some((field) => {
     const value = copy[field as keyof SourceWorkingCopy];
     return value !== undefined && typeof value !== "string";
-  }) || (copy.warnings !== undefined && (!Array.isArray(copy.warnings) || copy.warnings.some((warning) => typeof warning !== "string")));
+  }) || (createdAt !== undefined && (typeof createdAt !== "string" || !isValidStoredTimestamp(createdAt))) || (copy.warnings !== undefined && (!Array.isArray(copy.warnings) || copy.warnings.some((warning) => typeof warning !== "string")));
 }
 
 function normaliseSourceWorkingCopy(value: unknown): SourceWorkingCopy | null {
