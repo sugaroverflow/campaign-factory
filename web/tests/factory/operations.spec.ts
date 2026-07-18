@@ -12363,6 +12363,107 @@ test("operations workbench keeps one sanitized activity note when state is clean
   expect(storedState).not.toContain("Fixture school street note should be scrubbed before rendering");
 });
 
+test("operations workbench scrubs other curated campaign names from real local state", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: barnetId, status: "completed", stateVersion: 61, lastSequence: 2110, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet GLA and committee decision records",
+        }),
+        evidence: campaignEvidence([{ id: "named-campaign-scrub", description: "Check Barnet decision records", reason: "Named cross-campaign state scrub guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 61,
+        sourceLastSequence: 2110,
+        sourceDocumentSignature: `source:${id}:current-baseline`,
+        sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+        selectedSegment: "source_primary",
+        subject: "Barnet source copy",
+        body: "This browser-local draft keeps Barnet source provenance attached.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "overview",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [
+          {
+            id: `source:${id}:barnet-records`,
+            title: "Check Barnet committee records",
+            source: "Tactics and Timeline",
+            owner: "Campaigner",
+            timing: "Next",
+            priority: "High",
+            status: "next",
+            provenance: `Source campaign ${id}; created from Barnet source records.`,
+          },
+          {
+            id: `source:${id}:foreign-tower-hamlets-title`,
+            title: "Re-use Tower Hamlets affordable housing targets",
+            source: "Tactics and Timeline",
+            owner: "Campaigner",
+            timing: "Next",
+            priority: "Medium",
+            status: "next",
+            provenance: `Source campaign ${id}; stale local action text from Build 5,000 affordable houses in Tower Hamlets in the next 3 years.`,
+          },
+        ],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: {
+          id: `source:${id}:digital-pack`,
+          campaignId: id,
+          title: "Barnet supporter email from source",
+          channel: "Email",
+          sourceDocument: "Digital Campaign Pack",
+          sourceDocumentKey: "digital_campaign_pack",
+          createdAt: "2026-07-17T20:05:00.000Z",
+          warnings: ["Confirm Barnet decision records before stronger claims."],
+          provenance: `Source campaign ${id}; copied from Digital Campaign Pack into browser-local operations.`,
+        },
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [
+          { id: "barnet-note", label: "Barnet local workspace opened." },
+          { id: "foreign-named-note", label: "Tower Hamlets, London local queue note should not render in Barnet." },
+        ],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=actions`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByText("Check Barnet committee records", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Re-use Tower Hamlets affordable housing targets")).toHaveCount(0);
+  await expect(page.getByText("Tower Hamlets, London local queue note should not render in Barnet.")).toHaveCount(0);
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), barnetId)) ?? "";
+  expect(storedState).toContain("Check Barnet committee records");
+  expect(storedState).toContain("Barnet local workspace opened");
+  expect(storedState).toContain("workspace-sanitized");
+  expect(storedState).not.toContain("Tower Hamlets");
+});
+
 test("operations portfolio sanitizes malformed browser-local state before local counts", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
   const campaignTitles: Record<string, { title: string; place: string; status: "partial" | "completed" }> = {

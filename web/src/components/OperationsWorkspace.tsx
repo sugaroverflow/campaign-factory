@@ -25,6 +25,23 @@ const LEGACY_STORAGE_KEYS = ["cf_operations_demo_v2", "cf_operations_demo_v1"];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const PORTFOLIO_CAMPAIGNS: PortfolioCampaign[] = [...OPERATIONS_PUBLIC_CAMPAIGNS];
+const CURATED_CAMPAIGN_TEXT_GUARDS: Record<string, RegExp[]> = {
+  "69f257b6-9913-4395-94f7-5c25b4b5fe95": [
+    /\bKeep KFC Out of Ormskirk\b/i,
+    /\bKFC (?:being built|appeal|out) in Ormskirk\b/i,
+    /\bOrmskirk, Lancashire\b/i,
+  ],
+  "57678ae0-29fd-4b4b-8a53-5c711cdb21cf": [
+    /\bBuild 5,000 affordable (?:homes|houses) in Tower Hamlets\b/i,
+    /\bTower Hamlets (?:affordable housing|housing targets?|café outreach)\b/i,
+    /\bTower Hamlets, London\b/i,
+  ],
+  "6b54225d-afa3-41d1-b053-89741094f153": [
+    /\bStop the leisure park redevelopment in Barnet\b/i,
+    /\bBarnet (?:Council committee|decision records?|GLA|leisure park)\b/i,
+    /\bBarnet, London\b/i,
+  ],
+};
 const SOURCE_CLIENT_TIMEOUT_MS = 15_000;
 const SOURCE_CLIENT_FETCH_HEADERS = {
   accept: "application/json",
@@ -954,7 +971,13 @@ function referencedCampaignIds(value: string) {
 }
 
 function textReferencesOnlyExpectedCampaign(value: string, expectedWorkspaceKey: string) {
-  return referencedCampaignIds(value).every((campaignId) => campaignId.toLowerCase() === expectedWorkspaceKey.toLowerCase());
+  const expectedKey = expectedWorkspaceKey.toLowerCase();
+  const uuidMatchesExpected = referencedCampaignIds(value).every((campaignId) => campaignId.toLowerCase() === expectedKey);
+  if (!uuidMatchesExpected) return false;
+  return Object.entries(CURATED_CAMPAIGN_TEXT_GUARDS).every(([campaignId, guards]) => {
+    if (campaignId === expectedKey) return true;
+    return guards.every((guard) => !guard.test(value));
+  });
 }
 
 function textFieldsReferenceOnlyExpectedCampaign(values: string[], expectedWorkspaceKey: string) {
