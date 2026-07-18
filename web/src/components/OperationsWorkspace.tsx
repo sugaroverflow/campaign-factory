@@ -1298,14 +1298,39 @@ function stateHasOlderSourceResourceBaseline(state: DemoState, source: CampaignS
   return state.sourceStateVersion !== source.stateVersion || state.sourceLastSequence !== source.lastSequence || state.sourceDocumentSignature !== currentDocumentSignature;
 }
 
+function localActionMatchesCurrentSourceAction(action: LocalAction, source: CampaignSource) {
+  if (action.id === `source:${source.campaignId}:primary-source-check`) {
+    const primaryCheck = source.evidence.nextChecks[0];
+    return Boolean(primaryCheck && normaliseOperationsSourceInlineText(action.title) === normaliseOperationsSourceInlineText(sourceCheckActionTitle(source, primaryCheck, 0)));
+  }
+
+  const currentCheckAction = source.evidence.nextChecks
+    .slice(1)
+    .some((check, offset) => action.id === sourceCheckActionId(source, check, offset + 1) && normaliseOperationsSourceInlineText(action.title) === normaliseOperationsSourceInlineText(sourceCheckActionTitle(source, check, offset + 1)));
+  if (currentCheckAction) return true;
+
+  const currentIncompleteDocumentAction = source.incompleteDocuments.some(
+    (doc) => action.id === incompleteDocumentActionId(source, doc) && normaliseOperationsSourceInlineText(action.title) === normaliseOperationsSourceInlineText(`Follow up incomplete ${doc.name}`),
+  );
+  if (currentIncompleteDocumentAction) return true;
+
+  return extractSourceTactics(source).some(
+    (tactic) => action.id === tactic.id && normaliseOperationsSourceInlineText(action.title) === normaliseOperationsSourceInlineText(tactic.title),
+  );
+}
+
 function sanitizeStateForCurrentSourceResources(state: DemoState, source: CampaignSource, resources: SourceResource[], currentDocumentSignature: string): DemoState {
   if (state.workspaceKey !== source.campaignId) return state;
   if (stateHasOlderSourceResourceBaseline(state, source, currentDocumentSignature)) return state;
   const sourceWorkingCopy = state.sourceWorkingCopy && sourceWorkingCopyMatchesCurrentSourceResource(state.sourceWorkingCopy, resources) ? state.sourceWorkingCopy : null;
   const workingDrafts = state.workingDrafts.filter((draft) => sourceWorkingCopyMatchesCurrentSourceResource(draft.sourceWorkingCopy, resources));
-  if (sourceWorkingCopy === state.sourceWorkingCopy && workingDrafts.length === state.workingDrafts.length) return state;
+  const localActions = state.localActions.filter((action) => localActionMatchesCurrentSourceAction(action, source));
+  if (sourceWorkingCopy === state.sourceWorkingCopy && workingDrafts.length === state.workingDrafts.length && localActions.length === state.localActions.length) return state;
 
   const removedReferences = [
+    ...state.localActions
+      .filter((action) => !localActions.some((keptAction) => keptAction.id === action.id))
+      .flatMap((action) => [action.id, action.title, action.source, action.owner, action.timing, action.provenance]),
     ...state.workingDrafts
       .filter((draft) => !workingDrafts.some((keptDraft) => keptDraft.id === draft.id))
       .flatMap((draft) => [
@@ -1336,16 +1361,19 @@ function sanitizeStateForCurrentSourceResources(state: DemoState, source: Campai
       : []),
   ];
   const hasQueuedDraft = workingDrafts.some((draft) => hasRecordedLocalQueue(draft.status, draft.queuedAt));
+  const removedLocalActions = localActions.length !== state.localActions.length;
   const activity = state.activity.filter(
     (item) =>
       !activityLooksTiedToRemovedLocalWork(item, removedReferences) &&
       !(workingDrafts.length === 0 && state.workingDrafts.length > 0 && activityLooksLikeDraftWorkflow(item)) &&
-      !(state.sourceWorkingCopy && !sourceWorkingCopy && activityLooksLikeTopLevelDraftWorkflow(item)),
+      !(state.sourceWorkingCopy && !sourceWorkingCopy && activityLooksLikeTopLevelDraftWorkflow(item)) &&
+      !(removedLocalActions && activityLooksLikeLocalActionWorkflow(item)),
   );
   return {
     ...state,
     sourceWorkingCopy,
     workingDrafts,
+    localActions,
     activeWorkingDraftId: workingDrafts.some((draft) => draft.id === state.activeWorkingDraftId) ? state.activeWorkingDraftId : (workingDrafts[0]?.id ?? null),
     activeDraft: state.sourceWorkingCopy && !sourceWorkingCopy ? initialState.activeDraft : state.activeDraft,
     subject: state.sourceWorkingCopy && !sourceWorkingCopy ? "Local source draft reset" : state.subject,
