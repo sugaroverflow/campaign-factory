@@ -458,6 +458,12 @@ function normalizeSourceReferenceId(value: unknown) {
   return id.length > 0 ? id : undefined;
 }
 
+function normalizeSourceIsoDateTime(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const at = value.trim();
+  return SOURCE_ISO_DATETIME_RE.test(at) && Number.isFinite(Date.parse(at)) ? at : undefined;
+}
+
 function uniqueSourceReferenceIds(values: unknown) {
   if (!Array.isArray(values)) return values;
   const seen = new Set<string>();
@@ -508,14 +514,13 @@ function normalizeSourceAffectedSectionValues(values: unknown) {
 }
 
 function isRecoverableSourceTerminalGap(value: Record<string, unknown>) {
+  const at = normalizeSourceIsoDateTime(value.at);
   return (
     typeof value.id === "string" &&
     value.id.trim().length > 0 &&
     typeof value.description === "string" &&
     value.description.trim().length > 0 &&
-    typeof value.at === "string" &&
-    SOURCE_ISO_DATETIME_RE.test(value.at) &&
-    Number.isFinite(Date.parse(value.at))
+    Boolean(at)
   );
 }
 
@@ -523,8 +528,10 @@ function normalizeSourceTerminalGap(value: Record<string, unknown>) {
   const normalized = { ...value };
   const id = normalizeSourceReferenceId(normalized.id);
   const description = normalizeSourceVisibleText(normalized.description);
+  const at = normalizeSourceIsoDateTime(normalized.at);
   if (id) normalized.id = id;
   if (description) normalized.description = description;
+  if (at) normalized.at = at;
   if (normalized.agentRunId !== undefined && typeof normalized.agentRunId !== "string") delete normalized.agentRunId;
   if (normalized.step !== undefined) {
     const step = normalized.step;
