@@ -483,6 +483,16 @@ function isRecoverableSourceTerminalGap(value: Record<string, unknown>) {
   );
 }
 
+function normalizeSourceTerminalGap(value: Record<string, unknown>) {
+  const normalized = { ...value };
+  if (normalized.agentRunId !== undefined && typeof normalized.agentRunId !== "string") delete normalized.agentRunId;
+  if (normalized.step !== undefined) {
+    const step = normalized.step;
+    if (typeof step !== "number" || !Number.isInteger(step) || step < 1 || step > 10) delete normalized.step;
+  }
+  return normalized;
+}
+
 function normalizeSourceDocuments(value: unknown) {
   return Array.isArray(value)
     ? value.map((document) => (typeof document === "object" && document !== null ? { ...(document as Record<string, unknown>), flags: uniqueStrings((document as Record<string, unknown>).flags) } : document))
@@ -646,9 +656,9 @@ function normalizeSourceEvidence(value: unknown) {
         passthroughTerminalGaps.push(gap);
         continue;
       }
-      const gapRecord = gap as Record<string, unknown>;
+      const gapRecord = normalizeSourceTerminalGap(gap as Record<string, unknown>);
       if (typeof gapRecord.id !== "string") {
-        passthroughTerminalGaps.push(gap);
+        passthroughTerminalGaps.push(gapRecord);
         continue;
       }
       if (!terminalGapsById.has(gapRecord.id)) terminalGapOrder.push(gapRecord.id);
