@@ -2053,6 +2053,25 @@ function sourceSignatureStrings(values: string[] | undefined) {
   return [...(values ?? [])].sort(sourceSignatureCompare);
 }
 
+function sourceEvidenceClaimSignature(claim: EvidenceAndNextChecks["groups"][number]["claims"][number]) {
+  return {
+    id: claim.id,
+    text: claim.text,
+    type: claim.type,
+    label: claim.label,
+    loadBearing: claim.loadBearing,
+    confidence: claim.confidence,
+    excerpt: claim.excerpt ?? null,
+    sourceCount: claim.sourceCount,
+    affectedOutputs: sourceSignatureStrings(claim.affectedOutputs),
+    contradictsClaimIds: sourceSignatureStrings(claim.contradictsClaimIds),
+  };
+}
+
+function sourceEvidenceClaimSortKey(claim: ReturnType<typeof sourceEvidenceClaimSignature>) {
+  return `${claim.id}\u0000${claim.label}\u0000${claim.text}`;
+}
+
 function sourceDocumentSignature(source: CampaignSource) {
   const sourceIdentity = sourceSignatureHash(sourceSignatureText(`${source.title}\n${source.place ?? ""}`));
   const documentStatuses = source.documents
@@ -2067,21 +2086,13 @@ function sourceDocumentSignature(source: CampaignSource) {
   const evidenceSignature = sourceSignatureHash(
     sourceSignatureText(
       JSON.stringify({
-        groups: source.evidence.groups.map((group) => ({
-          label: group.label,
-          claims: group.claims.map((claim) => ({
-            id: claim.id,
-            text: claim.text,
-            type: claim.type,
-            label: claim.label,
-            loadBearing: claim.loadBearing,
-            confidence: claim.confidence,
-            excerpt: claim.excerpt ?? null,
-            sourceCount: claim.sourceCount,
-            affectedOutputs: sourceSignatureStrings(claim.affectedOutputs),
-            contradictsClaimIds: sourceSignatureStrings(claim.contradictsClaimIds),
-          })),
-        })),
+        groups: source.evidence.groups
+          .map((group) => ({
+            label: group.label,
+            claims: group.claims.map(sourceEvidenceClaimSignature).sort((left, right) => sourceSignatureCompare(sourceEvidenceClaimSortKey(left), sourceEvidenceClaimSortKey(right))),
+          }))
+          .sort((left, right) => sourceSignatureCompare(left.label, right.label)),
+        conflicts: source.evidence.conflicts.map(sourceEvidenceClaimSignature).sort((left, right) => sourceSignatureCompare(sourceEvidenceClaimSortKey(left), sourceEvidenceClaimSortKey(right))),
         nextChecks: source.evidence.nextChecks.map((check) => ({
           id: check.id,
           description: check.description,
@@ -3723,11 +3734,13 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         ? {
             totals: source.evidence.totals,
             nextChecks: source.evidence.nextChecks.slice(0, 8).map((check) => ({ id: check.id, description: check.description, reason: check.reason, affectedSections: check.affectedSections })),
+            conflicts: source.evidence.conflicts.slice(0, 8).map((claim) => ({ id: claim.id, text: claim.text, label: claim.label, contradictsClaimIds: claim.contradictsClaimIds ?? [] })),
             incompleteDocuments: source.incompleteDocuments.map((doc) => ({ key: doc.key, name: doc.name, status: doc.status, resourceCount: doc.resourceCount })),
           }
         : {
             totals: { unresolvedLoadBearing: 2 },
             nextChecks: ["Verify council order status", "Keep media escalation blocked until checked"],
+            conflicts: [],
             incompleteDocuments: [],
           },
       sourceDocuments: source
@@ -3824,6 +3837,9 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         "## Evidence & checks",
         `- Unresolved load-bearing facts: ${pack.evidence.totals.unresolvedLoadBearing}`,
         ...pack.evidence.nextChecks.map((check) => (typeof check === "string" ? `- ${check}` : `- ${check.description}${check.reason ? ` — ${check.reason}` : ""}`)),
+        ...(pack.evidence.conflicts.length
+          ? pack.evidence.conflicts.map((claim) => `- Source conflict: ${claim.text}${claim.contradictsClaimIds.length ? ` (contradicts ${claim.contradictsClaimIds.join(", ")})` : ""}`)
+          : ["- Source conflicts: none exposed by typed source"]),
         ...pack.evidence.incompleteDocuments.map((doc) => `- Incomplete source document: ${doc.name} (${doc.status}, ${doc.resourceCount} resources)`),
         "",
         "## Source documents",

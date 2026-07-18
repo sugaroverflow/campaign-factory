@@ -13931,6 +13931,8 @@ test("operations workbench: order-only source metadata changes keep the acknowle
     { id: "gap-appeal-status", description: "Appeal-status terminal gap remains unresolved.", agentRunId: "agent-appeal", step: 4, at: "2026-07-17T12:01:00Z" },
     { id: "gap-resident-evidence", description: "Resident evidence consent terminal gap remains unresolved.", agentRunId: "agent-evidence", step: 8, at: "2026-07-17T12:02:00Z" },
   ];
+  let conflictAffectedOutputs = ["campaign_strategy", "digital_pack"];
+  let conflictContradictingIds = ["claim-2", "claim-1"];
   let documentFlags = ["Unresolved load-bearing claim: Unresolved source claim 1", "Unresolved load-bearing claim: Unresolved source claim 2"];
 
   const sourceEvidence = () => {
@@ -13940,6 +13942,22 @@ test("operations workbench: order-only source metadata changes keep the acknowle
     evidence.nextChecks[0].claimIds = claimIds;
     evidence.draftNotes = draftNotes;
     evidence.terminalGaps = terminalGaps;
+    const conflictClaim = {
+      id: "claim-conflict-appeal-status",
+      text: "Appeal-status source conflict remains unresolved.",
+      type: "other",
+      label: "Conflicting evidence",
+      loadBearing: true,
+      confidence: "medium",
+      sourceCount: 2,
+      affectedOutputs: conflictAffectedOutputs,
+      contradictsClaimIds: conflictContradictingIds,
+    };
+    evidence.groups = [{ label: "Conflicting evidence", count: 1, claims: [conflictClaim] }, ...evidence.groups];
+    evidence.conflicts = [conflictClaim];
+    evidence.totals.claims += 1;
+    evidence.totals.loadBearing += 1;
+    evidence.totals.unresolvedLoadBearing += 1;
     return evidence;
   };
 
@@ -13970,6 +13988,8 @@ test("operations workbench: order-only source metadata changes keep the acknowle
   affectedOutputs = [...affectedOutputs].reverse();
   draftNotes = [...draftNotes].reverse();
   terminalGaps = [...terminalGaps].reverse();
+  conflictAffectedOutputs = [...conflictAffectedOutputs].reverse();
+  conflictContradictingIds = [...conflictContradictingIds].reverse();
   documentFlags = [...documentFlags].reverse();
   await page.reload();
   await page.getByRole("button", { name: /Overview/ }).first().click();
@@ -13980,6 +14000,65 @@ test("operations workbench: order-only source metadata changes keep the acknowle
   await expect(page.getByRole("button", { name: "Acknowledge updated source" })).toHaveCount(0);
   const afterOrderChange = JSON.parse((await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "{}");
   expect(afterOrderChange.sourceDocumentSignature).toBe(beforeOrderChange.sourceDocumentSignature);
+});
+
+test("operations workbench: source conflict changes preserve browser-local work and require acknowledgement", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  let conflictText = "Initial public source conflict for the local action baseline.";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const evidence = campaignEvidence([{ id: "appeal-check", description: "Check Ormskirk appeal records", reason: "Conflict source baseline", affectedSections: ["strategy"] }], 2);
+    const conflictClaim = {
+      id: "claim-conflict-appeal-status",
+      text: conflictText,
+      type: "other",
+      label: "Conflicting evidence",
+      loadBearing: true,
+      confidence: "medium",
+      sourceCount: 2,
+      affectedOutputs: ["campaign_strategy"],
+      contradictsClaimIds: ["claim-1"],
+    };
+    evidence.groups = [{ label: "Conflicting evidence", count: 1, claims: [conflictClaim] }, ...evidence.groups];
+    evidence.conflicts = [conflictClaim];
+    evidence.totals.claims += 1;
+    evidence.totals.loadBearing += 1;
+    evidence.totals.unresolvedLoadBearing += 1;
+
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 44, lastSequence: 1909, events: [] },
+        documents: campaignOperationsDocuments({ title: "Keep KFC Out of Ormskirk", place: "Ormskirk, Lancashire", next: "Check Ormskirk appeal records" }),
+        evidence,
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+  await expect(page.getByRole("heading", { name: /Keep KFC Out of Ormskirk into operations/i })).toBeVisible();
+  await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
+  await page.getByRole("button", { name: "Create appeal-status action" }).click();
+  await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
+  const beforeConflictChange = JSON.parse((await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "{}");
+  expect(beforeConflictChange.sourceDocumentSignature).toContain(`source:${campaignId}:`);
+
+  conflictText = "Updated public source conflict while the run header and compiled documents stayed unchanged.";
+  await page.reload();
+  await page.getByRole("button", { name: /Overview/ }).first().click();
+
+  await expect(page.getByText("Read-only source has changed since this local workspace started.")).toBeVisible();
+  await expect(page.getByLabel("Source document baseline state")).toContainText("changed since local acknowledgement");
+  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("1 local item needs source re-check");
+  await expect(page.getByRole("button", { name: "Acknowledge updated source" })).toBeDisabled();
+  await page.getByRole("button", { name: /Outbox & schedule/ }).first().click();
+  const [changedJsonDownload] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download JSON" }).click()]);
+  const changedJsonPath = await changedJsonDownload.path();
+  expect(changedJsonPath).toBeTruthy();
+  const changedPack = JSON.parse(await readFile(changedJsonPath!, "utf8")) as { sourceChangeReview: { previousDocumentSignature: string | null; currentDocumentSignature: string | null } };
+  expect(changedPack.sourceChangeReview.previousDocumentSignature).toBe(beforeConflictChange.sourceDocumentSignature);
+  expect(changedPack.sourceChangeReview.currentDocumentSignature).not.toBe(beforeConflictChange.sourceDocumentSignature);
 });
 
 test("operations workbench: source updates preserve browser-local work and require acknowledgement", async ({ page }) => {
