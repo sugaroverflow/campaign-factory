@@ -895,10 +895,12 @@ function normaliseActivity(activity: unknown): Activity[] {
   for (const item of activity) {
     if (!item || typeof item !== "object") continue;
     const candidate = item as Partial<Activity>;
-    if (typeof candidate.id !== "string" || !candidate.id || typeof candidate.label !== "string" || !candidate.label) continue;
-    if (seenIds.has(candidate.id)) continue;
-    seenIds.add(candidate.id);
-    normalised.push({ id: candidate.id, label: candidate.label });
+    const id = typeof candidate.id === "string" ? candidate.id.trim() : "";
+    const label = typeof candidate.label === "string" ? candidate.label.trim() : "";
+    if (!id || !label) continue;
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+    normalised.push({ id, label });
   }
   return normalised;
 }

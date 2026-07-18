@@ -3581,7 +3581,6 @@ test("operations source API: normalizes recoverable legacy source references bef
   (evidence.groups[1].claims[1] as { contradictsClaimIds?: null }).contradictsClaimIds = null;
   evidence.conflicts = [legacyClaim, legacyClaim, { ...legacyClaim, id: "archived-claim-from-previous-build", contradictsClaimIds: ["claim-1"] }];
   const legacyNextCheck = evidence.nextChecks[0] as { claimIds?: string[] | null; affectedSections: string[]; description: string; reason: string };
-  const legacyNextCheckReason = legacyNextCheck.reason;
   legacyNextCheck.description = "Legacy&nbsp source\n check keeps the current claim and drops historical ids.";
   legacyNextCheck.claimIds = [" claim-1 ", "claim-1", "archived-claim-from-previous-build"];
   legacyNextCheck.affectedSections = ["documents", "Campaign&nbsp;Strategy document", "Lobbying Pack document", "lobbying_pack", "Media Pack document", "Tactics &amp; Timeline document", "OBJECTIVE_THEORY_OF_CHANGE", "Research &amp; Evidence", "evidence base"];
@@ -16431,6 +16430,83 @@ test("operations workbench: content-only source title changes preserve local wor
   await page.getByRole("button", { name: /Drafts/ }).first().click();
   await expect(page.getByLabel("Subject")).toBeEnabled();
   await expect(page.getByRole("button", { name: "Mark ready for review" })).toBeEnabled();
+});
+
+test("operations workbench trims blank browser-local activity before export", async ({ page }) => {
+  const campaignId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? campaignId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Retrieve the GLA decision report and Barnet committee minutes",
+        }),
+        evidence: campaignEvidence([{ id: "next", description: "Retrieve the GLA decision report and Barnet committee minutes", reason: "Activity trim regression", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 14,
+        sourceLastSequence: 25,
+        sourceDocumentSignature: `source:${id}:barnet-source-baseline`,
+        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        selectedSegment: "source_primary",
+        subject: "Barnet local update",
+        body: "Hi — can you support the campaign after the next source check?",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "outbox",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        activity: [
+          { id: "   ", label: "Whitespace-only activity id must not survive." },
+          { id: "blank-label", label: "   " },
+          { id: "  trimmed-activity  ", label: "  Reviewed Barnet local workspace boundary.  " },
+        ],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+
+  const [jsonDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download JSON" }).click(),
+  ]);
+  const jsonPath = await jsonDownload.path();
+  expect(jsonPath).toBeTruthy();
+  const pack = JSON.parse(await readFile(jsonPath!, "utf8")) as { activity: string[] };
+  expect(pack.activity).toContain("Browser-local state was sanitized for this real campaign workspace; public source data was not changed.");
+  expect(pack.activity).toContain("Reviewed Barnet local workspace boundary.");
+  expect(pack.activity).not.toContain("Whitespace-only activity id must not survive.");
+  expect(pack.activity).not.toContain("   ");
+
+  const stored = await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId);
+  expect(stored).toContain('"id":"trimmed-activity"');
+  expect(stored).toContain('"label":"Reviewed Barnet local workspace boundary."');
+  expect(stored).not.toContain("Whitespace-only activity id must not survive");
+  expect(stored).not.toContain("blank-label");
 });
 
 test("operations workbench: all real campaign routes export source-specific local packs", async ({ page }) => {

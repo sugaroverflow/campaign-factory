@@ -122,7 +122,6 @@ const SOURCE_RUN_STATUS_BY_VISIBLE_TEXT = new Map<string, string>([
   ["cancelled", "cancelled"],
   ["canceled", "cancelled"],
 ]);
-const SOURCE_DOCUMENT_STATUSES = new Set<string>(DOCUMENT_STATUSES);
 const SOURCE_DOCUMENT_STATUS_BY_VISIBLE_TEXT = new Map<string, string>(DOCUMENT_STATUSES.flatMap((status) => [[status, status], [status.replace(/ /g, "_"), status], [status.replace(/ /g, "-"), status]]));
 const SOURCE_CANONICAL_DOCUMENTS_BY_KEY = new Map<string, (typeof CANONICAL_DOCUMENTS)[number]>(CANONICAL_DOCUMENTS.map((document) => [document.key, document]));
 const SOURCE_DOCUMENT_KEY_BY_VISIBLE_TEXT = new Map<string, string>(
@@ -521,18 +520,6 @@ function sourceRunHeaderOnly(value: unknown) {
     delete header.batchId;
   }
   return header;
-}
-
-function uniqueStrings(values: unknown) {
-  if (!Array.isArray(values)) return values;
-  const seen = new Set<string>();
-  const unique: string[] = [];
-  for (const value of values) {
-    if (typeof value !== "string" || seen.has(value)) continue;
-    seen.add(value);
-    unique.push(value);
-  }
-  return unique;
 }
 
 function normalizeSourceReferenceId(value: unknown) {

@@ -106,6 +106,7 @@ export function documentPill(
   // "Complete" unreachable, contradicting the ready count in the header.
   _flagged = false,
 ): { label: string; tone: "complete" | "nearly" } | null {
+  void _flagged;
   if (status === "ready") return { label: "Complete", tone: "complete" };
   if (status === "needs verification") return { label: "Nearly complete", tone: "nearly" };
   return null; // assembling / under review / not started — dimmed card, no pill
