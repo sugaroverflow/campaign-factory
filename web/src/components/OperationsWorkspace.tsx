@@ -936,6 +936,12 @@ function storedSourceMetadataTextIsMalformed(value: unknown) {
   return value !== value.trim() || value !== value.normalize("NFC") || normaliseOperationsSourceInlineText(value) !== value;
 }
 
+function storedCampaignIdIsMalformed(value: unknown) {
+  if (typeof value !== "string") return value !== undefined;
+  const canonicalCampaignId = value.trim().toLowerCase();
+  return value !== canonicalCampaignId || value !== value.normalize("NFC") || normaliseOperationsSourceInlineText(value) !== value || !UUID_RE.test(canonicalCampaignId);
+}
+
 function localActionHasMalformedField(action: Record<string, unknown>) {
   return ["id", "title", "source", "owner", "timing", "provenance", "priority", "status"].some((field) => {
     const value = action[field];
@@ -1011,7 +1017,7 @@ function sourceWorkingCopyHasMalformedOptionalField(copy: Partial<SourceWorkingC
   const title = typeof copy.title === "string" ? copy.title.trim() : "";
   const sourceDocument = typeof copy.sourceDocument === "string" ? copy.sourceDocument.trim() : "";
   const sourceDocumentKey = typeof copy.sourceDocumentKey === "string" ? copy.sourceDocumentKey.trim() : "";
-  return ["channel", "sourceDocumentKey", "provenance"].some((field) => {
+  return storedCampaignIdIsMalformed(copy.campaignId) || ["channel", "sourceDocumentKey", "provenance"].some((field) => {
     const value = copy[field as keyof SourceWorkingCopy];
     return (value !== undefined && (typeof value !== "string" || !storedTextHasVisibleText(value) || storedSourceMetadataTextIsMalformed(value)));
   }) ||
