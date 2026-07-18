@@ -536,7 +536,8 @@ function normalizeSourceReferenceId(value: unknown) {
 function normalizeSourceIsoDateTime(value: unknown) {
   if (typeof value !== "string") return undefined;
   const at = value.trim();
-  return SOURCE_ISO_DATETIME_RE.test(at) && Number.isFinite(Date.parse(at)) ? at : undefined;
+  const canonicalUtcAt = at.endsWith("z") ? `${at.slice(0, -1)}Z` : at;
+  return SOURCE_ISO_DATETIME_RE.test(canonicalUtcAt) && Number.isFinite(Date.parse(canonicalUtcAt)) ? canonicalUtcAt : undefined;
 }
 
 function uniqueSourceReferenceIds(values: unknown) {
