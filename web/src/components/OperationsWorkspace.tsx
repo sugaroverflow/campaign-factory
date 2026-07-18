@@ -922,10 +922,17 @@ function storedTextIsInvisible(value: unknown) {
   return typeof value === "string" && value.trim().length > 0 && !storedTextHasVisibleText(value);
 }
 
+function storedSourceScopedIdIsMalformed(value: unknown) {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!/^(?:source:)?[0-9a-f-]{36}(?::|$)/i.test(trimmed)) return false;
+  return value !== trimmed || value !== value.normalize("NFC") || normaliseOperationsSourceInlineText(value) !== value;
+}
+
 function localActionHasMalformedField(action: Record<string, unknown>) {
   return ["id", "title", "source", "owner", "timing", "provenance", "priority", "status"].some((field) => {
     const value = action[field];
-    return (value !== undefined && typeof value !== "string") || storedTextIsInvisible(value);
+    return (value !== undefined && typeof value !== "string") || storedTextIsInvisible(value) || (field === "id" && storedSourceScopedIdIsMalformed(value));
   }) ||
     (action.priority !== undefined && action.priority !== "High" && action.priority !== "Medium" && action.priority !== "Low") ||
     (action.status !== undefined && action.status !== "next" && action.status !== "in_progress" && action.status !== "blocked" && action.status !== "done");
@@ -990,6 +997,7 @@ function sourceWorkingCopyHasMalformedOptionalField(copy: Partial<SourceWorkingC
   }) ||
     !sourceDocumentKey ||
     storedTextIsInvisible(copy.id) ||
+    storedSourceScopedIdIsMalformed(copy.id) ||
     storedTextIsInvisible(copy.title) ||
     storedTextIsInvisible(copy.sourceDocument) ||
     !storedTextHasVisibleText(sourceDocumentKey) ||
@@ -1246,6 +1254,7 @@ function workingDraftHasMalformedField(draft: Partial<WorkingDraft>) {
     const value = draft[field as keyof WorkingDraft];
     return (value !== undefined && typeof value !== "string") || storedTextIsInvisible(value);
   }) ||
+    storedSourceScopedIdIsMalformed(draft.id) ||
     typeof draft.createdAt !== "string" ||
     !isValidStoredTimestamp(draft.createdAt) ||
     typeof draft.updatedAt !== "string" ||
