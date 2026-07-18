@@ -2015,6 +2015,20 @@ function loadSanitizedWorkspaceState(campaignId: string, persistSanitized = fals
 function portfolioLocalCounts(campaignId: string, persistSanitized = false): PortfolioLocalCounts {
   const state = loadSanitizedWorkspaceState(campaignId, persistSanitized);
   if (!state) return emptyPortfolioLocalCounts();
+  return portfolioLocalCountsFromState(state);
+}
+
+function portfolioLocalCountsForSource(source: CampaignSource, persistSanitized = false): PortfolioLocalCounts {
+  const state = loadSanitizedWorkspaceState(source.campaignId, persistSanitized);
+  if (!state) return emptyPortfolioLocalCounts();
+  const sanitized = sanitizeStateForCurrentSourceResources(state, source, extractSourceResources(source), sourceDocumentSignature(source));
+  if (persistSanitized && sanitized !== state && typeof window !== "undefined") {
+    localStorage.setItem(localStorageKeyFor(source.campaignId), JSON.stringify(sanitized));
+  }
+  return portfolioLocalCountsFromState(sanitized);
+}
+
+function portfolioLocalCountsFromState(state: DemoState): PortfolioLocalCounts {
   const topLevelSourceDraftCount = state.sourceWorkingCopy ? 1 : 0;
   return {
     actions: state.localActions.length,
@@ -3237,7 +3251,7 @@ function OperationsPortfolio() {
     fetchCampaignSource(campaign.id, controller.signal)
       .then((source) => {
         if (controller.signal.aborted || currentRefreshId !== portfolioRefreshId.current || itemRefreshId !== portfolioItemRefreshIds.current[campaign.id]) return;
-        const localCounts = portfolioLocalCounts(campaign.id, true);
+        const localCounts = portfolioLocalCountsForSource(source, true);
         setItems((current) =>
           current.map((item) =>
             item.campaign.id === campaign.id

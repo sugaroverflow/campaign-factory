@@ -10180,6 +10180,101 @@ test("operations workbench rejects source working drafts whose heading is not in
   expect(stored).not.toContain("missing-current-source-resource");
 });
 
+test("operations portfolio rejects source working drafts whose heading is not in the current source resources before counts", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+  const campaignTitles: Record<string, { title: string; place: string; status: "partial" | "completed" }> = {
+    "69f257b6-9913-4395-94f7-5c25b4b5fe95": { title: "Keep KFC Out of Ormskirk", place: "Ormskirk, Lancashire", status: "partial" },
+    "57678ae0-29fd-4b4b-8a53-5c711cdb21cf": { title: "Build 5,000 affordable houses in Tower Hamlets in the next 3 years", place: "Tower Hamlets, London", status: "partial" },
+    [barnetId]: { title: "Stop the leisure park redevelopment in Barnet", place: "Barnet, London", status: "completed" },
+  };
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const requestedCampaignId = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    const campaign = campaignTitles[requestedCampaignId] ?? campaignTitles[barnetId];
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: requestedCampaignId, status: campaign.status, stateVersion: 61, lastSequence: 2130, events: [] },
+        documents: campaignOperationsDocuments({ title: campaign.title, place: campaign.place, next: `Check ${campaign.place} source records` }),
+        evidence: campaignEvidence([{ id: "portfolio-missing-current-resource", description: `Check ${campaign.place} source records`, reason: "Portfolio current source-resource guard", affectedSections: ["digital_pack"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    const copy = {
+      id: `source:${id}:resource:digital_pack:meeting-request-email`,
+      campaignId: id,
+      title: "Meeting request email",
+      channel: "Council email",
+      sourceDocument: "Digital Campaign Pack",
+      sourceDocumentKey: "digital_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: ["Confirm the current Barnet decision record before any external use."],
+      provenance: `Source campaign ${id}; copied from the read-only Digital Campaign Pack into this browser-local workspace.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: null,
+        sourceLastSequence: null,
+        sourceDocumentSignature: null,
+        sourceAcknowledgedAt: null,
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local portfolio state names a plausible source resource that is absent from the current source payload.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "overview",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [
+          {
+            id: copy.id,
+            title: copy.title,
+            channel: copy.channel,
+            subject: "Barnet meeting request",
+            body: "This local copy should fail closed before portfolio counts because Meeting request email is not an extracted current resource.",
+            reviewerNote: "Review before queueing.",
+            status: "review",
+            queuedAt: null,
+            createdAt: "2026-07-16T17:52:30.000Z",
+            updatedAt: "2026-07-16T18:02:30.000Z",
+            sourceWorkingCopy: copy,
+          },
+        ],
+        activeWorkingDraftId: copy.id,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "portfolio-missing-source-resource", label: "Created local copy from source resource: Meeting request email." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto("/operations");
+  const barnetRow = page.locator("article").filter({ hasText: "Stop the leisure park redevelopment in Barnet" });
+  await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
+  await expect(barnetRow).not.toContainText("1 working draft");
+  await expect(barnetRow).not.toContainText("Meeting request email");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("Barnet meeting request");
+  expect(stored).not.toContain("portfolio-missing-source-resource");
+});
+
 test("operations workbench rejects source next-check actions absent from current source checks", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 
