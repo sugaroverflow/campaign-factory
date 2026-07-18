@@ -957,28 +957,31 @@ function normaliseSourceWorkingCopy(value: unknown): SourceWorkingCopy | null {
   if (!value || typeof value !== "object") return null;
   const copy = value as Partial<SourceWorkingCopy>;
   const campaignId = normaliseStoredCampaignId(copy.campaignId);
+  const id = typeof copy.id === "string" ? copy.id.trim() : "";
+  const title = typeof copy.title === "string" ? copy.title.trim() : "";
+  const channel = typeof copy.channel === "string" ? copy.channel.trim() : "";
+  const sourceDocument = typeof copy.sourceDocument === "string" ? copy.sourceDocument.trim() : "";
+  const sourceDocumentKey = typeof copy.sourceDocumentKey === "string" ? copy.sourceDocumentKey.trim() : "";
+  const provenance = typeof copy.provenance === "string" ? copy.provenance.trim() : "";
   if (
-    typeof copy.id !== "string" ||
-    !copy.id ||
-    typeof copy.title !== "string" ||
-    !copy.title ||
-    typeof copy.sourceDocument !== "string" ||
-    !copy.sourceDocument ||
+    !id ||
+    !title ||
+    !sourceDocument ||
     !campaignId ||
     sourceWorkingCopyHasMalformedOptionalField(copy)
   ) {
     return null;
   }
   return {
-    id: copy.id,
+    id,
     campaignId,
-    title: copy.title,
-    channel: typeof copy.channel === "string" && copy.channel ? copy.channel : "Source draft",
-    sourceDocument: copy.sourceDocument,
-    sourceDocumentKey: typeof copy.sourceDocumentKey === "string" && copy.sourceDocumentKey ? copy.sourceDocumentKey : "source_document",
+    title,
+    channel: channel || "Source draft",
+    sourceDocument,
+    sourceDocumentKey: sourceDocumentKey || "source_document",
     createdAt: normaliseStoredTimestamp(copy.createdAt) ?? new Date().toISOString(),
-    warnings: Array.isArray(copy.warnings) ? copy.warnings : [],
-    provenance: typeof copy.provenance === "string" && copy.provenance ? copy.provenance : "Copied from a read-only Campaign Factory source document into this browser-local workspace.",
+    warnings: Array.isArray(copy.warnings) ? copy.warnings.map((warning) => warning.trim()).filter(Boolean) : [],
+    provenance: provenance || "Copied from a read-only Campaign Factory source document into this browser-local workspace.",
   };
 }
 
@@ -1091,18 +1094,23 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
     .filter((draft): draft is Partial<WorkingDraft> => Boolean(draft) && typeof draft === "object")
     .map((draft) => {
       const sourceWorkingCopy = normaliseSourceWorkingCopy(draft.sourceWorkingCopy);
-      if (!sourceWorkingCopy || typeof draft.id !== "string" || !draft.id || typeof draft.title !== "string" || !draft.title) return null;
+      const id = typeof draft.id === "string" ? draft.id.trim() : "";
+      const title = typeof draft.title === "string" ? draft.title.trim() : "";
+      const channel = typeof draft.channel === "string" ? draft.channel.trim() : "";
+      const subject = typeof draft.subject === "string" ? draft.subject.trim() : "";
+      const reviewerNote = typeof draft.reviewerNote === "string" ? draft.reviewerNote.trim() : "";
+      if (!sourceWorkingCopy || !id || !title) return null;
       const malformed = workingDraftHasMalformedField(draft);
       const createdAt = normaliseStoredTimestamp(draft.createdAt) ?? sourceWorkingCopy.createdAt;
       const parsedQueuedAt = malformed ? null : normaliseStoredTimestamp(draft.queuedAt);
       const status = malformed ? "draft" : normaliseQueuedStatus(draft.status, parsedQueuedAt);
       return {
-        id: draft.id,
-        title: malformed ? INVALID_LOCAL_DRAFT_SUBJECT : draft.title,
-        channel: malformed ? "Malformed browser-local draft" : typeof draft.channel === "string" && draft.channel ? draft.channel : sourceWorkingCopy.channel || "Source draft",
-        subject: malformed ? INVALID_LOCAL_DRAFT_SUBJECT : typeof draft.subject === "string" && draft.subject ? draft.subject : draft.title,
+        id,
+        title: malformed ? INVALID_LOCAL_DRAFT_SUBJECT : title,
+        channel: malformed ? "Malformed browser-local draft" : channel || sourceWorkingCopy.channel || "Source draft",
+        subject: malformed ? INVALID_LOCAL_DRAFT_SUBJECT : subject || title,
         body: malformed ? INVALID_LOCAL_DRAFT_BODY : typeof draft.body === "string" && draft.body ? draft.body : "",
-        reviewerNote: malformed ? "" : typeof draft.reviewerNote === "string" ? draft.reviewerNote : "",
+        reviewerNote: malformed ? "" : reviewerNote,
         status,
         queuedAt: status === "queued" ? parsedQueuedAt : null,
         createdAt,
