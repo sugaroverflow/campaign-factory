@@ -1761,7 +1761,7 @@ function activityLooksFixtureBound(activity: Activity) {
 }
 
 function activityClaimsExternalOutcome(activity: Activity) {
-  return /\b(?:sent|delivered|opened|clicked|replied|received replies|provider connected|contacts imported|imported contacts|synced to provider|scheduled externally|production scheduled)\b/i.test(activity.label);
+  return /\b(?:sent|delivered|opened|clicked|replied|received replies|emailed|mailed|dispatched|posted|published|provider connected|provider delivery|live delivery|contacts imported|imported contacts|contacts uploaded|uploaded contacts|synced to provider|synced to crm|crm synced|scheduled externally|scheduled with provider|scheduled in provider|provider scheduled|production scheduled)\b/i.test(activity.label);
 }
 
 function activityReferencesOnlyExpectedCampaign(activity: Activity, expectedWorkspaceKey: string) {
