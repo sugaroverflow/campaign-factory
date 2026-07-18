@@ -3453,7 +3453,8 @@ test("operations source API: normalizes recoverable legacy source references bef
   evidence.groups[0].claims.push({ ...evidence.groups[0].claims[0] });
   evidence.groups.push({ label: "Verification incomplete", count: 1, claims: [{ ...evidence.groups[0].claims[1] }] });
   evidence.totals = { claims: 7, loadBearing: 7, verifiedLoadBearing: 5, unresolvedLoadBearing: 2 };
-  const legacyClaim = evidence.groups[0].claims[0] as { affectedOutputs: string[]; contradictsClaimIds?: string[] };
+  const legacyClaim = evidence.groups[0].claims[0] as { affectedOutputs: string[]; contradictsClaimIds?: string[] | null; excerpt?: string | null };
+  legacyClaim.excerpt = null;
   legacyClaim.affectedOutputs = [
     "Campaign Brief document",
     "campaign_brief",
@@ -3464,11 +3465,13 @@ test("operations source API: normalizes recoverable legacy source references bef
     "evidence base",
   ];
   legacyClaim.contradictsClaimIds = ["claim-2", "claim-2", "archived-claim-from-previous-build"];
+  (evidence.groups[0].claims[1] as { contradictsClaimIds?: null }).contradictsClaimIds = null;
   evidence.conflicts = [legacyClaim, legacyClaim, { ...legacyClaim, id: "archived-claim-from-previous-build", contradictsClaimIds: ["claim-1"] }];
-  const legacyNextCheck = evidence.nextChecks[0] as { claimIds?: string[]; affectedSections: string[] };
+  const legacyNextCheck = evidence.nextChecks[0] as { claimIds?: string[] | null; affectedSections: string[] };
   legacyNextCheck.claimIds = ["claim-1", "claim-1", "archived-claim-from-previous-build"];
   legacyNextCheck.affectedSections = ["documents", "Lobbying Pack document", "lobbying_pack", "Media Pack document", "Tactics & Timeline document", "evidence base"];
   evidence.nextChecks.push({ ...legacyNextCheck, description: "Duplicate legacy source check should be ignored." });
+  evidence.nextChecks.push({ id: "legacy-null-optional", description: "Legacy source check drops null optional claim ids.", reason: "Older builds sometimes serialised missing optional arrays as null.", claimIds: null, affectedSections: ["Campaign Brief document"] });
   evidence.terminalGaps = [
     { id: "legacy-gap", description: "Stale duplicated terminal gap date is recoverable.", at: "2026-07-17" },
     { id: "legacy-gap", description: "Legacy terminal gap appears once.", at: "2026-07-17T10:00:00.000Z", agentRunId: null, step: 0 },
@@ -3497,18 +3500,23 @@ test("operations source API: normalizes recoverable legacy source references bef
     expect(response.status).toBe(200);
     expectPublicSourceJsonBoundary(response.headers, "normalized legacy source references");
 
-    const body = (await response.json()) as { run?: { batchId?: unknown }; documents?: Array<{ flags?: string[] }>; evidence?: { groups?: Array<{ count?: number; claims?: Array<{ affectedOutputs?: string[]; contradictsClaimIds?: string[] }> }>; totals?: { claims?: number; loadBearing?: number; verifiedLoadBearing?: number; unresolvedLoadBearing?: number }; conflicts?: Array<{ id?: string; contradictsClaimIds?: string[] }>; nextChecks?: Array<{ claimIds?: string[]; affectedSections?: string[] }>; terminalGaps?: Array<{ id?: string }> }; sourceFailureKind?: string };
+    const body = (await response.json()) as { run?: { batchId?: unknown }; documents?: Array<{ flags?: string[] }>; evidence?: { groups?: Array<{ count?: number; claims?: Array<{ affectedOutputs?: string[]; contradictsClaimIds?: string[]; excerpt?: unknown }> }>; totals?: { claims?: number; loadBearing?: number; verifiedLoadBearing?: number; unresolvedLoadBearing?: number }; conflicts?: Array<{ id?: string; contradictsClaimIds?: string[] }>; nextChecks?: Array<{ id?: string; claimIds?: string[]; affectedSections?: string[] }>; terminalGaps?: Array<{ id?: string }> }; sourceFailureKind?: string };
     expect(body.run).not.toHaveProperty("batchId");
     expect(body.documents?.[0]?.flags).toEqual(["Unresolved load-bearing claim: Unresolved source claim 1"]);
     expect(body.evidence?.groups).toHaveLength(1);
     expect(body.evidence?.groups?.[0]?.count).toBe(2);
     expect(body.evidence?.totals).toEqual({ claims: 2, loadBearing: 2, verifiedLoadBearing: 0, unresolvedLoadBearing: 2 });
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.affectedOutputs).toEqual(["campaign_brief", "objective_theory_of_change", "power_stakeholder_map", "digital_pack", "evidence"]);
+    expect(body.evidence?.groups?.[0]?.claims?.[0]?.excerpt).toBeUndefined();
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.contradictsClaimIds).toEqual(["claim-2"]);
+    expect(body.evidence?.groups?.[0]?.claims?.[1]?.contradictsClaimIds).toBeUndefined();
     expect(body.evidence?.conflicts).toEqual([{ ...body.evidence?.groups?.[0]?.claims?.[0], contradictsClaimIds: ["claim-2"] }]);
-    expect(body.evidence?.nextChecks).toHaveLength(1);
+    expect(body.evidence?.nextChecks).toHaveLength(2);
     expect(body.evidence?.nextChecks?.[0]?.claimIds).toEqual(["claim-1"]);
     expect(body.evidence?.nextChecks?.[0]?.affectedSections).toEqual(["lobbying_pack", "media_pack", "tactics_timeline", "evidence"]);
+    expect(body.evidence?.nextChecks?.[1]?.id).toBe("legacy-null-optional");
+    expect(body.evidence?.nextChecks?.[1]?.claimIds).toBeUndefined();
+    expect(body.evidence?.nextChecks?.[1]?.affectedSections).toEqual(["campaign_brief"]);
     expect(body.evidence?.terminalGaps).toEqual([{ id: "legacy-gap", description: "Legacy terminal gap appears once.", at: "2026-07-17T10:00:00.000Z" }]);
     expect(body.sourceFailureKind).toBeUndefined();
     expect(requestedUrls).toEqual([

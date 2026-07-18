@@ -537,8 +537,9 @@ function normalizeSourceEvidenceClaim(value: unknown, claimIds: Set<string>, fal
   return {
     ...record,
     ...(label ? { label } : {}),
+    ...(record.excerpt === null ? { excerpt: undefined } : {}),
     affectedOutputs,
-    contradictsClaimIds: Array.isArray(contradictsClaimIds) && claimIds.size > 0 ? contradictsClaimIds.filter((claimId) => claimId !== record.id && claimIds.has(claimId)) : contradictsClaimIds,
+    contradictsClaimIds: Array.isArray(contradictsClaimIds) && claimIds.size > 0 ? contradictsClaimIds.filter((claimId) => claimId !== record.id && claimIds.has(claimId)) : contradictsClaimIds === null ? undefined : contradictsClaimIds,
   };
 }
 
@@ -688,7 +689,7 @@ function normalizeSourceEvidence(value: unknown) {
           const affectedSections = normalizeSourceAffectedSectionValues(checkRecord.affectedSections);
           return [{
             ...checkRecord,
-            claimIds: Array.isArray(checkClaimIds) && claimIds.size > 0 ? checkClaimIds.filter((claimId) => claimIds.has(claimId)) : checkClaimIds,
+            claimIds: Array.isArray(checkClaimIds) && claimIds.size > 0 ? checkClaimIds.filter((claimId) => claimIds.has(claimId)) : checkClaimIds === null ? undefined : checkClaimIds,
             affectedSections: Array.isArray(affectedSections) ? affectedSections.filter((section) => SOURCE_AFFECTED_SECTION_KEYS.has(section)) : affectedSections,
           }];
         })
