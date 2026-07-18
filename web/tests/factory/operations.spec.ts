@@ -11850,6 +11850,102 @@ test("operations workbench trims restored source working copy fields", async ({ 
   expect(stored).not.toContain('"   "');
 });
 
+test("operations workbench rejects source working drafts whose provenance names a different current document", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 16, lastSequence: 27, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          status: "completed",
+          next: "Check Barnet decision records",
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check Barnet decision records", reason: "Provenance document guard", claimIds: [], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    const sourceCopy = {
+      id: `source:${campaignId}:resource:digital_pack:supporter-email`,
+      campaignId,
+      title: "Supporter email",
+      channel: "Supporter email",
+      sourceDocument: "Digital Campaign Pack",
+      sourceDocumentKey: "digital_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: [],
+      provenance: `Source campaign ${campaignId}; copied from Lobbying Pack into a browser-local editable copy; this does not change the public source document.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: 16,
+        sourceLastSequence: 27,
+        sourceDocumentSignature: `source:${campaignId}:documents:v1`,
+        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        selectedSegment: "source_primary",
+        subject: "Shadow provenance supporter email",
+        body: "This local draft should not survive because its source-copy provenance names Lobbying Pack while the current matching resource is in Digital Campaign Pack.",
+        reviewerNote: "Wrong source document provenance should be scrubbed.",
+        status: "draft",
+        mode: "preview",
+        activeDraft: "supporter_email",
+        activeView: "drafts",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_next_check",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [
+          {
+            id: sourceCopy.id,
+            title: "Supporter email",
+            channel: "Supporter email",
+            subject: "Shadow provenance supporter email",
+            body: "This local draft should not survive because its source-copy provenance names Lobbying Pack while the current matching resource is in Digital Campaign Pack.",
+            reviewerNote: "Wrong source document provenance should be scrubbed.",
+            status: "review",
+            queuedAt: null,
+            createdAt: "2026-07-16T17:52:30.000Z",
+            updatedAt: "2026-07-16T18:02:30.000Z",
+            sourceWorkingCopy: sourceCopy,
+          },
+        ],
+        activeWorkingDraftId: sourceCopy.id,
+        sourceWorkingCopy: null,
+        activity: [{ id: "wrong-document-provenance", label: "Created editable local copy from source resource: Shadow provenance supporter email." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=drafts`);
+  await expect(page.locator("main")).toContainText("Real source resources");
+  await expect(page.locator("main")).not.toContainText("Shadow provenance supporter email");
+  await expect(page.locator("main")).not.toContainText("Wrong source document provenance should be scrubbed");
+
+  await expect.poll(async () => page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId)).not.toContain("Shadow provenance supporter email");
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain("workspace-sanitized");
+  expect(stored).not.toContain("wrong-document-provenance");
+  expect(stored).not.toContain("Lobbying Pack into a browser-local editable copy");
+});
+
 test("operations workbench trims restored legacy top-level source draft fields", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 

@@ -1284,14 +1284,17 @@ function sourceWorkingCopyMatchesCurrentSourceResource(copy: SourceWorkingCopy, 
   const copyTitle = normaliseOperationsSourceInlineText(copy.title).toLowerCase();
   const copyChannel = normaliseOperationsSourceInlineText(copy.channel).toLowerCase();
   const copyWarnings = copy.warnings.map((warning) => normaliseOperationsSourceInlineText(warning).toLowerCase());
+  const copyProvenance = normaliseOperationsSourceInlineText(copy.provenance).toLowerCase();
   return resources.some(
     (resource) => {
+      const resourceDocument = normaliseOperationsSourceInlineText(resource.sourceDocument).toLowerCase();
       const resourceWarnings = resource.warnings.map((warning) => normaliseOperationsSourceInlineText(warning).toLowerCase());
       return (
         canonicalSourceDocumentKey(resource.sourceDocumentKey) === copyDocumentKey &&
-        normaliseOperationsSourceInlineText(resource.sourceDocument).toLowerCase() === copyDocument &&
+        resourceDocument === copyDocument &&
         normaliseOperationsSourceInlineText(resource.title).toLowerCase() === copyTitle &&
         normaliseOperationsSourceInlineText(resource.channel).toLowerCase() === copyChannel &&
+        copyProvenance.includes(resourceDocument) &&
         copyWarnings.length === resourceWarnings.length &&
         copyWarnings.every((warning, index) => warning === resourceWarnings[index])
       );
