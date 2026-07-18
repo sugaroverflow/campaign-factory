@@ -1874,6 +1874,11 @@ function localStorageKeyFor(campaignId?: string) {
   return campaignId ? `${STORAGE_KEY}:${campaignId.toLowerCase()}` : STORAGE_KEY;
 }
 
+function storageKeySuffixMatchesCampaign(value: string, campaignId: string) {
+  const canonicalSuffix = value.toLowerCase();
+  return value === value.trim() && value === value.normalize("NFC") && UUID_RE.test(canonicalSuffix) && canonicalSuffix === campaignId;
+}
+
 function localStorageKeysForCampaign(campaignId: string) {
   if (typeof window === "undefined") return [];
   const canonicalKey = localStorageKeyFor(campaignId);
@@ -1884,8 +1889,7 @@ function localStorageKeysForCampaign(campaignId: string) {
     if (!key || key === canonicalKey || key === STORAGE_KEY || LEGACY_STORAGE_KEYS.includes(key)) continue;
     const prefix = keyedPrefixes.find((candidate) => key.startsWith(candidate));
     if (!prefix) continue;
-    const storedCampaignId = normaliseStoredCampaignId(key.slice(prefix.length));
-    if (storedCampaignId === campaignId) keys.push(key);
+    if (storageKeySuffixMatchesCampaign(key.slice(prefix.length), campaignId)) keys.push(key);
   }
   return [...new Set([...keys, STORAGE_KEY, ...LEGACY_STORAGE_KEYS])];
 }

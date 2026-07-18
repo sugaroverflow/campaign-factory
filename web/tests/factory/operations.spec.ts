@@ -5928,6 +5928,85 @@ test("operations portfolio ignores stale local state under the wrong campaign ke
   await expect(page.locator("main")).not.toContainText("Stale Ormskirk local action");
 });
 
+test("operations portfolio ignores browser-local state saved under padded campaign storage keys", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    const isBarnet = id === barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: isBarnet ? "completed" : "partial", stateVersion: 12, lastSequence: 23, events: [] },
+        documents: campaignOperationsDocuments({
+          title: isBarnet ? "Stop the leisure park redevelopment in Barnet" : "Keep KFC Out of Ormskirk",
+          place: isBarnet ? "Barnet, London" : "Ormskirk, Lancashire",
+          next: isBarnet ? "Check Barnet planning records" : "Check Ormskirk appeal records",
+        }),
+        evidence: campaignEvidence([{ id: "padded-storage-key", description: isBarnet ? "Check Barnet planning records" : "Check Ormskirk appeal records", reason: "Padded storage key guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate(
+    ({ id }) => {
+      localStorage.setItem(
+        `cf_operations_demo_v3: ${id} `,
+        JSON.stringify({
+          workspaceKey: id,
+          selectedSegment: "source_primary",
+          subject: "Barnet padded-key source draft",
+          body: "This state is saved under a padded campaign storage key and must not hydrate portfolio local counts.",
+          status: "draft",
+          mode: "compose",
+          activeDraft: "supporter_email",
+          activeView: "overview",
+          contactFilter: "all",
+          contactReadinessFilter: "all",
+          scheduleIntent: "after_approval",
+          queuedAt: null,
+          localActions: [
+            {
+              id: `source:${id}:next-check:padded-storage-key`,
+              title: "Check Barnet planning records",
+              source: "Campaign source · Evidence & checks",
+              owner: "Campaigner",
+              timing: "Next",
+              priority: "High",
+              status: "next",
+              provenance: `Source campaign ${id}; created from Evidence & checks next check.`,
+            },
+          ],
+          workingDrafts: [],
+          activeWorkingDraftId: null,
+          sourceWorkingCopy: null,
+          activity: [{ id: "padded-storage-key-action", label: "Created action: Check Barnet planning records" }],
+        }),
+      );
+    },
+    { id: barnetId },
+  );
+
+  await page.goto("/operations");
+  await expect(page.getByRole("heading", { name: "Stop the leisure park redevelopment in Barnet" })).toBeVisible();
+  const portfolio = page.getByLabel("Campaign operations portfolio");
+  const barnetRow = portfolio.locator("article", { hasText: "Stop the leisure park redevelopment" });
+  await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
+  await expect(barnetRow).not.toContainText("1 action");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=actions`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Barnet padded-key source draft");
+  await expect(page.locator("main")).not.toContainText("padded campaign storage key");
+
+  const canonicalState = JSON.parse((await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), barnetId)) ?? "{}");
+  expect(canonicalState.localActions).toEqual([]);
+  expect(canonicalState.subject).not.toBe("Barnet padded-key source draft");
+  expect(await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3: ${id} `), barnetId)).not.toBeNull();
+});
+
 test("operations workbench ignores source actions whose provenance belongs to another campaign", async ({ page }) => {
   const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
