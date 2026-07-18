@@ -3559,6 +3559,7 @@ test("operations source API: normalizes recoverable legacy source references bef
     { id: "legacy-gap", description: "Stale duplicated terminal gap date is recoverable.", at: "2026-07-17" },
     { id: "legacy-gap", description: "Legacy&nbsp;terminal\n gap appears once.", at: " 2026-07-17T10:00:00.000Z ", agentRunId: " terminal-agent ", step: " 9 " },
   ];
+  documents.reverse();
   const documentsBody = JSON.stringify({ documents, evidence });
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -791,26 +791,44 @@ function normalizeSourceDocumentIsPack(value: unknown) {
   return normalizeSourceBoolean(value);
 }
 
+function sortRecoverableSourceDocuments(value: unknown[]) {
+  const seen = new Set<string>();
+  const sortable: Array<Record<string, unknown>> = [];
+  for (const document of value) {
+    if (typeof document !== "object" || document === null) return value;
+    const key = (document as Record<string, unknown>).key;
+    if (typeof key !== "string" || !SOURCE_CANONICAL_DOCUMENTS_BY_KEY.has(key) || seen.has(key)) return value;
+    seen.add(key);
+    sortable.push(document as Record<string, unknown>);
+  }
+  if (sortable.length !== CANONICAL_DOCUMENTS.length) return value;
+  return sortable.sort((left, right) => {
+    const leftDocument = SOURCE_CANONICAL_DOCUMENTS_BY_KEY.get(left.key as string);
+    const rightDocument = SOURCE_CANONICAL_DOCUMENTS_BY_KEY.get(right.key as string);
+    return (leftDocument?.num ?? 0) - (rightDocument?.num ?? 0);
+  });
+}
+
 function normalizeSourceDocuments(value: unknown) {
-  return Array.isArray(value)
-    ? value.map((document) => {
-        if (typeof document !== "object" || document === null) return document;
-        const sourceDocument = document as Record<string, unknown>;
-        const key = normalizeSourceDocumentKey(sourceDocument.key);
-        const normalizedDocument = {
-          ...sourceDocument,
-          key,
-          num: normalizeSourceDocumentNum(sourceDocument.num),
-          name: normalizeSourceDocumentName(sourceDocument.name, key),
-          isPack: normalizeSourceDocumentIsPack(sourceDocument.isPack),
-          plainText: normalizeSourceDocumentPlainText(sourceDocument.plainText),
-          status: normalizeSourceDocumentStatus(sourceDocument.status),
-          sectionKeys: normalizeSourceDocumentSectionKeys(sourceDocument.sectionKeys, key),
-          resourceCount: normalizeSourceDocumentResourceCount(sourceDocument.resourceCount),
-        };
-        return { ...normalizedDocument, flags: normalizeSourceDocumentFlags(sourceDocument.flags, normalizedDocument) };
-      })
-    : value;
+  if (!Array.isArray(value)) return value;
+  const documents = value.map((document) => {
+    if (typeof document !== "object" || document === null) return document;
+    const sourceDocument = document as Record<string, unknown>;
+    const key = normalizeSourceDocumentKey(sourceDocument.key);
+    const normalizedDocument = {
+      ...sourceDocument,
+      key,
+      num: normalizeSourceDocumentNum(sourceDocument.num),
+      name: normalizeSourceDocumentName(sourceDocument.name, key),
+      isPack: normalizeSourceDocumentIsPack(sourceDocument.isPack),
+      plainText: normalizeSourceDocumentPlainText(sourceDocument.plainText),
+      status: normalizeSourceDocumentStatus(sourceDocument.status),
+      sectionKeys: normalizeSourceDocumentSectionKeys(sourceDocument.sectionKeys, key),
+      resourceCount: normalizeSourceDocumentResourceCount(sourceDocument.resourceCount),
+    };
+    return { ...normalizedDocument, flags: normalizeSourceDocumentFlags(sourceDocument.flags, normalizedDocument) };
+  });
+  return sortRecoverableSourceDocuments(documents);
 }
 
 function normalizeSourceDocumentEvidenceFlags(documents: unknown, evidence: unknown) {
