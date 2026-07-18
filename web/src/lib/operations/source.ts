@@ -62,7 +62,7 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isCanonicalNonEmptySourceId(value: unknown): value is string {
-  return typeof value === "string" && value.length > 0 && value === value.trim() && value === value.normalize("NFC");
+  return typeof value === "string" && value.length > 0 && value === value.trim() && value === value.normalize("NFC") && normaliseSourceInlineText(value) === value;
 }
 
 function normaliseSourcePresentationText(value: string) {
@@ -444,7 +444,7 @@ function hasConsistentOperationsRunEvents(value: RunReadModel) {
 export function isOperationsRunReadModel(value: unknown, campaignId: string): value is RunReadModel {
   if (!isRecord(value) || value.campaignId !== campaignId) return false;
   if (
-    !isOptionalString(value.batchId) ||
+    !isOptionalCanonicalNonEmptySourceId(value.batchId) ||
     typeof value.status !== "string" ||
     !OPERATIONS_RUN_STATUSES.has(value.status) ||
     !isNonNegativeInteger(value.stateVersion) ||
