@@ -5534,6 +5534,9 @@ test("operations workbench: real source working copies move through local review
   expect(markdownPath).toBeTruthy();
   const markdownPack = await readFile(markdownPath!, "utf8");
   expect(markdownPack).toContain("Reviewer note: Reviewer confirmed the appeal-status warning must stay attached before any provider setup.");
+  expect(markdownPack).toContain("## Source documents");
+  expect(markdownPack).toContain("Digital Campaign Pack (digital_pack) — ready; 1 resource");
+  expect(markdownPack).toContain("Source document flag: Contains explicit verification placeholders.");
   expect(markdownPack).toContain("## Source pack resources");
   expect(markdownPack).toContain("Ormskirk supporter email (Supporter email) — Digital Campaign Pack (digital_pack)");
   expect(markdownPack).toContain("Subject/source heading: Ormskirk KFC source update");

@@ -1016,10 +1016,18 @@ function workingDraftMatchesWorkspace(draft: WorkingDraft, expectedWorkspaceKey:
   return sourceWorkingCopyMatchesWorkspace(draft.sourceWorkingCopy, expectedWorkspaceKey);
 }
 
+function stableTextCompare(a: string, b: string) {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function stableLowercase(value: string) {
+  return value.toLowerCase();
+}
+
 function uniqueByStoredId<T extends { id: string }>(items: T[]) {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = item.id.toLocaleLowerCase();
+    const key = stableLowercase(item.id);
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -1224,10 +1232,10 @@ function activityReferencesOnlyExpectedCampaign(activity: Activity, expectedWork
 }
 
 function activityLooksTiedToRemovedLocalWork(activity: Activity, removedLocalWorkReferences: string[]) {
-  const label = activity.label.toLocaleLowerCase();
-  const id = activity.id.toLocaleLowerCase();
+  const label = stableLowercase(activity.label);
+  const id = stableLowercase(activity.id);
   return removedLocalWorkReferences.some((removedReference) => {
-    const normalized = removedReference.trim().toLocaleLowerCase();
+    const normalized = stableLowercase(removedReference.trim());
     return normalized.length >= 8 && (label.includes(normalized) || id.includes(normalized));
   });
 }
@@ -1844,7 +1852,7 @@ function extractSourceResources(source: CampaignSource): SourceResource[] {
     });
   });
   return resources
-    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99) || a.title.localeCompare(b.title))
+    .sort((a, b) => (a.priority ?? 99) - (b.priority ?? 99) || stableTextCompare(a.title, b.title))
     .map((resource) => ({
       id: resource.id,
       title: resource.title,
@@ -3715,6 +3723,15 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             nextChecks: ["Verify council order status", "Keep media escalation blocked until checked"],
             incompleteDocuments: [],
           },
+      sourceDocuments: source
+        ? source.documents.map((doc) => ({
+            key: doc.key,
+            name: doc.name,
+            status: doc.status,
+            resourceCount: doc.resourceCount,
+            flags: doc.flags,
+          }))
+        : [],
       sourceResources: sourceResources.map((resource) => ({
         title: resource.title,
         channel: resource.channel,
@@ -3801,6 +3818,14 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         `- Unresolved load-bearing facts: ${pack.evidence.totals.unresolvedLoadBearing}`,
         ...pack.evidence.nextChecks.map((check) => (typeof check === "string" ? `- ${check}` : `- ${check.description}${check.reason ? ` — ${check.reason}` : ""}`)),
         ...pack.evidence.incompleteDocuments.map((doc) => `- Incomplete source document: ${doc.name} (${doc.status}, ${doc.resourceCount} resources)`),
+        "",
+        "## Source documents",
+        ...(pack.sourceDocuments.length
+          ? pack.sourceDocuments.flatMap((doc) => [
+              `- ${doc.name} (${doc.key}) — ${doc.status}; ${doc.resourceCount} resource${doc.resourceCount === 1 ? "" : "s"}`,
+              ...(doc.flags.length ? doc.flags.map((flag) => `  - Source document flag: ${flag}`) : ["  - Source document flag: none exposed by typed source"]),
+            ])
+          : ["- Fixture workspace does not expose public source document metadata."]),
         "",
         "## Source pack resources",
         ...(pack.sourceResources.length
