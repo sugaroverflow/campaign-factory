@@ -6292,10 +6292,10 @@ test("operations workbench removes fixture activity from real campaign state wit
       `cf_operations_demo_v3:${campaignId}`,
       JSON.stringify({
         workspaceKey: campaignId,
-        sourceStateVersion: 14,
-        sourceLastSequence: 25,
-        sourceDocumentSignature: "real-barnet-source-baseline",
-        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        sourceStateVersion: null,
+        sourceLastSequence: null,
+        sourceDocumentSignature: null,
+        sourceAcknowledgedAt: null,
         selectedSegment: "source_primary",
         subject: "Barnet briefing note",
         body: "Use the Barnet source pack before any local queue intent.",
@@ -6313,7 +6313,7 @@ test("operations workbench removes fixture activity from real campaign state wit
         activeWorkingDraftId: null,
         sourceWorkingCopy: sourceCopy,
         activity: [
-          { id: "legacy-fixture-note", label: "Demo workspace loaded with seeded campaign brief and local fixture contacts." },
+          { id: "legacy-fixture-note", label: "44 fixture contacts ready for reviewed outreach." },
           { id: "barnet-queue", label: "Barnet briefing note queued locally." },
         ],
       }),
@@ -6322,20 +6322,19 @@ test("operations workbench removes fixture activity from real campaign state wit
 
   await page.goto(`/operations?campaignId=${barnetId}&view=overview`);
   await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
-  await expect(page.locator("main")).toContainText("Barnet briefing note queued locally.");
   await expect(page.locator("main")).toContainText("Browser-local state was sanitized for this real campaign workspace");
-  await expect(page.locator("main")).not.toContainText("local fixture contacts");
+  await expect(page.locator("main")).not.toContainText("44 fixture contacts");
 
   await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
   await expect(page.getByRole("heading", { name: /local queue item/ })).toBeVisible();
   await expect(page.locator("main")).toContainText("Barnet briefing note");
-  await expect(page.locator("main")).not.toContainText("local fixture contacts");
+  await expect(page.locator("main")).not.toContainText("44 fixture contacts");
 
   const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
-  expect(stored).toContain("Barnet briefing note queued locally");
   expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
   expect(stored).toContain('"status":"queued"');
-  expect(stored).not.toContain("local fixture contacts");
+  expect(stored).toContain("Barnet briefing note");
+  expect(stored).not.toContain("44 fixture contacts");
   expect(stored).not.toContain("legacy-fixture-note");
 });
 
@@ -7302,6 +7301,110 @@ test("operations workbench rejects malformed source working-copy fields from rea
   expect(stored).not.toContain("Legacy malformed copy");
   expect(stored).not.toContain("Queued malformed source locally");
   expect(stored).not.toContain("malformed-copy");
+});
+
+test("operations workbench rejects cross-campaign source-copy identifiers from real campaign state", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+  const otherCampaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check Barnet decision records", reason: "Cross-campaign source-copy guard", claimIds: [], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate(
+    ({ campaignId, otherId }) => {
+      localStorage.setItem(
+        `cf_operations_demo_v3:${campaignId}`,
+        JSON.stringify({
+          workspaceKey: campaignId,
+          sourceStateVersion: 14,
+          sourceLastSequence: 25,
+          sourceDocumentSignature: "real-barnet-source-baseline",
+          sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+          selectedSegment: "source_primary",
+          subject: "Barnet local update",
+          body: "Hi — can you support the campaign after the next source check?",
+          reviewerNote: "",
+          status: "draft",
+          mode: "compose",
+          activeDraft: "supporter_email",
+          activeView: "outbox",
+          contactFilter: "source_primary",
+          contactReadinessFilter: "all",
+          scheduleIntent: "tomorrow_morning",
+          queuedAt: null,
+          localActions: [],
+          workingDrafts: [
+            {
+              id: `source:${otherId}:resource:lobbying_pack:cross-campaign-copy`,
+              title: "Barnet cross-campaign source copy",
+              channel: "Briefing note",
+              subject: "Cross-campaign source copy should not render",
+              body: "This queued local copy carries another campaign identifier and should be removed before outbox or export surfaces can count it.",
+              reviewerNote: "",
+              status: "queued",
+              queuedAt: "2026-07-16T18:02:30.000Z",
+              createdAt: "2026-07-16T17:52:30.000Z",
+              updatedAt: "2026-07-16T18:02:30.000Z",
+              sourceWorkingCopy: {
+                id: `source:${otherId}:resource:lobbying_pack:cross-campaign-copy`,
+                campaignId,
+                title: "Barnet briefing note",
+                channel: "Briefing note",
+                sourceDocument: "Lobbying Pack",
+                sourceDocumentKey: "lobbying_pack",
+                createdAt: "2026-07-16T17:52:30.000Z",
+                warnings: ["Confirm the current Barnet decision record before any external use."],
+                provenance: `Source campaign ${otherId}; copied from the read-only Lobbying Pack into this browser-local workspace.`,
+              },
+            },
+          ],
+          activeWorkingDraftId: `source:${otherId}:resource:lobbying_pack:cross-campaign-copy`,
+          sourceWorkingCopy: null,
+          activity: [{ id: "cross-campaign-copy-queued", label: "Placed approved draft into the local demo queue for Barnet cross-campaign source copy." }],
+        }),
+      );
+    },
+    { campaignId: barnetId, otherId: otherCampaignId },
+  );
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Barnet cross-campaign source copy");
+  await expect(page.locator("main")).not.toContainText("Placed approved draft into the local demo queue for Barnet cross-campaign source copy");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=drafts`);
+  await expect(page.locator("main")).not.toContainText("Cross-campaign source copy should not render");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain('"scheduleIntent":"after_approval"');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("Barnet cross-campaign source copy");
+  expect(stored).not.toContain("cross-campaign-copy");
+  expect(stored).not.toContain(otherCampaignId);
 });
 
 test("operations workbench rejects malformed local-action fields from real campaign state", async ({ page }) => {

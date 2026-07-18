@@ -942,6 +942,21 @@ function localActionMatchesWorkspace(action: LocalAction, expectedWorkspaceKey: 
   return true;
 }
 
+function sourceWorkingCopyMatchesWorkspace(copy: SourceWorkingCopy, expectedWorkspaceKey: string) {
+  if (copy.campaignId !== expectedWorkspaceKey) return false;
+  const idCampaignId = copy.id.match(/^source:([0-9a-f-]{36})(?::|$)/i)?.[1];
+  if (idCampaignId && idCampaignId !== expectedWorkspaceKey) return false;
+  const provenanceCampaignId = copy.provenance.match(/Source campaign\s+([0-9a-f-]{36})/i)?.[1];
+  if (provenanceCampaignId && provenanceCampaignId !== expectedWorkspaceKey) return false;
+  return true;
+}
+
+function workingDraftMatchesWorkspace(draft: WorkingDraft, expectedWorkspaceKey: string) {
+  const idCampaignId = draft.id.match(/^source:([0-9a-f-]{36})(?::|$)/i)?.[1];
+  if (idCampaignId && idCampaignId !== expectedWorkspaceKey) return false;
+  return sourceWorkingCopyMatchesWorkspace(draft.sourceWorkingCopy, expectedWorkspaceKey);
+}
+
 function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>): WorkingDraft[] {
   const drafts = Array.isArray(value) ? value : [];
   const normalised = drafts
@@ -1053,7 +1068,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
   };
 }
 
-const FIXTURE_LEAKAGE_RE = /St John the Baptist|school[\s_-]?street|school[\s_-]?run|school[\s_-]?gates?|Leicester City Council|Clean Air Leicester|Ward casework watcher|\bA\. Patel\b|\bR\. Johnson\b|\bM\. Davies\b|\bS\. Hussain\b|Campaign Factory demo workspace|seeded campaign brief|local fixture contacts|fixture evidence check|fixture timing check|fixture media boundary|fixture campaign copy/i;
+const FIXTURE_LEAKAGE_RE = /St John the Baptist|school[\s_-]?street|school[\s_-]?run|school[\s_-]?gates?|Leicester City Council|Clean Air Leicester|Ward casework watcher|\bA\. Patel\b|\bR\. Johnson\b|\bM\. Davies\b|\bS\. Hussain\b|Campaign Factory demo workspace|seeded campaign brief|(?:local\s+)?fixture contacts|fixture evidence check|fixture timing check|fixture media boundary|fixture campaign copy/i;
 const FIXTURE_IDENTIFIER_RE = /\b(?:demo-)?fixture(?:[_:-][a-z0-9_-]+)+\b|\bfixture:[a-z0-9_-]+\b/i;
 
 function hasFixtureLeakage(value: string) {
@@ -1150,9 +1165,9 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
   const contactFilter = state.contactFilter === "all" || isSourceSegmentId(state.contactFilter) ? state.contactFilter : "all";
   const localActions = state.localActions.filter((action) => localActionMatchesWorkspace(action, expectedWorkspaceKey) && !localActionLooksMalformed(action) && !localActionLooksFixtureBound(action));
   const workingDrafts = state.workingDrafts.filter(
-    (draft) => draft.sourceWorkingCopy.campaignId === expectedWorkspaceKey && !workingDraftLooksMalformed(draft) && !workingDraftLooksFixtureBound(draft),
+    (draft) => workingDraftMatchesWorkspace(draft, expectedWorkspaceKey) && !workingDraftLooksMalformed(draft) && !workingDraftLooksFixtureBound(draft),
   );
-  const sourceWorkingCopyCandidate = state.sourceWorkingCopy?.campaignId === expectedWorkspaceKey && !sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy) ? state.sourceWorkingCopy : null;
+  const sourceWorkingCopyCandidate = state.sourceWorkingCopy && sourceWorkingCopyMatchesWorkspace(state.sourceWorkingCopy, expectedWorkspaceKey) && !sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy) ? state.sourceWorkingCopy : null;
   const removedLocalWorkReferences = [
     ...state.localActions
       .filter((action) => !localActions.some((keptAction) => keptAction.id === action.id))
