@@ -15443,6 +15443,101 @@ test("operations workbench rejects malformed browser-local timestamps in a real 
   expect(storedState).not.toContain("timestamp-legacy");
 });
 
+test("operations workbench rejects future-dated browser-local source copy timestamps", async ({ page }) => {
+  const campaignId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "completed", stateVersion: 72, lastSequence: 2220, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: campaignEvidence([{ id: "future-local-timestamp", description: "Check Barnet decision records", reason: "Future local timestamp scrub guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    const sourceCopy = {
+      id: `source:${id}:resource:lobbying_pack:Barnet meeting request`,
+      campaignId: id,
+      title: "Barnet meeting request",
+      channel: "Email",
+      sourceDocument: "Lobbying Pack",
+      sourceDocumentKey: "lobbying_pack",
+      createdAt: "2099-07-17T20:05:00.000Z",
+      warnings: ["Confirm Barnet decision records before stronger claims."],
+      provenance: `Source campaign ${id}; copied from Lobbying Pack into browser-local operations.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: null,
+        sourceLastSequence: null,
+        sourceDocumentSignature: null,
+        sourceAcknowledgedAt: null,
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local Barnet queue state should be sanitized because its source-copy timestamps are in the future.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "outbox",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "tomorrow_morning",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [
+          {
+            id: sourceCopy.id,
+            title: sourceCopy.title,
+            channel: sourceCopy.channel,
+            subject: "Barnet future-dated meeting request",
+            body: "This queued local source copy should not render while its timestamps are future-dated.",
+            reviewerNote: "Future timestamp should be scrubbed before local queue counts render.",
+            status: "queued",
+            queuedAt: "2099-07-17T20:07:00.000Z",
+            createdAt: "2099-07-17T20:05:00.000Z",
+            updatedAt: "2099-07-17T20:06:00.000Z",
+            sourceWorkingCopy: sourceCopy,
+          },
+        ],
+        activeWorkingDraftId: sourceCopy.id,
+        sourceWorkingCopy: sourceCopy,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "future-local-queue", label: "Queued local Barnet meeting request copy with a future browser-local timestamp." }],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Barnet future-dated meeting request");
+  await expect(page.locator("main")).not.toContainText("Queued locally");
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "";
+  expect(storedState).toContain("workspace-sanitized");
+  expect(storedState).toContain('"workingDrafts":[]');
+  expect(storedState).toContain('"sourceWorkingCopy":null');
+  expect(storedState).toContain('"scheduleIntent":"after_approval"');
+  expect(storedState).not.toContain("2099-07-17");
+  expect(storedState).not.toContain("future-local-queue");
+  expect(storedState).not.toContain("Barnet future-dated meeting request");
+});
+
 test("operations workbench restores top-level source copies to the editable supporter draft", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 

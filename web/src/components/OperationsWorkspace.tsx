@@ -1014,7 +1014,7 @@ function sourceWorkingCopyHasMalformedOptionalField(copy: Partial<SourceWorkingC
     (typeof copy.id === "string" && !sourceWorkingCopyIdDocumentKeyMatchesSourceKey(copy.id, sourceDocumentKey)) ||
     (typeof copy.id === "string" && !sourceWorkingCopyIdTitleMatchesSourceTitle(copy.id, title)) ||
     typeof createdAt !== "string" ||
-    !isValidStoredTimestamp(createdAt) ||
+    !isCurrentOrPastStoredTimestamp(createdAt) ||
     (copy.warnings !== undefined && (!Array.isArray(copy.warnings) || copy.warnings.some((warning) => typeof warning !== "string" || storedTextIsInvisible(warning))));
 }
 
@@ -1160,8 +1160,12 @@ function isValidStoredTimestamp(value: string) {
   return new Date(value).toISOString() === value;
 }
 
+function isCurrentOrPastStoredTimestamp(value: string) {
+  return isValidStoredTimestamp(value) && new Date(value).getTime() <= Date.now();
+}
+
 function hasRecordedLocalQueue(status: DraftStatus, queuedAt: string | null) {
-  return status === "queued" && Boolean(queuedAt && isValidStoredTimestamp(queuedAt));
+  return status === "queued" && Boolean(queuedAt && isCurrentOrPastStoredTimestamp(queuedAt));
 }
 
 function normaliseQueuedStatus(status: unknown, queuedAt: string | null): DraftStatus {
@@ -1171,7 +1175,7 @@ function normaliseQueuedStatus(status: unknown, queuedAt: string | null): DraftS
 }
 
 function normaliseStoredTimestamp(value: unknown) {
-  return typeof value === "string" && value && isValidStoredTimestamp(value) ? value : null;
+  return typeof value === "string" && value && isCurrentOrPastStoredTimestamp(value) ? value : null;
 }
 
 function normaliseStoredAcknowledgedTimestamp(value: unknown) {
@@ -1267,12 +1271,12 @@ function workingDraftHasMalformedField(draft: Partial<WorkingDraft>) {
   }) ||
     storedSourceScopedIdIsMalformed(draft.id) ||
     typeof draft.createdAt !== "string" ||
-    !isValidStoredTimestamp(draft.createdAt) ||
+    !isCurrentOrPastStoredTimestamp(draft.createdAt) ||
     typeof draft.updatedAt !== "string" ||
-    !isValidStoredTimestamp(draft.updatedAt) ||
+    !isCurrentOrPastStoredTimestamp(draft.updatedAt) ||
     storedTimestampIsBefore(draft.updatedAt, draft.createdAt) ||
-    (typeof draft.queuedAt === "string" && isValidStoredTimestamp(draft.queuedAt) && storedTimestampIsBefore(draft.queuedAt, draft.createdAt)) ||
-    (typeof draft.queuedAt === "string" && isValidStoredTimestamp(draft.queuedAt) && storedTimestampIsBefore(draft.queuedAt, draft.updatedAt)) ||
+    (typeof draft.queuedAt === "string" && isCurrentOrPastStoredTimestamp(draft.queuedAt) && storedTimestampIsBefore(draft.queuedAt, draft.createdAt)) ||
+    (typeof draft.queuedAt === "string" && isCurrentOrPastStoredTimestamp(draft.queuedAt) && storedTimestampIsBefore(draft.queuedAt, draft.updatedAt)) ||
     (draft.queuedAt !== undefined && draft.queuedAt !== null && typeof draft.queuedAt !== "string");
 }
 
@@ -1411,7 +1415,7 @@ function activityLooksTiedToRemovedLocalWork(activity: Activity, removedLocalWor
 }
 
 function activityLooksLikeTopLevelDraftWorkflow(activity: Activity) {
-  return /\b(marked the draft ready|human approval recorded|placed approved draft|approved draft|local demo queue|queued local\b.{0,60}\b(?:draft|copy)|queued\b.{0,80}\blocally|submitted(?:\b.{0,80}\bdraft)?\b.{0,40}\bfor review|ready for human review)\b/i.test(
+  return /\b(marked the draft ready|human approval recorded|placed approved draft|approved draft|local demo queue|queued local\b.{0,60}\b(?:draft|copy)|queued\b.{0,80}\b(?:draft|copy|locally)|submitted(?:\b.{0,80}\bdraft)?\b.{0,40}\bfor review|ready for human review)\b/i.test(
     activity.label,
   );
 }
