@@ -250,6 +250,48 @@ test("operations source API: invalid and non-curated ids are allow-list misses w
   }
 });
 
+test("operations source API: curated UUID ids are canonicalized before source reads", async () => {
+  const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const uppercaseId = curatedId.toUpperCase();
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  const runBody = JSON.stringify({ campaignId: uppercaseId, status: "completed", stateVersion: 3, lastSequence: 14, events: [] });
+  const documentsBody = JSON.stringify({ documents: canonicalOperationsDocuments("Keep KFC Out of Ormskirk"), evidence: campaignEvidence([], 0) });
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestedUrls.push(String(input));
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response(runBody, { status: 200, headers: { "content-type": "application/json", "content-length": String(Buffer.byteLength(runBody)) } });
+    }
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}/documents`)) {
+      return new Response(documentsBody, { status: 200, headers: { "content-type": "application/json", "content-length": String(Buffer.byteLength(documentsBody)) } });
+    }
+
+    throw new Error(`Unexpected source request: ${String(input)}`);
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${uppercaseId}`), { params: Promise.resolve({ id: uppercaseId }) });
+    expect(response.status).toBe(200);
+    expectPublicSourceJsonBoundary(response.headers, "canonicalized source id");
+
+    const body = (await response.json()) as { run?: { campaignId?: string }; sourceFailureKind?: string };
+    expect(body.run?.campaignId).toBe(curatedId);
+    expect(body.sourceFailureKind).toBeUndefined();
+    expect(requestedUrls).toEqual([
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: non-GET methods are blocked as read-only no-store responses", async ({ request }) => {
   const curatedId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 

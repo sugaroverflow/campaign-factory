@@ -456,11 +456,16 @@ function hasExplicitEmptyBody(response: Response) {
   return response.headers.get("content-length")?.trim() === "0";
 }
 
+function normalizeSourceCampaignId(value: unknown) {
+  const id = normalizeSourceReferenceId(value);
+  return id && UUID_RE.test(id) ? id.toLowerCase() : id;
+}
+
 function sourceRunHeaderOnly(value: unknown) {
   if (typeof value !== "object" || value === null) return value;
   const header: Record<string, unknown> = { ...(value as Record<string, unknown>), events: [] };
 
-  const campaignId = normalizeSourceReferenceId(header.campaignId);
+  const campaignId = normalizeSourceCampaignId(header.campaignId);
   if (campaignId) header.campaignId = campaignId;
 
   const status = normalizeSourceRunStatus(header.status);
@@ -1269,7 +1274,8 @@ async function fetchSourceJson<T>(
 }
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params;
+  const { id: rawId } = await ctx.params;
+  const id = rawId.trim().toLowerCase();
   if (!UUID_RE.test(id) || !isOperationsPublicCampaignId(id)) {
     return sourceJson(
       sourceFailureBody("configuration", { error: "Operations source not found", detail: "This read-only preview source path only exposes the curated public operations campaigns.", sourceFailureKind: "configuration" }),
