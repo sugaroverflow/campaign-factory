@@ -1270,6 +1270,89 @@ function sourceWorkingCopyMatchesWorkspace(copy: SourceWorkingCopy, expectedWork
   return provenanceCampaignId === expectedCampaignId;
 }
 
+function sourceWorkingCopyMatchesCurrentSourceResource(copy: SourceWorkingCopy, resources: SourceResource[]) {
+  const copyDocumentKey = canonicalSourceDocumentKey(copy.sourceDocumentKey);
+  const copyDocument = normaliseOperationsSourceInlineText(copy.sourceDocument).toLowerCase();
+  const copyTitle = normaliseOperationsSourceInlineText(copy.title).toLowerCase();
+  const copyChannel = normaliseOperationsSourceInlineText(copy.channel).toLowerCase();
+  return resources.some(
+    (resource) =>
+      canonicalSourceDocumentKey(resource.sourceDocumentKey) === copyDocumentKey &&
+      normaliseOperationsSourceInlineText(resource.sourceDocument).toLowerCase() === copyDocument &&
+      normaliseOperationsSourceInlineText(resource.title).toLowerCase() === copyTitle &&
+      normaliseOperationsSourceInlineText(resource.channel).toLowerCase() === copyChannel,
+  );
+}
+
+function stateHasOlderSourceResourceBaseline(state: DemoState, source: CampaignSource, currentDocumentSignature: string) {
+  if (!state.sourceDocumentSignature || state.sourceStateVersion === null || state.sourceLastSequence === null || !state.sourceAcknowledgedAt) return false;
+  if (!sourceBaselineSignatureMatchesWorkspace(state.sourceDocumentSignature, source.campaignId)) return false;
+  return state.sourceStateVersion !== source.stateVersion || state.sourceLastSequence !== source.lastSequence || state.sourceDocumentSignature !== currentDocumentSignature;
+}
+
+function sanitizeStateForCurrentSourceResources(state: DemoState, source: CampaignSource, resources: SourceResource[], currentDocumentSignature: string): DemoState {
+  if (state.workspaceKey !== source.campaignId) return state;
+  if (stateHasOlderSourceResourceBaseline(state, source, currentDocumentSignature)) return state;
+  const sourceWorkingCopy = state.sourceWorkingCopy && sourceWorkingCopyMatchesCurrentSourceResource(state.sourceWorkingCopy, resources) ? state.sourceWorkingCopy : null;
+  const workingDrafts = state.workingDrafts.filter((draft) => sourceWorkingCopyMatchesCurrentSourceResource(draft.sourceWorkingCopy, resources));
+  if (sourceWorkingCopy === state.sourceWorkingCopy && workingDrafts.length === state.workingDrafts.length) return state;
+
+  const removedReferences = [
+    ...state.workingDrafts
+      .filter((draft) => !workingDrafts.some((keptDraft) => keptDraft.id === draft.id))
+      .flatMap((draft) => [
+        draft.id,
+        draft.title,
+        draft.channel,
+        draft.subject,
+        draft.body,
+        draft.reviewerNote,
+        draft.sourceWorkingCopy.id,
+        draft.sourceWorkingCopy.title,
+        draft.sourceWorkingCopy.channel,
+        draft.sourceWorkingCopy.sourceDocument,
+        draft.sourceWorkingCopy.sourceDocumentKey,
+        draft.sourceWorkingCopy.provenance,
+        ...draft.sourceWorkingCopy.warnings,
+      ]),
+    ...(state.sourceWorkingCopy && !sourceWorkingCopy
+      ? [
+          state.sourceWorkingCopy.id,
+          state.sourceWorkingCopy.title,
+          state.sourceWorkingCopy.channel,
+          state.sourceWorkingCopy.sourceDocument,
+          state.sourceWorkingCopy.sourceDocumentKey,
+          state.sourceWorkingCopy.provenance,
+          ...state.sourceWorkingCopy.warnings,
+        ]
+      : []),
+  ];
+  const hasQueuedDraft = workingDrafts.some((draft) => hasRecordedLocalQueue(draft.status, draft.queuedAt));
+  const activity = state.activity.filter(
+    (item) =>
+      !activityLooksTiedToRemovedLocalWork(item, removedReferences) &&
+      !(workingDrafts.length === 0 && state.workingDrafts.length > 0 && activityLooksLikeDraftWorkflow(item)) &&
+      !(state.sourceWorkingCopy && !sourceWorkingCopy && activityLooksLikeTopLevelDraftWorkflow(item)),
+  );
+  return {
+    ...state,
+    sourceWorkingCopy,
+    workingDrafts,
+    activeWorkingDraftId: workingDrafts.some((draft) => draft.id === state.activeWorkingDraftId) ? state.activeWorkingDraftId : (workingDrafts[0]?.id ?? null),
+    activeDraft: state.sourceWorkingCopy && !sourceWorkingCopy ? initialState.activeDraft : state.activeDraft,
+    subject: state.sourceWorkingCopy && !sourceWorkingCopy ? "Local source draft reset" : state.subject,
+    body:
+      state.sourceWorkingCopy && !sourceWorkingCopy
+        ? "This browser-local draft was reset because its stored source resource is not present in the current Campaign Factory source. Use a current source resource before review or local queueing."
+        : state.body,
+    reviewerNote: state.sourceWorkingCopy && !sourceWorkingCopy ? "" : state.reviewerNote,
+    status: state.sourceWorkingCopy && !sourceWorkingCopy ? "draft" : state.status,
+    queuedAt: state.sourceWorkingCopy && !sourceWorkingCopy ? null : state.queuedAt,
+    scheduleIntent: hasQueuedDraft || (sourceWorkingCopy && hasRecordedLocalQueue(state.status, state.queuedAt)) ? state.scheduleIntent : initialState.scheduleIntent,
+    activity: withWorkspaceSanitizedActivity(activity),
+  };
+}
+
 function workingDraftMatchesWorkspace(draft: WorkingDraft, expectedWorkspaceKey: string) {
   const expectedCampaignId = expectedWorkspaceKey.toLowerCase();
   if (draft.id !== draft.sourceWorkingCopy.id || !sourceScopedLocalIdMatchesWorkspace(draft.id, expectedCampaignId)) return false;
@@ -3631,6 +3714,12 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const sourceTactics = useMemo(() => (source ? extractSourceTactics(source) : []), [source]);
   const sourceResources = useMemo(() => (source ? extractSourceResources(source) : []), [source]);
   const currentSourceDocumentSignature = useMemo(() => (source ? sourceDocumentSignature(source) : null), [source]);
+
+  useEffect(() => {
+    if (!hydrated || !source || !currentSourceDocumentSignature) return;
+    queueMicrotask(() => setState((current) => sanitizeStateForCurrentSourceResources(current, source, sourceResources, currentSourceDocumentSignature)));
+  }, [currentSourceDocumentSignature, hydrated, source, sourceResources]);
+
   const sourceBaselineMissing = Boolean(source && state.workspaceKey === source.campaignId && state.sourceStateVersion === null && sourceBoundLocalWorkCount(state) > 0);
   const sourceBaselineChanged = Boolean(
     source &&

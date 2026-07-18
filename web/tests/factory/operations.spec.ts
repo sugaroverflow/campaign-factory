@@ -10088,6 +10088,98 @@ test("operations workbench rejects source working drafts without a canonical res
   expect(stored).not.toContain("non-resource-source-heading-copy");
 });
 
+test("operations workbench rejects source working drafts whose heading is not in the current source resources", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 17, lastSequence: 31, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: campaignEvidence([{ id: "missing-current-resource", description: "Check Barnet decision records", reason: "Current source-resource guard", affectedSections: ["digital_pack"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    const copy = {
+      id: `source:${campaignId}:resource:digital_pack:meeting-request-email`,
+      campaignId,
+      title: "Meeting request email",
+      channel: "Council email",
+      sourceDocument: "Digital Campaign Pack",
+      sourceDocumentKey: "digital_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: ["Confirm the current Barnet decision record before any external use."],
+      provenance: `Source campaign ${campaignId}; copied from the read-only Digital Campaign Pack into this browser-local workspace.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: null,
+        sourceLastSequence: null,
+        sourceDocumentSignature: null,
+        sourceAcknowledgedAt: null,
+        selectedSegment: "source_primary",
+        subject: "Barnet meeting request",
+        body: "Hi — this browser-local copy names a plausible source resource that is not in the current source payload.",
+        reviewerNote: "Review before any local queueing.",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "drafts",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [
+          {
+            id: copy.id,
+            title: copy.title,
+            channel: copy.channel,
+            subject: "Barnet meeting request",
+            body: "This local copy should fail closed because Meeting request email is not an extracted Digital Campaign Pack resource for the current source.",
+            reviewerNote: "Review before any local queueing.",
+            status: "review",
+            queuedAt: null,
+            createdAt: "2026-07-16T17:52:30.000Z",
+            updatedAt: "2026-07-16T18:02:30.000Z",
+            sourceWorkingCopy: copy,
+          },
+        ],
+        activeWorkingDraftId: copy.id,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "missing-current-source-resource", label: "Created local copy from source resource: Meeting request email." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=drafts`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Barnet meeting request");
+  await expect(page.locator("main")).not.toContainText("Meeting request email");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("Barnet meeting request");
+  expect(stored).not.toContain("missing-current-source-resource");
+});
+
 test("operations workbench rejects cross-campaign UUIDs in visible local-work fields", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
   const otherCampaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
