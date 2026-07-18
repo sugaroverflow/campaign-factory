@@ -1164,6 +1164,7 @@ function workingDraftHasMalformedField(draft: Partial<WorkingDraft>) {
     !isValidStoredTimestamp(draft.updatedAt) ||
     storedTimestampIsBefore(draft.updatedAt, draft.createdAt) ||
     (typeof draft.queuedAt === "string" && isValidStoredTimestamp(draft.queuedAt) && storedTimestampIsBefore(draft.queuedAt, draft.createdAt)) ||
+    (typeof draft.queuedAt === "string" && isValidStoredTimestamp(draft.queuedAt) && storedTimestampIsBefore(draft.queuedAt, draft.updatedAt)) ||
     (draft.queuedAt !== undefined && draft.queuedAt !== null && typeof draft.queuedAt !== "string");
 }
 
