@@ -862,11 +862,17 @@ function downloadClientFile(filename: string, content: string, type: string) {
 
 function normaliseActivity(activity: unknown): Activity[] {
   if (!Array.isArray(activity)) return initialState.activity;
-  const normalised = activity
-    .filter((item): item is Partial<Activity> => Boolean(item) && typeof item === "object")
-    .filter((item) => typeof item.id === "string" && item.id && typeof item.label === "string" && item.label)
-    .map((item) => ({ id: item.id as string, label: item.label as string }));
-  return normalised.length ? normalised : [];
+  const seenIds = new Set<string>();
+  const normalised: Activity[] = [];
+  for (const item of activity) {
+    if (!item || typeof item !== "object") continue;
+    const candidate = item as Partial<Activity>;
+    if (typeof candidate.id !== "string" || !candidate.id || typeof candidate.label !== "string" || !candidate.label) continue;
+    if (seenIds.has(candidate.id)) continue;
+    seenIds.add(candidate.id);
+    normalised.push({ id: candidate.id, label: candidate.label });
+  }
+  return normalised;
 }
 
 const INVALID_LOCAL_ACTION_TITLE = "Local action unavailable";
