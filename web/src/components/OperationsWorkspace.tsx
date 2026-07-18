@@ -1374,7 +1374,10 @@ function loadSanitizedWorkspaceState(campaignId: string, persistSanitized = fals
   const storageKey = localStorageKeyFor(campaignId);
   const raw = localStorage.getItem(storageKey);
   const loaded = loadState(storageKey);
-  if (loaded.workspaceKey !== campaignId) return null;
+  if (loaded.workspaceKey !== campaignId) {
+    if (persistSanitized && raw) localStorage.removeItem(storageKey);
+    return null;
+  }
   const state = sanitizeStateForWorkspace(loaded, campaignId);
   if (persistSanitized && raw) {
     const sanitizedRaw = JSON.stringify(state);

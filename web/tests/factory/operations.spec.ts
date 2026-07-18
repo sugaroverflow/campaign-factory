@@ -12131,6 +12131,89 @@ test("operations portfolio sanitizes malformed browser-local state before local 
   expect(storedState).not.toContain("portfolio-malformed-action");
 });
 
+test("operations portfolio removes browser-local state stored under the wrong campaign key", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+  const foreignId = "57678ae0-29fd-4b4b-8a53-5c711cdb21cf";
+  const campaignTitles: Record<string, { title: string; place: string; status: "partial" | "completed" }> = {
+    "69f257b6-9913-4395-94f7-5c25b4b5fe95": { title: "Keep KFC Out of Ormskirk", place: "Ormskirk, Lancashire", status: "partial" },
+    [foreignId]: { title: "Build 5,000 affordable houses in Tower Hamlets in the next 3 years", place: "Tower Hamlets, London", status: "partial" },
+    [barnetId]: { title: "Stop the leisure park redevelopment in Barnet", place: "Barnet, London", status: "completed" },
+  };
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const requestedCampaignId = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    const campaign = campaignTitles[requestedCampaignId] ?? campaignTitles[barnetId];
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: requestedCampaignId, status: campaign.status, stateVersion: 59, lastSequence: 2110, events: [] },
+        documents: campaignOperationsDocuments({ title: campaign.title, place: campaign.place, next: `Check ${campaign.place} source records` }),
+        evidence: campaignEvidence([{ id: "portfolio-wrong-key", description: `Check ${campaign.place} source records`, reason: "Portfolio wrong-key localStorage sanitization guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate(
+    ({ campaignId, foreignCampaignId }) => {
+      localStorage.setItem(
+        `cf_operations_demo_v3:${campaignId}`,
+        JSON.stringify({
+          workspaceKey: foreignCampaignId,
+          sourceStateVersion: 59,
+          sourceLastSequence: 2110,
+          sourceDocumentSignature: `source:${foreignCampaignId}:foreign-baseline`,
+          sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+          selectedSegment: "source_primary",
+          subject: "Tower Hamlets local queue should not count for Barnet",
+          body: "This wrong-key browser-local state should be removed from the Barnet campaign key before portfolio counts render.",
+          reviewerNote: "Foreign browser-local state under the wrong key.",
+          status: "queued",
+          mode: "preview",
+          activeDraft: "supporter_email",
+          activeView: "overview",
+          contactFilter: "source_primary",
+          contactReadinessFilter: "all",
+          scheduleIntent: "tomorrow_morning",
+          queuedAt: "2026-07-17T21:00:00.000Z",
+          localActions: [
+            {
+              id: `source:${foreignCampaignId}:portfolio-wrong-key-action`,
+              title: "Foreign action stored under the Barnet key",
+              source: "Campaign source · Evidence & checks",
+              owner: "Campaigner",
+              timing: "Next",
+              priority: "High",
+              status: "next",
+              provenance: `Source campaign ${foreignCampaignId}; created from Evidence & checks.`,
+            },
+          ],
+          workingDrafts: [],
+          activeWorkingDraftId: null,
+          sourceWorkingCopy: null,
+          sourceRecheckStateVersion: null,
+          sourceRecheckLastSequence: null,
+          sourceRecheckDocumentSignature: null,
+          sourceRecheckVisitedViews: [],
+          activity: [{ id: "portfolio-wrong-key-action", label: "Queued foreign local work under the Barnet key." }],
+        }),
+      );
+    },
+    { campaignId: barnetId, foreignCampaignId: foreignId },
+  );
+
+  await page.goto("/operations");
+  await expect(page.getByRole("heading", { name: "Stop the leisure park redevelopment in Barnet" })).toBeVisible();
+  const barnetRow = page.locator("article").filter({ hasText: "Stop the leisure park redevelopment in Barnet" });
+  await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
+  await expect(barnetRow).not.toContainText("1 action");
+  await expect(barnetRow).not.toContainText("queued locally");
+  await expect(barnetRow).not.toContainText("Foreign action stored under the Barnet key");
+
+  await expect.poll(async () => page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), barnetId)).toBeNull();
+});
+
 test("operations portfolio preserves acknowledged source baseline when re-check metadata is foreign", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
   const foreignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
