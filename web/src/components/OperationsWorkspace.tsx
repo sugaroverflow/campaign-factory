@@ -1084,6 +1084,13 @@ function normaliseStoredTimestamp(value: unknown) {
   return typeof value === "string" && value && isValidStoredTimestamp(value) ? value : null;
 }
 
+function normaliseStoredAcknowledgedTimestamp(value: unknown) {
+  const timestamp = normaliseStoredTimestamp(value);
+  if (!timestamp) return null;
+  const fiveMinutesFromNow = Date.now() + 5 * 60 * 1000;
+  return new Date(timestamp).getTime() <= fiveMinutesFromNow ? timestamp : null;
+}
+
 function normaliseStoredCampaignId(value: unknown) {
   if (typeof value !== "string") return null;
   const campaignId = value.trim().toLowerCase();
@@ -1214,7 +1221,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     sourceStateVersion: normaliseOptionalSourceSequence(parsed.sourceStateVersion),
     sourceLastSequence: normaliseOptionalSourceSequence(parsed.sourceLastSequence),
     sourceDocumentSignature: typeof parsed.sourceDocumentSignature === "string" ? parsed.sourceDocumentSignature : null,
-    sourceAcknowledgedAt: normaliseStoredTimestamp(parsed.sourceAcknowledgedAt),
+    sourceAcknowledgedAt: normaliseStoredAcknowledgedTimestamp(parsed.sourceAcknowledgedAt),
     sourceRecheckStateVersion: normaliseOptionalSourceSequence(parsed.sourceRecheckStateVersion),
     sourceRecheckLastSequence: normaliseOptionalSourceSequence(parsed.sourceRecheckLastSequence),
     sourceRecheckDocumentSignature: typeof parsed.sourceRecheckDocumentSignature === "string" ? parsed.sourceRecheckDocumentSignature : null,
