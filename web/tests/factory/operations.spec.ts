@@ -9145,6 +9145,96 @@ test("operations workbench removes malformed and unsafe source baseline sequence
   expect(stored).not.toContain('"sourceAcknowledgedAt":"2026-07-16T17:54:30.000Z"');
 });
 
+test("operations workbench requires re-check when malformed source baseline has local work", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: campaignEvidence([{ id: "next", description: "Check Barnet decision records", reason: "Malformed baseline local-work guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: Number.MAX_SAFE_INTEGER + 1,
+        sourceLastSequence: 24.5,
+        sourceDocumentSignature: "real-barnet-source-baseline",
+        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        sourceRecheckStateVersion: -2,
+        sourceRecheckLastSequence: Number.MAX_SAFE_INTEGER + 1,
+        sourceRecheckDocumentSignature: "real-barnet-source-recheck-baseline",
+        sourceRecheckVisitedViews: ["evidence"],
+        selectedSegment: "source_primary",
+        subject: "Barnet source update",
+        body: "Use the Barnet source pack before any local queue intent.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "overview",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_next_check",
+        queuedAt: null,
+        localActions: [
+          {
+            id: `source:${campaignId}:barnet-records-check`,
+            title: "Confirm Barnet decision records",
+            source: "Campaign source · Evidence & checks · strategy",
+            owner: "Reviewer",
+            timing: "Before local queue",
+            priority: "High",
+            status: "next",
+            provenance: `Source campaign ${campaignId}; local action retained while malformed source baseline is re-checked.`,
+          },
+        ],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        activity: [{ id: "local-action", label: "Created local action: Confirm Barnet decision records." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto("/operations");
+  const portfolio = page.getByLabel("Campaign operations portfolio");
+  const barnetRow = portfolio.locator("article").nth(2);
+  await expect(barnetRow).toContainText("Local signals: 1 source re-check required · 1 action.");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=overview`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.locator("main")).toContainText("Browser-local state was sanitized for this real campaign workspace");
+  await expect(page.getByText("Read-only source has changed since this local workspace started.")).toBeVisible();
+  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("1 local item needs source re-check");
+  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("Action: Confirm Barnet decision records");
+  await expect(page.getByRole("button", { name: "Acknowledge updated source" })).toBeDisabled();
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).toContain("Confirm Barnet decision records");
+  expect(stored).toContain('"sourceStateVersion":null');
+  expect(stored).toContain('"sourceLastSequence":null');
+  expect(stored).toContain('"sourceDocumentSignature":null');
+  expect(stored).toContain('"sourceRecheckVisitedViews":[]');
+  expect(stored).not.toContain('"sourceStateVersion":14');
+  expect(stored).not.toContain('"sourceAcknowledgedAt":"2026-07-16T17:54:30.000Z"');
+});
+
 test("operations workbench: failed or not-yet-usable real source loads do not fall back to the fixture", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {

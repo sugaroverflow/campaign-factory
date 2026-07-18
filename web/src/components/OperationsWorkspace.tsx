@@ -1544,6 +1544,14 @@ function portfolioLocalCounts(campaignId: string, persistSanitized = false): Por
   };
 }
 
+function sourceBoundPrimaryDraftCount(state: DemoState) {
+  return state.status !== "draft" || state.sourceWorkingCopy ? 1 : 0;
+}
+
+function sourceBoundLocalWorkCount(state: DemoState) {
+  return state.localActions.length + sourceBoundPrimaryDraftCount(state) + state.workingDrafts.length;
+}
+
 function localSignalPhrases(counts: PortfolioLocalCounts, sourceRecheckItemCount = 0, sourceUpdateNeedsAcknowledgement = false) {
   return [
     sourceRecheckItemCount
@@ -1563,18 +1571,18 @@ function storedSourceRecheckSummary(campaignId: string, source: CampaignSource) 
   if (!state) return null;
   const currentDocumentSignature = sourceDocumentSignature(source);
   const baselineChanged = Boolean(
-    state.sourceStateVersion !== null &&
-      (state.sourceStateVersion !== source.stateVersion || state.sourceLastSequence !== source.lastSequence || state.sourceDocumentSignature !== currentDocumentSignature),
+    (state.sourceStateVersion === null && sourceBoundLocalWorkCount(state) > 0) ||
+      (state.sourceStateVersion !== null &&
+        (state.sourceStateVersion !== source.stateVersion || state.sourceLastSequence !== source.lastSequence || state.sourceDocumentSignature !== currentDocumentSignature)),
   );
   if (!baselineChanged) return null;
-  const sourceBoundPrimaryDraftCount = state.status !== "draft" || state.sourceWorkingCopy ? 1 : 0;
   const recheckMatchesCurrentSource =
     state.sourceRecheckStateVersion === source.stateVersion && state.sourceRecheckLastSequence === source.lastSequence && state.sourceRecheckDocumentSignature === currentDocumentSignature;
   const visitedViews = new Set(recheckMatchesCurrentSource ? state.sourceRecheckVisitedViews : []);
   const checkedViews = SOURCE_RECHECK_REQUIRED_VIEWS.filter((view) => visitedViews.has(view));
   const missingViews = SOURCE_RECHECK_REQUIRED_VIEWS.filter((view) => !visitedViews.has(view));
   return {
-    itemCount: state.localActions.length + sourceBoundPrimaryDraftCount + state.workingDrafts.length,
+    itemCount: sourceBoundLocalWorkCount(state),
     checkedCount: checkedViews.length,
     requiredCount: SOURCE_RECHECK_REQUIRED_VIEWS.length,
     missingLabels: missingViews.map((view) => sourceRecheckViewLabels[view]),
@@ -3153,13 +3161,16 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     if (!hydrated || !source || !hasStoredLocalState || state.workspaceKey !== source.campaignId || state.sourceStateVersion !== null) return;
     const signature = sourceDocumentSignature(source);
     queueMicrotask(() => {
-      setState((current) => ({
-        ...current,
-        sourceStateVersion: source.stateVersion,
-        sourceLastSequence: source.lastSequence,
-        sourceDocumentSignature: signature,
-        sourceAcknowledgedAt: source.loadedAt,
-      }));
+      setState((current) => {
+        if (sourceBoundLocalWorkCount(current) > 0) return current;
+        return {
+          ...current,
+          sourceStateVersion: source.stateVersion,
+          sourceLastSequence: source.lastSequence,
+          sourceDocumentSignature: signature,
+          sourceAcknowledgedAt: source.loadedAt,
+        };
+      });
     });
   }, [hasStoredLocalState, hydrated, source, state.sourceStateVersion, state.workspaceKey]);
 
@@ -3246,10 +3257,12 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const sourceTactics = useMemo(() => (source ? extractSourceTactics(source) : []), [source]);
   const sourceResources = useMemo(() => (source ? extractSourceResources(source) : []), [source]);
   const currentSourceDocumentSignature = useMemo(() => (source ? sourceDocumentSignature(source) : null), [source]);
+  const sourceBaselineMissing = Boolean(source && state.workspaceKey === source.campaignId && state.sourceStateVersion === null && sourceBoundLocalWorkCount(state) > 0);
   const sourceBaselineChanged = Boolean(
     source &&
-      state.sourceStateVersion !== null &&
-      (state.sourceStateVersion !== source.stateVersion || state.sourceLastSequence !== source.lastSequence || state.sourceDocumentSignature !== currentSourceDocumentSignature),
+      (sourceBaselineMissing ||
+        (state.sourceStateVersion !== null &&
+          (state.sourceStateVersion !== source.stateVersion || state.sourceLastSequence !== source.lastSequence || state.sourceDocumentSignature !== currentSourceDocumentSignature))),
   );
   const sourceChangedActionsToRecheck = sourceBaselineChanged ? state.localActions : [];
   const sourceChangedDraftsToRecheck = sourceBaselineChanged
