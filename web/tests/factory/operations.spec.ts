@@ -3437,7 +3437,7 @@ test("operations source API: normalizes recoverable legacy source references bef
   const curatedId = "6b54225d-afa3-41d1-b053-89741094f153";
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
-  const runBody = JSON.stringify({ campaignId: curatedId, batchId: "  ", status: " Completed ", stateVersion: " 88 ", lastSequence: " 900 ", events: [{ eventId: "legacy-large-source-event", sequence: 1 }] });
+  const runBody = JSON.stringify({ campaignId: curatedId, batchId: "  ", status: " Complete ", stateVersion: " 88 ", lastSequence: " 900 ", events: [{ eventId: "legacy-large-source-event", sequence: 1 }] });
   const documents = canonicalOperationsDocuments("Stop the leisure park redevelopment in Barnet");
   documents[0].flags = [
     "Unresolved load-bearing claim: Unresolved source claim 1",
@@ -3447,6 +3447,7 @@ test("operations source API: normalizes recoverable legacy source references bef
   documents[0].plainText = withCompiledDocumentDisclaimer(`Stop the leisure park redevelopment in Barnet\n\n${COMPILED_DOCUMENT_NEEDS_VERIFICATION_NOTE}\n\nCanonical source document shell.`);
   documents[0].html = `<p>${documents[0].plainText}</p>`;
   (documents[0] as { status: unknown }).status = " Needs\u00a0Verification ";
+  (documents[3] as { status: unknown }).status = " UNDER_REVIEW ";
   (documents[1] as { resourceCount: unknown }).resourceCount = " 0 ";
   (documents[6] as { resourceCount: unknown }).resourceCount = " 1 ";
   documents[8].plainText = withCompiledDocumentDisclaimer("DIGITAL CAMPAIGN PACK\n\nSupporter&nbsp email\n\nSubject: Source&nbsp update\n\nBefore you send this, check\n\nConfirm\n  the council&nbsp source before reusing this pack line.");
@@ -3538,6 +3539,7 @@ test("operations source API: normalizes recoverable legacy source references bef
     expect(body.run).not.toHaveProperty("batchId");
     expect(body.documents?.[0]?.status).toBe("needs verification");
     expect(body.documents?.[0]?.flags).toEqual(["Unresolved load-bearing claim: Unresolved source claim 1", "A source section is flagged needs verification."]);
+    expect(body.documents?.[3]?.status).toBe("under review");
     expect(body.documents?.[8]?.plainText).toContain("Supporter email");
     expect(body.documents?.[8]?.plainText).toContain("Subject: Source update");
     expect(body.documents?.[8]?.plainText).toContain("Before you send this, check");

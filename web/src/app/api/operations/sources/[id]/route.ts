@@ -103,7 +103,19 @@ const SOURCE_VERIFICATION_LABEL_BY_VISIBLE_TEXT = new Map<string, string>(VERIFI
 const SOURCE_UNRESOLVED_LABELS = new Set(["Conflicting evidence", "Verification incomplete", "External information unavailable"]);
 const SOURCE_CLAIM_TYPES = new Set(["authority", "process", "deadline", "officeholder", "policy", "stakeholder_position", "number", "context", "other"]);
 const SOURCE_CLAIM_CONFIDENCES = new Set(["high", "medium", "low"]);
+const SOURCE_RUN_STATUS_BY_VISIBLE_TEXT = new Map<string, string>([
+  ["queued", "queued"],
+  ["running", "running"],
+  ["partial", "partial"],
+  ["partial but usable", "partial"],
+  ["completed", "completed"],
+  ["complete", "completed"],
+  ["failed", "failed"],
+  ["cancelled", "cancelled"],
+  ["canceled", "cancelled"],
+]);
 const SOURCE_DOCUMENT_STATUSES = new Set<string>(DOCUMENT_STATUSES);
+const SOURCE_DOCUMENT_STATUS_BY_VISIBLE_TEXT = new Map<string, string>(DOCUMENT_STATUSES.flatMap((status) => [[status, status], [status.replace(/ /g, "_"), status], [status.replace(/ /g, "-"), status]]));
 const SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM = "Unresolved load-bearing claim: ";
 const SOURCE_DOCUMENT_FLAG_NEEDS_VERIFICATION = "A source section is flagged needs verification.";
 const SOURCE_DOCUMENT_FLAG_PLACEHOLDERS = "Contains explicit verification placeholders.";
@@ -448,7 +460,7 @@ function sourceRunHeaderOnly(value: unknown) {
   if (typeof value !== "object" || value === null) return value;
   const header: Record<string, unknown> = { ...(value as Record<string, unknown>), events: [] };
 
-  const status = normalizeSourceVisibleText(header.status)?.toLowerCase();
+  const status = normalizeSourceRunStatus(header.status);
   if (status) header.status = status;
 
   const stateVersion = normalizeSourceNonNegativeInteger(header.stateVersion);
@@ -529,6 +541,19 @@ function normalizeSourceClaimType(value: unknown) {
 function normalizeSourceClaimConfidence(value: unknown) {
   const normalized = normalizeSourceVisibleText(value)?.toLowerCase();
   return normalized && SOURCE_CLAIM_CONFIDENCES.has(normalized) ? normalized : undefined;
+}
+
+function normalizeSourceStatusText(value: unknown) {
+  return normalizeSourceVisibleText(value)
+    ?.toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeSourceRunStatus(value: unknown) {
+  const normalized = normalizeSourceStatusText(value);
+  return normalized ? SOURCE_RUN_STATUS_BY_VISIBLE_TEXT.get(normalized) : undefined;
 }
 
 function normalizeSourceAffectedSectionKey(value: string) {
@@ -708,8 +733,8 @@ function normalizeSourceDocumentResourceCount(value: unknown) {
 }
 
 function normalizeSourceDocumentStatus(value: unknown) {
-  const normalized = normalizeSourceVisibleText(value)?.toLowerCase();
-  return normalized && SOURCE_DOCUMENT_STATUSES.has(normalized) ? normalized : value;
+  const normalized = normalizeSourceStatusText(value);
+  return normalized ? (SOURCE_DOCUMENT_STATUS_BY_VISIBLE_TEXT.get(normalized) ?? value) : value;
 }
 
 function normalizeSourceDocuments(value: unknown) {
