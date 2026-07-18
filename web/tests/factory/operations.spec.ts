@@ -3478,6 +3478,8 @@ test("operations source API: normalizes recoverable legacy source references bef
     null,
     { text: "Confirm the council source before using this pack line.", section: "Digital Campaign Pack" },
     { text: "Confirm the council source before using this pack line.", section: "Digital Campaign Pack" },
+    { text: "Confirm\n  the\u00a0council source before using this pack line.", section: "Digital&nbsp;Campaign Pack" },
+    { text: "Confirm the council source before using this pack line.", section: "Digital\n  Campaign Pack" },
   ] as typeof evidence.draftNotes;
   evidence.terminalGaps = [
     { id: "legacy-gap", description: "Stale duplicated terminal gap date is recoverable.", at: "2026-07-17" },

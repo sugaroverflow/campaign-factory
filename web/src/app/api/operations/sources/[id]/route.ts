@@ -696,7 +696,13 @@ function normalizeSourceDraftNotes(value: unknown) {
       notes.push(note);
       continue;
     }
-    const key = `${record.section}\u0000${record.text}`;
+    const normalizedSection = normaliseOperationsSourceInlineText(record.section);
+    const normalizedText = normaliseOperationsSourceInlineText(record.text);
+    if (!normalizedSection || !normalizedText) {
+      notes.push(note);
+      continue;
+    }
+    const key = `${normalizedSection}\u0000${normalizedText}`;
     if (seen.has(key)) continue;
     seen.add(key);
     notes.push(record);
