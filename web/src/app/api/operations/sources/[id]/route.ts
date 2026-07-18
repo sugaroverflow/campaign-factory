@@ -10,6 +10,7 @@ import {
   normaliseOperationsSourceOrigin,
   type OperationsSourcePayload,
 } from "@/lib/operations/source";
+import { VERIFICATION_LABELS } from "@/lib/pipeline/labels";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +55,8 @@ const SOURCE_AFFECTED_SECTION_KEYS = new Set([
   "media_pack",
   "digital_pack",
 ]);
+const SOURCE_VERIFICATION_LABELS = new Set<string>(VERIFICATION_LABELS);
+const SOURCE_UNRESOLVED_LABELS = new Set(["Conflicting evidence", "Verification incomplete", "External information unavailable"]);
 // Operations only needs the source run header; request an event-free polling
 // page when recovering from an empty canonical run-read failure so large public
 // event streams do not block real workspace hydration.
@@ -422,6 +425,80 @@ function normalizeSourceEvidenceClaim(value: unknown, claimIds: Set<string>) {
   };
 }
 
+function normalizeSourceEvidenceGroups(record: Record<string, unknown>, claimIds: Set<string>) {
+  if (!Array.isArray(record.groups)) return record.groups;
+
+  const groupedByLabel = new Map<string, { label: string; claims: unknown[] }>();
+  const passthroughGroups: unknown[] = [];
+  const seenClaimIds = new Set<string>();
+
+  for (const group of record.groups) {
+    if (typeof group !== "object" || group === null || !Array.isArray((group as Record<string, unknown>).claims)) {
+      passthroughGroups.push(group);
+      continue;
+    }
+
+    const groupRecord = group as Record<string, unknown>;
+    if (typeof groupRecord.label !== "string") {
+      passthroughGroups.push(group);
+      continue;
+    }
+
+    const claims: unknown[] = [];
+    for (const claim of groupRecord.claims as unknown[]) {
+      const normalizedClaim = normalizeSourceEvidenceClaim(claim, claimIds);
+      if (typeof normalizedClaim === "object" && normalizedClaim !== null && typeof (normalizedClaim as Record<string, unknown>).id === "string") {
+        const claimId = (normalizedClaim as Record<string, unknown>).id as string;
+        if (seenClaimIds.has(claimId)) continue;
+        seenClaimIds.add(claimId);
+      }
+      claims.push(normalizedClaim);
+    }
+
+    const existingGroup = groupedByLabel.get(groupRecord.label);
+    if (existingGroup) {
+      existingGroup.claims.push(...claims);
+    } else {
+      groupedByLabel.set(groupRecord.label, { label: groupRecord.label, claims });
+    }
+  }
+
+  const orderedGroups = VERIFICATION_LABELS.flatMap((label) => {
+    const group = groupedByLabel.get(label);
+    return group && group.claims.length > 0 ? [{ label: group.label, count: group.claims.length, claims: group.claims }] : [];
+  });
+  const unknownLabelGroups = Array.from(groupedByLabel.values()).flatMap((group) => (SOURCE_VERIFICATION_LABELS.has(group.label) || group.claims.length === 0 ? [] : [{ label: group.label, count: group.claims.length, claims: group.claims }]));
+  return [...orderedGroups, ...unknownLabelGroups, ...passthroughGroups];
+}
+
+function normalizeSourceEvidenceTotals(record: Record<string, unknown>, groups: unknown) {
+  if (!Array.isArray(groups)) return record.totals;
+  let claims = 0;
+  let loadBearing = 0;
+  let unresolvedLoadBearing = 0;
+
+  for (const group of groups) {
+    if (typeof group !== "object" || group === null || !Array.isArray((group as Record<string, unknown>).claims)) continue;
+    for (const claim of (group as Record<string, unknown>).claims as unknown[]) {
+      if (typeof claim !== "object" || claim === null) continue;
+      const claimRecord = claim as Record<string, unknown>;
+      claims += 1;
+      if (claimRecord.loadBearing === true) {
+        loadBearing += 1;
+        if (typeof claimRecord.label === "string" && SOURCE_UNRESOLVED_LABELS.has(claimRecord.label)) unresolvedLoadBearing += 1;
+      }
+    }
+  }
+
+  return {
+    ...(typeof record.totals === "object" && record.totals !== null ? (record.totals as Record<string, unknown>) : {}),
+    claims,
+    loadBearing,
+    verifiedLoadBearing: loadBearing - unresolvedLoadBearing,
+    unresolvedLoadBearing,
+  };
+}
+
 function normalizeSourceEvidence(value: unknown) {
   if (typeof value !== "object" || value === null) return value;
   const record = value as Record<string, unknown>;
@@ -434,9 +511,8 @@ function normalizeSourceEvidence(value: unknown) {
       }
     }
   }
-  const groups = Array.isArray(record.groups)
-    ? record.groups.map((group) => (typeof group === "object" && group !== null && Array.isArray((group as Record<string, unknown>).claims) ? { ...(group as Record<string, unknown>), claims: ((group as Record<string, unknown>).claims as unknown[]).map((claim) => normalizeSourceEvidenceClaim(claim, claimIds)) } : group))
-    : record.groups;
+  const groups = normalizeSourceEvidenceGroups(record, claimIds);
+  const totals = normalizeSourceEvidenceTotals(record, groups);
   const currentClaims: Record<string, unknown>[] = [];
   if (Array.isArray(groups)) {
     for (const group of groups) {
@@ -451,6 +527,7 @@ function normalizeSourceEvidence(value: unknown) {
   return {
     ...record,
     groups,
+    totals,
     conflicts: currentClaims.filter((claim) => claim.label === "Conflicting evidence" || (Array.isArray(claim.contradictsClaimIds) && claim.contradictsClaimIds.length > 0)),
     nextChecks: Array.isArray(record.nextChecks)
       ? record.nextChecks.flatMap((check) => {

@@ -3447,6 +3447,10 @@ test("operations source API: normalizes recoverable legacy source references bef
     [{ id: "legacy-reference", description: "Legacy source check keeps the current claim and drops historical ids.", reason: "Older public source builds can carry archived claim ids in next checks.", affectedSections: ["documents", "lobbying_pack", "evidence"] }],
     2,
   );
+  evidence.groups[0].count = 7;
+  evidence.groups[0].claims.push({ ...evidence.groups[0].claims[0] });
+  evidence.groups.push({ label: "Verification incomplete", count: 1, claims: [{ ...evidence.groups[0].claims[1] }] });
+  evidence.totals = { claims: 7, loadBearing: 7, verifiedLoadBearing: 5, unresolvedLoadBearing: 2 };
   const legacyClaim = evidence.groups[0].claims[0] as { affectedOutputs: string[]; contradictsClaimIds?: string[] };
   legacyClaim.affectedOutputs = ["campaign_brief", "campaign_brief", "digital_pack"];
   legacyClaim.contradictsClaimIds = ["claim-2", "claim-2", "archived-claim-from-previous-build"];
@@ -3483,8 +3487,11 @@ test("operations source API: normalizes recoverable legacy source references bef
     expect(response.status).toBe(200);
     expectPublicSourceJsonBoundary(response.headers, "normalized legacy source references");
 
-    const body = (await response.json()) as { documents?: Array<{ flags?: string[] }>; evidence?: { groups?: Array<{ claims?: Array<{ affectedOutputs?: string[]; contradictsClaimIds?: string[] }> }>; conflicts?: Array<{ id?: string; contradictsClaimIds?: string[] }>; nextChecks?: Array<{ claimIds?: string[]; affectedSections?: string[] }>; terminalGaps?: Array<{ id?: string }> }; sourceFailureKind?: string };
+    const body = (await response.json()) as { documents?: Array<{ flags?: string[] }>; evidence?: { groups?: Array<{ count?: number; claims?: Array<{ affectedOutputs?: string[]; contradictsClaimIds?: string[] }> }>; totals?: { claims?: number; loadBearing?: number; verifiedLoadBearing?: number; unresolvedLoadBearing?: number }; conflicts?: Array<{ id?: string; contradictsClaimIds?: string[] }>; nextChecks?: Array<{ claimIds?: string[]; affectedSections?: string[] }>; terminalGaps?: Array<{ id?: string }> }; sourceFailureKind?: string };
     expect(body.documents?.[0]?.flags).toEqual(["Unresolved load-bearing claim: Unresolved source claim 1"]);
+    expect(body.evidence?.groups).toHaveLength(1);
+    expect(body.evidence?.groups?.[0]?.count).toBe(2);
+    expect(body.evidence?.totals).toEqual({ claims: 2, loadBearing: 2, verifiedLoadBearing: 0, unresolvedLoadBearing: 2 });
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.affectedOutputs).toEqual(["campaign_brief", "digital_pack"]);
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.contradictsClaimIds).toEqual(["claim-2"]);
     expect(body.evidence?.conflicts).toEqual([{ ...body.evidence?.groups?.[0]?.claims?.[0], contradictsClaimIds: ["claim-2"] }]);
