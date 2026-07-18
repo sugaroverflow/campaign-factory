@@ -89,6 +89,7 @@ const SOURCE_AFFECTED_SECTION_ALIASES: Record<string, string> = {
 };
 const SOURCE_VERIFICATION_LABELS = new Set<string>(VERIFICATION_LABELS);
 const SOURCE_UNRESOLVED_LABELS = new Set(["Conflicting evidence", "Verification incomplete", "External information unavailable"]);
+const SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM = "Unresolved load-bearing claim: ";
 // Operations only needs the source run header; request an event-free polling
 // page when recovering from an empty canonical run-read failure so large public
 // event streams do not block real workspace hydration.
@@ -480,6 +481,32 @@ function normalizeSourceDocuments(value: unknown) {
   return Array.isArray(value)
     ? value.map((document) => (typeof document === "object" && document !== null ? { ...(document as Record<string, unknown>), flags: uniqueStrings((document as Record<string, unknown>).flags) } : document))
     : value;
+}
+
+function normalizeSourceDocumentEvidenceFlags(documents: unknown, evidence: unknown) {
+  if (!Array.isArray(documents) || typeof evidence !== "object" || evidence === null || !Array.isArray((evidence as Record<string, unknown>).groups)) return documents;
+
+  const unresolvedLoadBearingClaimTexts = new Set<string>();
+  for (const group of (evidence as Record<string, unknown>).groups as unknown[]) {
+    if (typeof group !== "object" || group === null || !Array.isArray((group as Record<string, unknown>).claims)) continue;
+    for (const claim of (group as Record<string, unknown>).claims as unknown[]) {
+      if (typeof claim !== "object" || claim === null) continue;
+      const claimRecord = claim as Record<string, unknown>;
+      if (claimRecord.loadBearing === true && typeof claimRecord.label === "string" && SOURCE_UNRESOLVED_LABELS.has(claimRecord.label) && typeof claimRecord.text === "string") {
+        unresolvedLoadBearingClaimTexts.add(claimRecord.text);
+      }
+    }
+  }
+
+  return documents.map((document) => {
+    if (typeof document !== "object" || document === null || !Array.isArray((document as Record<string, unknown>).flags)) return document;
+    const flags = ((document as Record<string, unknown>).flags as unknown[]).flatMap((flag) => {
+      if (typeof flag !== "string" || !flag.startsWith(SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM)) return [flag];
+      const claimText = flag.slice(SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM.length).trim();
+      return unresolvedLoadBearingClaimTexts.has(claimText) ? [`${SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM}${claimText}`] : [];
+    });
+    return { ...(document as Record<string, unknown>), flags: uniqueStrings(flags) };
+  });
 }
 
 function normalizeSourceEvidenceClaim(value: unknown, claimIds: Set<string>, fallbackLabel?: string) {
@@ -994,8 +1021,8 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     );
   }
 
-  const sourceDocuments = normalizeSourceDocuments(docs.value.documents);
   const sourceEvidence = normalizeSourceEvidence(docs.value.evidence);
+  const sourceDocuments = normalizeSourceDocumentEvidenceFlags(normalizeSourceDocuments(docs.value.documents), sourceEvidence);
   if (
     !isOperationsCompiledDocumentList(sourceDocuments) ||
     !isOperationsEvidenceAndNextChecks(sourceEvidence) ||

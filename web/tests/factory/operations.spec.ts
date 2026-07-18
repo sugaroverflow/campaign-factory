@@ -3442,6 +3442,7 @@ test("operations source API: normalizes recoverable legacy source references bef
   documents[0].flags = [
     "Unresolved load-bearing claim: Unresolved source claim 1",
     "Unresolved load-bearing claim: Unresolved source claim 1",
+    "Unresolved load-bearing claim: Archived source claim from an older build",
   ];
   const evidence = campaignEvidence(
     [{ id: "legacy-reference", description: "Legacy source check keeps the current claim and drops historical ids.", reason: "Older public source builds can carry archived claim ids in next checks.", affectedSections: ["documents", "lobbying_pack", "evidence"] }],
