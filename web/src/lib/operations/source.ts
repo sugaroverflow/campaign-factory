@@ -313,6 +313,20 @@ function isOptionalUniqueNonEmptyStringArray(value: unknown): value is string[] 
   return value === undefined || isUniqueNonEmptyStringArray(value);
 }
 
+function isUniqueCanonicalSourceIdArray(value: unknown): value is string[] {
+  if (!Array.isArray(value)) return false;
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!isCanonicalNonEmptySourceId(item) || seen.has(item)) return false;
+    seen.add(item);
+  }
+  return true;
+}
+
+function isOptionalUniqueCanonicalSourceIdArray(value: unknown): value is string[] | undefined {
+  return value === undefined || isUniqueCanonicalSourceIdArray(value);
+}
+
 function isOperationsDocumentFlag(value: unknown): value is string {
   if (!isNonEmptyString(value)) return false;
   const normalized = normaliseSourceInlineText(value);
@@ -522,7 +536,7 @@ export function hasConsistentOperationsDocumentEvidence(documents: CompiledDocum
 function isOperationsEvidenceClaimView(value: unknown) {
   if (!isRecord(value)) return false;
   return (
-    isNonEmptyString(value.id) &&
+    isCanonicalNonEmptySourceId(value.id) &&
     hasRenderedText(value.text) &&
     typeof value.type === "string" &&
     OPERATIONS_CLAIM_TYPES.has(value.type) &&
@@ -534,7 +548,7 @@ function isOperationsEvidenceClaimView(value: unknown) {
     isOptionalRenderedText(value.excerpt) &&
     isNonNegativeInteger(value.sourceCount) &&
     isOperationsAffectedOutputArray(value.affectedOutputs) &&
-    isOptionalUniqueNonEmptyStringArray(value.contradictsClaimIds)
+    isOptionalUniqueCanonicalSourceIdArray(value.contradictsClaimIds)
   );
 }
 
@@ -590,10 +604,10 @@ function isOperationsNextCheck(value: unknown) {
   const claimIds = isRecord(value) ? value.claimIds : undefined;
   return (
     isRecord(value) &&
-    isNonEmptyString(value.id) &&
+    isCanonicalNonEmptySourceId(value.id) &&
     hasRenderedText(value.description) &&
     hasRenderedText(value.reason) &&
-    isOptionalUniqueNonEmptyStringArray(claimIds) &&
+    isOptionalUniqueCanonicalSourceIdArray(claimIds) &&
     isOperationsAffectedSectionArray(value.affectedSections)
   );
 }
@@ -602,7 +616,7 @@ function isOperationsTerminalGap(value: unknown) {
   const at = isRecord(value) ? value.at : undefined;
   return (
     isRecord(value) &&
-    isNonEmptyString(value.id) &&
+    isCanonicalNonEmptySourceId(value.id) &&
     hasRenderedText(value.description) &&
     isOptionalString(value.agentRunId) &&
     isOptionalJourneyStep(value.step) &&
