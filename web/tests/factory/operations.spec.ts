@@ -13883,6 +13883,42 @@ test("operations workbench: source updates without local work refresh the baseli
   expect(JSON.stringify(storedState)).not.toContain("source update pause");
 });
 
+test("operations workbench: run status changes preserve browser-local work and require acknowledgement", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  let runStatus: "partial" | "completed" = "partial";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: runStatus, stateVersion: 44, lastSequence: 1909, events: [] },
+        documents: campaignOperationsDocuments({ title: "Keep KFC Out of Ormskirk", place: "Ormskirk, Lancashire", next: "Check Ormskirk appeal records" }),
+        evidence: campaignEvidence([{ id: "appeal-check", description: "Check Ormskirk appeal records", reason: "Run status source baseline", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+  await expect(page.getByRole("heading", { name: /Keep KFC Out of Ormskirk into operations/i })).toBeVisible();
+  await page.getByRole("button", { name: /Evidence & checks/ }).first().click();
+  await page.getByRole("button", { name: "Create appeal-status action" }).click();
+  await expect(page.getByText("Confirm Planning Inspectorate appeal status", { exact: true }).first()).toBeVisible();
+  const beforeStatusChange = JSON.parse((await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "{}");
+  expect(beforeStatusChange.sourceDocumentSignature).toContain(`source:${campaignId}:partial:`);
+
+  runStatus = "completed";
+  await page.reload();
+  await page.getByRole("button", { name: /Overview/ }).first().click();
+
+  await expect(page.getByText("Read-only source has changed since this local workspace started.")).toBeVisible();
+  await expect(page.getByLabel("Source document baseline state")).toContainText("changed since local acknowledgement");
+  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("1 local item needs source re-check");
+  await expect(page.getByRole("button", { name: "Acknowledge updated source" })).toBeDisabled();
+  const afterStatusChange = JSON.parse((await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "{}");
+  expect(afterStatusChange.sourceDocumentSignature).toBe(beforeStatusChange.sourceDocumentSignature);
+});
+
 test("operations workbench: next-check metadata changes preserve browser-local work and require acknowledgement", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   let nextCheckReason = "Initial source reason for the local action baseline.";

@@ -2114,7 +2114,7 @@ function sourceDocumentSignature(source: CampaignSource) {
       }),
     ),
   );
-  return `source:${source.campaignId}:${sourceIdentity}::${documentStatuses}::${evidenceTotals.claims}/${evidenceTotals.loadBearing}/${evidenceTotals.verifiedLoadBearing}/${evidenceTotals.unresolvedLoadBearing}::${evidenceSignature}`;
+  return `source:${source.campaignId}:${source.runStatus}:${sourceIdentity}::${documentStatuses}::${evidenceTotals.claims}/${evidenceTotals.loadBearing}/${evidenceTotals.verifiedLoadBearing}/${evidenceTotals.unresolvedLoadBearing}::${evidenceSignature}`;
 }
 
 function buildInitialStateForSource(source: CampaignSource): DemoState {
