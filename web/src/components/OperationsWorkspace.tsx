@@ -1011,6 +1011,7 @@ function sourceWorkingCopyMatchesWorkspace(copy: SourceWorkingCopy, expectedWork
   if (copy.campaignId !== expectedCampaignId) return false;
   const idCampaignId = copy.id.match(/^source:([0-9a-f-]{36})(?::|$)/i)?.[1]?.toLowerCase();
   if (idCampaignId && idCampaignId !== expectedCampaignId) return false;
+  if (!referencedCampaignIds(copy.id).some((campaignId) => campaignId.toLowerCase() === expectedCampaignId)) return false;
   if (!textFieldsReferenceOnlyExpectedCampaign([copy.id, copy.title, copy.channel, copy.sourceDocument, copy.sourceDocumentKey, copy.provenance, ...copy.warnings], expectedCampaignId)) return false;
   const provenanceCampaignId = copy.provenance.match(/Source campaign\s+([0-9a-f-]{36})/i)?.[1]?.toLowerCase();
   if (provenanceCampaignId && provenanceCampaignId !== expectedCampaignId) return false;

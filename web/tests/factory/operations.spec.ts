@@ -6066,6 +6066,111 @@ test("operations workbench ignores source working drafts whose provenance belong
   await expect(page.locator("main")).not.toContainText("Stale Ormskirk reviewer note");
 });
 
+test("operations workbench rejects source working drafts with unscoped source-copy ids", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 12, lastSequence: 23, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check Barnet decision records", reason: "Unscoped source-copy id guard", claimIds: [], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    const unscopedCopy = {
+      id: "manual-source-copy",
+      campaignId,
+      title: "Barnet manually seeded source copy",
+      channel: "Briefing note",
+      sourceDocument: "Lobbying Pack",
+      sourceDocumentKey: "lobbying_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: ["Confirm the current Barnet decision record before any external use."],
+      provenance: `Copied from Lobbying Pack in campaign ${campaignId}; browser-local unscoped-id regression fixture.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: 12,
+        sourceLastSequence: 23,
+        sourceDocumentSignature: `source:${campaignId}:real-barnet-source-baseline`,
+        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        selectedSegment: "source_primary",
+        subject: "Unscoped source copy should be reset",
+        body: "This top-level source copy has the right campaignId but no campaign-scoped source copy id.",
+        reviewerNote: "Unscoped source-copy reviewer note",
+        status: "queued",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "outbox",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "tomorrow_morning",
+        queuedAt: "2026-07-16T18:02:30.000Z",
+        localActions: [],
+        workingDrafts: [
+          {
+            id: unscopedCopy.id,
+            title: unscopedCopy.title,
+            channel: "Briefing note",
+            subject: "Unscoped working draft subject should be removed",
+            body: "Unscoped working draft body should be removed",
+            reviewerNote: "Unscoped working draft reviewer note should be removed",
+            status: "queued",
+            queuedAt: "2026-07-16T18:03:30.000Z",
+            createdAt: unscopedCopy.createdAt,
+            updatedAt: "2026-07-16T18:03:30.000Z",
+            sourceWorkingCopy: unscopedCopy,
+          },
+        ],
+        activeWorkingDraftId: unscopedCopy.id,
+        sourceWorkingCopy: unscopedCopy,
+        activity: [{ id: "unscoped-copy", label: "Barnet source provenance briefing queued locally from unscoped source copy id." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Barnet source provenance briefing queued locally from unscoped source copy id");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=drafts`);
+  await expect(page.locator("main")).not.toContainText("Unscoped source copy should be reset");
+  await expect(page.locator("main")).not.toContainText("Unscoped working draft subject should be removed");
+  await expect(page.locator("main")).not.toContainText("Unscoped working draft body should be removed");
+  await expect(page.locator("main")).not.toContainText("Unscoped working draft reviewer note should be removed");
+  await expect(page.getByLabel("Local working draft library")).toHaveCount(0);
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain('"sourceWorkingCopy":null');
+  expect(stored).toContain('"scheduleIntent":"after_approval"');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("manual-source-copy");
+  expect(stored).not.toContain("Unscoped working draft subject should be removed");
+  expect(stored).not.toContain("Barnet source provenance briefing queued locally from unscoped source copy id");
+});
+
 test("operations workbench resets legacy top-level source drafts from another campaign", async ({ page }) => {
   const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
@@ -6142,7 +6247,8 @@ test("operations workbench resets legacy top-level source drafts from another ca
   await page.goto("/operations");
   const portfolio = page.getByLabel("Campaign operations portfolio");
   const barnetRow = portfolio.locator("article", { hasText: "Stop the leisure park redevelopment" });
-  await expect(barnetRow).toContainText("Local signals: source update acknowledgement needed.");
+  await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
+  await expect(barnetRow).not.toContainText("source update acknowledgement needed");
   await expect(barnetRow).not.toContainText("queued locally");
   await expect(barnetRow).not.toContainText("Legacy Ormskirk queued source subject");
 
