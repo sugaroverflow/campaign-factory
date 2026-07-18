@@ -12051,6 +12051,82 @@ test("operations workbench: malformed browser-local timestamps are healed in a r
   expect(storedState).not.toContain("bad-top-level-created-at");
 });
 
+test("operations workbench restores top-level source copies to the editable supporter draft", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 56, lastSequence: 2080, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Keep KFC Out of Ormskirk",
+          place: "Ormskirk, Lancashire",
+          next: "Check Ormskirk appeal records",
+        }),
+        evidence: campaignEvidence([{ id: "appeal-check", description: "Check Ormskirk appeal records", reason: "Top-level source copy active draft guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 56,
+        sourceLastSequence: 2080,
+        sourceDocumentSignature: `source:${id}:current-baseline`,
+        sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+        selectedSegment: "source_primary",
+        subject: "Ormskirk source meeting request",
+        body: "This browser-local source copy has enough body text to remain a meaningful editable draft while the active tab is healed back to the supporter email draft.",
+        reviewerNote: "Keep source provenance visible before approval.",
+        status: "review",
+        mode: "compose",
+        activeDraft: "press_pitch",
+        activeView: "drafts",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: {
+          id: `source:${id}:top-level-copy`,
+          campaignId: id,
+          title: "Top-level Ormskirk source copy",
+          channel: "Email",
+          sourceDocument: "Digital Campaign Pack",
+          sourceDocumentKey: "digital_campaign_pack",
+          createdAt: "2026-07-17T20:05:00.000Z",
+          warnings: [],
+          provenance: `Source campaign ${id}; copied from Digital Campaign Pack into browser-local operations.`,
+        },
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "top-level-copy", label: "Selected a top-level source copy while browsing another draft." }],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=drafts`);
+  await expect(page.getByText("Keep KFC Out of Ormskirk · Ormskirk, Lancashire")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Working copy: Top-level Ormskirk source copy" })).toBeVisible();
+  await expect(page.getByText("Source provenance attached")).toBeVisible();
+  await expect(page.getByLabel("Subject")).toHaveValue("Ormskirk source meeting request");
+  await expect(page.getByRole("heading", { name: "Press pitch" })).not.toBeVisible();
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "";
+  expect(storedState).toContain('"activeDraft":"supporter_email"');
+  expect(storedState).toContain("Top-level Ormskirk source copy");
+});
+
 test("operations portfolio sanitizes malformed browser-local state before local counts", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
   const campaignTitles: Record<string, { title: string; place: string; status: "partial" | "completed" }> = {

@@ -1233,7 +1233,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     : workingDrafts[0]?.id ?? null;
   const removedDuplicatedTopLevelSourceCopy = Boolean(sourceWorkingCopyCandidate && workingDrafts.some((draft) => draft.id === sourceWorkingCopyCandidate.id));
   const sourceWorkingCopy = removedDuplicatedTopLevelSourceCopy ? null : sourceWorkingCopyCandidate;
-  const removedFixtureAudienceState = selectedSegment !== state.selectedSegment || contactFilter !== state.contactFilter;
+  const activeDraft = sourceWorkingCopy || state.status !== "draft" || state.queuedAt ? "supporter_email" : state.activeDraft;
   const removedMismatchedLocalWork = localActions.length !== state.localActions.length || workingDrafts.length !== state.workingDrafts.length;
   const removedFixtureSourceWorkingCopy = Boolean(state.sourceWorkingCopy && sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy));
   const removedMismatchedTopLevelSourceCopy = Boolean(state.sourceWorkingCopy && !sourceWorkingCopyCandidate && !removedFixtureSourceWorkingCopy);
@@ -1299,6 +1299,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     workingDrafts.length === state.workingDrafts.length &&
     activeWorkingDraftId === state.activeWorkingDraftId &&
     sourceWorkingCopy === state.sourceWorkingCopy &&
+    activeDraft === state.activeDraft &&
     selectedSegment === state.selectedSegment &&
     contactFilter === state.contactFilter &&
     !removedFixtureTopLevelCopy &&
@@ -1324,6 +1325,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     sourceRecheckLastSequence: resetSourceRecheckBaseline ? null : state.sourceRecheckLastSequence,
     sourceRecheckDocumentSignature: resetSourceRecheckBaseline ? null : state.sourceRecheckDocumentSignature,
     sourceRecheckVisitedViews: resetSourceRecheckBaseline ? [] : state.sourceRecheckVisitedViews,
+    activeDraft,
     subject: resetTopLevelDraft ? "Local source draft reset" : state.subject,
     body: resetTopLevelDraft
       ? removedMismatchedTopLevelSourceCopy
