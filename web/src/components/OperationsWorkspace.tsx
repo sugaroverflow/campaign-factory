@@ -1322,9 +1322,20 @@ function localActionMatchesCurrentSourceAction(action: LocalAction, source: Camp
   );
   if (currentIncompleteDocumentAction) return true;
 
-  return extractSourceTactics(source).some(
-    (tactic) => action.id === tactic.id && normaliseOperationsSourceInlineText(action.title) === normaliseOperationsSourceInlineText(tactic.title),
-  );
+  return extractSourceTactics(source).some((tactic) => {
+    const actionProvenance = normaliseOperationsSourceInlineText(action.provenance).toLowerCase();
+    const tacticTarget = normaliseOperationsSourceInlineText(tactic.target).toLowerCase();
+    return Boolean(
+      action.id === tactic.id &&
+        normaliseOperationsSourceInlineText(action.title) === normaliseOperationsSourceInlineText(tactic.title) &&
+        normaliseOperationsSourceInlineText(action.source) === normaliseOperationsSourceInlineText(`Campaign source · Tactics and Timeline · ${tactic.type}`) &&
+        normaliseOperationsSourceInlineText(action.owner) === normaliseOperationsSourceInlineText(tactic.owner) &&
+        normaliseOperationsSourceInlineText(action.timing) === normaliseOperationsSourceInlineText(tactic.timing) &&
+        action.priority === tactic.priority &&
+        Boolean(tacticTarget) &&
+        actionProvenance.includes(`tactic target: ${tacticTarget}`),
+    );
+  });
 }
 
 function sanitizeStateForCurrentSourceResources(state: DemoState, source: CampaignSource, resources: SourceResource[], currentDocumentSignature: string): DemoState {

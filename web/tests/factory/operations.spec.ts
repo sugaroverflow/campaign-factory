@@ -19171,6 +19171,88 @@ test("operations workbench rejects source tactic actions whose id slug disagrees
   expect(storedState).not.toContain("shadow-phase");
 });
 
+test("operations workbench rejects source tactic actions whose target provenance drifts from current source", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: barnetId, status: "completed", stateVersion: 80, lastSequence: 2291, events: [] },
+        documents: campaignOperationsDocuments(
+          {
+            title: "Stop the leisure park redevelopment in Barnet",
+            place: "Barnet, London",
+            next: "Check Barnet decision records",
+          },
+          {
+            tactics_timeline: "TACTICS AND TIMELINE\n\nP1 Check Barnet planning records\n\nType: research\n\nTarget: Planning committee\n\nOwner: Reviewer\n\nTiming: After source checks are understood",
+          },
+        ),
+        evidence: campaignEvidence([{ id: "source-tactic-target-drift", description: "Check Barnet decision records", reason: "Source tactic target provenance guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: null,
+        sourceLastSequence: null,
+        sourceDocumentSignature: null,
+        sourceAcknowledgedAt: null,
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local tactic action should be sanitized before drifted target provenance is trusted.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "actions",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [
+          {
+            id: `source:${id}:tactic:1-p1-check-barnet-planning-records`,
+            title: "P1 Check Barnet planning records",
+            source: "Campaign source · Tactics and Timeline · research",
+            owner: "Reviewer",
+            timing: "After source checks are understood",
+            priority: "Medium",
+            status: "next",
+            provenance: `Source campaign ${id}; tactic target: Shadow planning panel. This browser-local item was restored with drifted source tactic target provenance.`,
+          },
+        ],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "source-tactic-target-drift", label: "Created action: P1 Check Barnet planning records for Shadow planning panel." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=actions`);
+  await expect(page.getByRole("heading", { name: "Owned local work from source checks" })).toBeVisible();
+  await expect(page.getByText("No local actions yet. Create the primary source-check action to turn the campaign boundary into owned work.")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Shadow planning panel");
+  await expect(page.locator("main")).toContainText("Actions: 0 local items");
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), barnetId)) ?? "";
+  expect(storedState).toContain("workspace-sanitized");
+  expect(storedState).not.toContain("Shadow planning panel");
+  expect(storedState).not.toContain("source-tactic-target-drift");
+});
+
 test("operations workbench rejects padded source action metadata before portfolio or workspace counts", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 
