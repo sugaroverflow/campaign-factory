@@ -1109,8 +1109,10 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
       (state.sourceRecheckDocumentSignature && (state.sourceRecheckStateVersion === null || state.sourceRecheckLastSequence === null)),
   );
   const resetTopLevelDraft = removedMismatchedTopLevelSourceCopy || removedFixtureSourceWorkingCopy || removedFixtureTopLevelCopy || removedUnprovenancedTopLevelReviewState || removedDuplicatedTopLevelSourceCopy;
+  const removedQueuedWorkingDraft = state.workingDrafts.some((draft) => draft.status === "queued" && !workingDrafts.some((keptDraft) => keptDraft.id === draft.id));
   const hasQueuedWorkingDraft = workingDrafts.some((draft) => draft.status === "queued");
-  const resetScheduleIntent = resetTopLevelDraft && !hasQueuedWorkingDraft;
+  const hasQueuedTopLevelSourceCopy = Boolean(sourceWorkingCopy && state.status === "queued");
+  const resetScheduleIntent = (resetTopLevelDraft || removedQueuedWorkingDraft) && !hasQueuedWorkingDraft && !hasQueuedTopLevelSourceCopy;
   const resetSourceBaseline =
     removedFixtureSourceBaseline ||
     removedIncompleteSourceBaseline ||
