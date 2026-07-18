@@ -667,13 +667,17 @@ function normalizeSourceDocumentSectionKeys(value: unknown, documentKey: unknown
   return normalized;
 }
 
-function normalizeSourceDocumentResourceCount(value: unknown) {
+function normalizeSourceNonNegativeInteger(value: unknown) {
   if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
   if (!/^\d{1,6}$/.test(trimmed)) return value;
   const count = Number.parseInt(trimmed, 10);
   return Number.isSafeInteger(count) ? count : value;
+}
+
+function normalizeSourceDocumentResourceCount(value: unknown) {
+  return normalizeSourceNonNegativeInteger(value);
 }
 
 function normalizeSourceDocuments(value: unknown) {
@@ -731,6 +735,7 @@ function normalizeSourceEvidenceClaim(value: unknown, claimIds: Set<string>, fal
   const label = normalizeSourceVerificationLabel(record.label) ?? fallbackLabel;
   const type = normalizeSourceClaimType(record.type);
   const confidence = normalizeSourceClaimConfidence(record.confidence);
+  const sourceCount = normalizeSourceNonNegativeInteger(record.sourceCount);
   return {
     ...record,
     ...(id ? { id } : {}),
@@ -738,6 +743,7 @@ function normalizeSourceEvidenceClaim(value: unknown, claimIds: Set<string>, fal
     ...(label ? { label } : {}),
     ...(type ? { type } : {}),
     ...(confidence ? { confidence } : {}),
+    ...(sourceCount !== record.sourceCount ? { sourceCount } : {}),
     ...(record.excerpt === null ? { excerpt: undefined } : excerpt ? { excerpt } : {}),
     affectedOutputs,
     contradictsClaimIds: Array.isArray(contradictsClaimIds) && claimIds.size > 0 ? contradictsClaimIds.filter((claimId) => claimId !== id && claimIds.has(claimId)) : contradictsClaimIds === null ? undefined : contradictsClaimIds,
