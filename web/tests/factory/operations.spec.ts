@@ -14059,7 +14059,7 @@ test("operations workbench: source updates preserve browser-local work and requi
   const changedJsonPath = await changedJsonDownload.path();
   expect(changedJsonPath).toBeTruthy();
   const changedPack = JSON.parse(await readFile(changedJsonPath!, "utf8")) as {
-    campaign: { sourceBaselineChanged: boolean };
+    campaign: { sourceBaselineChanged: boolean; sourceStateVersion: number; sourceLastSequence: number; acknowledgedSourceStateVersion: number; acknowledgedSourceLastSequence: number };
     sourceChangeReview: {
       baselineChanged: boolean;
       sourceAcknowledgedAt: string | null;
@@ -14075,6 +14075,12 @@ test("operations workbench: source updates preserve browser-local work and requi
     };
   };
   expect(changedPack.campaign.sourceBaselineChanged).toBe(true);
+  expect(changedPack.campaign).toMatchObject({
+    sourceStateVersion: 45,
+    sourceLastSequence: 1918,
+    acknowledgedSourceStateVersion: 44,
+    acknowledgedSourceLastSequence: 1909,
+  });
   expect(changedPack.sourceChangeReview).toMatchObject({
     baselineChanged: true,
     sourceAcknowledgedAt: expect.any(String),
@@ -14101,8 +14107,9 @@ test("operations workbench: source updates preserve browser-local work and requi
   expect(changedMarkdownPath).toBeTruthy();
   const changedMarkdown = await readFile(changedMarkdownPath!, "utf8");
   expect(changedMarkdown).toContain("Source baseline: changed since local acknowledgement");
-  expect(changedMarkdown).toContain("Previous source baseline: state v44, event #1909");
   expect(changedMarkdown).toContain("Current source baseline: state v45, event #1918");
+  expect(changedMarkdown).toContain("Acknowledged baseline: state v44, event #1909");
+  expect(changedMarkdown).toContain("Previous source baseline: state v44, event #1909");
   expect(changedMarkdown).toContain("Required source re-check views: Evidence & checks, Strategy & tactics, Drafts");
   expect(changedMarkdown).toContain("Source re-check views reopened: Evidence & checks, Drafts");
   expect(changedMarkdown).toContain("Source re-check views still to inspect: Strategy & tactics");

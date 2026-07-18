@@ -3640,6 +3640,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
             runStatus: source.runStatus,
             sourceStateVersion: source.stateVersion,
             sourceLastSequence: source.lastSequence,
+            acknowledgedSourceStateVersion: state.sourceStateVersion,
+            acknowledgedSourceLastSequence: state.sourceLastSequence,
             currentSourceDocumentSignature,
             acknowledgedSourceDocumentSignature: state.sourceDocumentSignature,
             sourceAcknowledgedAt: state.sourceAcknowledgedAt,
@@ -3737,7 +3739,8 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
         ...(source
           ? [
               `Source baseline: ${campaign.sourceBaselineChanged ? "changed since local acknowledgement" : "matches local acknowledgement"}`,
-              `Acknowledged baseline: state v${campaign.sourceStateVersion}, event #${campaign.sourceLastSequence}${campaign.sourceAcknowledgedAt ? `, acknowledged ${formatQueuedTime(campaign.sourceAcknowledgedAt)}` : ", not acknowledged yet"}`,
+              `Current source baseline: state v${campaign.sourceStateVersion}, event #${campaign.sourceLastSequence}`,
+              `Acknowledged baseline: ${campaign.acknowledgedSourceStateVersion !== null && campaign.acknowledgedSourceLastSequence !== null ? `state v${campaign.acknowledgedSourceStateVersion}, event #${campaign.acknowledgedSourceLastSequence}` : "not recorded"}${campaign.sourceAcknowledgedAt ? `, acknowledged ${formatQueuedTime(campaign.sourceAcknowledgedAt)}` : ", not acknowledged yet"}`,
             ]
           : []),
         ...(campaign.sourceBaselineChanged
