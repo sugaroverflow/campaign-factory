@@ -13979,18 +13979,27 @@ test("operations workbench: order-only source metadata changes keep the acknowle
   let useComposedSourceAccents = false;
   let includeInvisibleSourceBreakHints = false;
   let includeNoBreakSourceSpaces = false;
+  let reflowSourceEvidenceText = false;
 
   const sourceEvidence = () => {
-    const evidence = campaignEvidence(nextChecks, 2);
+    const reflowEvidenceText = (value: string) => reflowSourceEvidenceText ? value.replace(/ /g, "\n  ") : value;
+    const evidence = campaignEvidence(
+      nextChecks.map((check) => ({
+        ...check,
+        description: reflowEvidenceText(check.description),
+        reason: reflowEvidenceText(check.reason),
+      })),
+      2,
+    );
     evidence.groups[0].claims[0].affectedOutputs = affectedOutputs;
     evidence.groups[0].claims[1].affectedOutputs = [...affectedOutputs].reverse();
     const appealCheck = evidence.nextChecks.find((check) => check.id === "appeal-check");
     if (appealCheck) appealCheck.claimIds = claimIds;
-    evidence.draftNotes = draftNotes;
-    evidence.terminalGaps = terminalGaps;
+    evidence.draftNotes = draftNotes.map((note) => ({ section: reflowEvidenceText(note.section), text: reflowEvidenceText(note.text) }));
+    evidence.terminalGaps = terminalGaps.map((gap) => ({ ...gap, description: reflowEvidenceText(gap.description) }));
     const conflictClaim = {
       id: "claim-conflict-appeal-status",
-      text: "Appeal-status source conflict remains unresolved.",
+      text: reflowEvidenceText("Appeal-status source conflict remains unresolved."),
       type: "other",
       label: "Conflicting evidence",
       loadBearing: true,
@@ -14071,6 +14080,7 @@ test("operations workbench: order-only source metadata changes keep the acknowle
   useComposedSourceAccents = true;
   includeInvisibleSourceBreakHints = true;
   includeNoBreakSourceSpaces = true;
+  reflowSourceEvidenceText = true;
   await page.reload();
   await page.getByRole("button", { name: /Overview/ }).first().click();
 

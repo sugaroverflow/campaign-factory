@@ -2095,12 +2095,12 @@ function sourceSignatureStrings(values: string[] | undefined) {
 function sourceEvidenceClaimSignature(claim: EvidenceAndNextChecks["groups"][number]["claims"][number]) {
   return {
     id: claim.id,
-    text: claim.text,
-    type: claim.type,
-    label: claim.label,
+    text: sourceSignaturePlainText(claim.text),
+    type: sourceSignaturePlainText(claim.type),
+    label: sourceSignaturePlainText(claim.label),
     loadBearing: claim.loadBearing,
-    confidence: claim.confidence,
-    excerpt: claim.excerpt ?? null,
+    confidence: sourceSignaturePlainText(claim.confidence),
+    excerpt: claim.excerpt ? sourceSignaturePlainText(claim.excerpt) : null,
     sourceCount: claim.sourceCount,
     affectedOutputs: sourceSignatureStrings(claim.affectedOutputs),
     contradictsClaimIds: sourceSignatureStrings(claim.contradictsClaimIds),
@@ -2127,7 +2127,7 @@ function sourceDocumentSignature(source: CampaignSource) {
       JSON.stringify({
         groups: source.evidence.groups
           .map((group) => ({
-            label: group.label,
+            label: sourceSignaturePlainText(group.label),
             claims: group.claims.map(sourceEvidenceClaimSignature).sort((left, right) => sourceSignatureCompare(sourceEvidenceClaimSortKey(left), sourceEvidenceClaimSortKey(right))),
           }))
           .sort((left, right) => sourceSignatureCompare(left.label, right.label)),
@@ -2135,8 +2135,8 @@ function sourceDocumentSignature(source: CampaignSource) {
         nextChecks: source.evidence.nextChecks
           .map((check) => ({
             id: check.id,
-            description: check.description,
-            reason: check.reason,
+            description: sourceSignaturePlainText(check.description),
+            reason: sourceSignaturePlainText(check.reason),
             claimIds: sourceSignatureStrings(check.claimIds),
             affectedSections: sourceSignatureStrings(check.affectedSections),
           }))
@@ -2147,7 +2147,7 @@ function sourceDocumentSignature(source: CampaignSource) {
             ),
           ),
         terminalGaps: source.evidence.terminalGaps
-          .map((gap) => ({ id: gap.id, description: gap.description, agentRunId: gap.agentRunId ?? null, step: gap.step ?? null, at: gap.at }))
+          .map((gap) => ({ id: gap.id, description: sourceSignaturePlainText(gap.description), agentRunId: gap.agentRunId ?? null, step: gap.step ?? null, at: gap.at }))
           .sort((left, right) =>
             sourceSignatureCompare(
               `${left.id}\u0000${left.description}\u0000${left.at}\u0000${left.agentRunId ?? ""}\u0000${left.step ?? ""}`,
@@ -2155,7 +2155,7 @@ function sourceDocumentSignature(source: CampaignSource) {
             ),
           ),
         draftNotes: source.evidence.draftNotes
-          .map((note) => ({ section: note.section, text: note.text }))
+          .map((note) => ({ section: sourceSignaturePlainText(note.section), text: sourceSignaturePlainText(note.text) }))
           .sort((left, right) => sourceSignatureCompare(`${left.section}\u0000${left.text}`, `${right.section}\u0000${right.text}`)),
       }),
     ),
