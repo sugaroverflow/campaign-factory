@@ -2061,7 +2061,7 @@ function sourceDocumentSignature(source: CampaignSource) {
       const documentFlags = sourceSignatureStrings(doc.flags).join("~");
       return `${doc.key}:${doc.status}:${doc.resourceCount}:${documentFlags}:${sourceSignatureHash(documentText)}`;
     })
-    .sort()
+    .sort(sourceSignatureCompare)
     .join("|");
   const evidenceTotals = source.evidence.totals;
   const evidenceSignature = sourceSignatureHash(
@@ -2089,7 +2089,14 @@ function sourceDocumentSignature(source: CampaignSource) {
           claimIds: sourceSignatureStrings(check.claimIds),
           affectedSections: sourceSignatureStrings(check.affectedSections),
         })),
-        terminalGaps: source.evidence.terminalGaps.map((gap) => ({ id: gap.id, description: gap.description, agentRunId: gap.agentRunId ?? null, step: gap.step ?? null, at: gap.at })),
+        terminalGaps: source.evidence.terminalGaps
+          .map((gap) => ({ id: gap.id, description: gap.description, agentRunId: gap.agentRunId ?? null, step: gap.step ?? null, at: gap.at }))
+          .sort((left, right) =>
+            sourceSignatureCompare(
+              `${left.id}\u0000${left.description}\u0000${left.at}\u0000${left.agentRunId ?? ""}\u0000${left.step ?? ""}`,
+              `${right.id}\u0000${right.description}\u0000${right.at}\u0000${right.agentRunId ?? ""}\u0000${right.step ?? ""}`,
+            ),
+          ),
         draftNotes: source.evidence.draftNotes
           .map((note) => ({ section: note.section, text: note.text }))
           .sort((left, right) => sourceSignatureCompare(`${left.section}\u0000${left.text}`, `${right.section}\u0000${right.text}`)),

@@ -13927,6 +13927,10 @@ test("operations workbench: order-only source metadata changes keep the acknowle
     { section: "Evidence", text: "Keep the official appeal-status check visible before approval." },
     { section: "Strategy", text: "Do not escalate until the public decision route is re-checked." },
   ];
+  let terminalGaps = [
+    { id: "gap-appeal-status", description: "Appeal-status terminal gap remains unresolved.", agentRunId: "agent-appeal", step: 4, at: "2026-07-17T12:01:00Z" },
+    { id: "gap-resident-evidence", description: "Resident evidence consent terminal gap remains unresolved.", agentRunId: "agent-evidence", step: 8, at: "2026-07-17T12:02:00Z" },
+  ];
   let documentFlags = ["Unresolved load-bearing claim: Unresolved source claim 1", "Unresolved load-bearing claim: Unresolved source claim 2"];
 
   const sourceEvidence = () => {
@@ -13935,6 +13939,7 @@ test("operations workbench: order-only source metadata changes keep the acknowle
     evidence.groups[0].claims[1].affectedOutputs = [...affectedOutputs].reverse();
     evidence.nextChecks[0].claimIds = claimIds;
     evidence.draftNotes = draftNotes;
+    evidence.terminalGaps = terminalGaps;
     return evidence;
   };
 
@@ -13964,6 +13969,7 @@ test("operations workbench: order-only source metadata changes keep the acknowle
   claimIds = [...claimIds].reverse();
   affectedOutputs = [...affectedOutputs].reverse();
   draftNotes = [...draftNotes].reverse();
+  terminalGaps = [...terminalGaps].reverse();
   documentFlags = [...documentFlags].reverse();
   await page.reload();
   await page.getByRole("button", { name: /Overview/ }).first().click();
