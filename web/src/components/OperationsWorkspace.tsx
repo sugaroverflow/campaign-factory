@@ -2037,6 +2037,10 @@ function sourceSignatureText(value: string) {
   return value.replace(/\r\n?/g, "\n").replace(/[\t ]+/g, " ").trim();
 }
 
+function sourceSignatureStrings(values: string[] | undefined) {
+  return [...(values ?? [])].sort((left, right) => left.localeCompare(right));
+}
+
 function sourceDocumentSignature(source: CampaignSource) {
   const sourceIdentity = sourceSignatureHash(sourceSignatureText(`${source.title}\n${source.place ?? ""}`));
   const documentStatuses = source.documents
@@ -2061,19 +2065,19 @@ function sourceDocumentSignature(source: CampaignSource) {
             confidence: claim.confidence,
             excerpt: claim.excerpt ?? null,
             sourceCount: claim.sourceCount,
-            affectedOutputs: claim.affectedOutputs,
-            contradictsClaimIds: claim.contradictsClaimIds ?? [],
+            affectedOutputs: sourceSignatureStrings(claim.affectedOutputs),
+            contradictsClaimIds: sourceSignatureStrings(claim.contradictsClaimIds),
           })),
         })),
         nextChecks: source.evidence.nextChecks.map((check) => ({
           id: check.id,
           description: check.description,
           reason: check.reason,
-          claimIds: check.claimIds ?? [],
-          affectedSections: check.affectedSections,
+          claimIds: sourceSignatureStrings(check.claimIds),
+          affectedSections: sourceSignatureStrings(check.affectedSections),
         })),
         terminalGaps: source.evidence.terminalGaps.map((gap) => ({ id: gap.id, description: gap.description, agentRunId: gap.agentRunId ?? null, step: gap.step ?? null, at: gap.at })),
-        draftNotes: source.evidence.draftNotes.map((note) => ({ section: note.section, text: note.text })),
+        draftNotes: source.evidence.draftNotes.map((note) => ({ section: note.section, text: note.text })).sort((left, right) => `${left.section}\u0000${left.text}`.localeCompare(`${right.section}\u0000${right.text}`)),
       }),
     ),
   );
