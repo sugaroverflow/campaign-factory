@@ -12292,6 +12292,77 @@ test("operations workbench deduplicates browser-local activity ids for real camp
   expect(storedState).not.toContain("Duplicate Ormskirk local note should be removed before rendering");
 });
 
+test("operations workbench keeps one sanitized activity note when state is cleaned again", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 58, lastSequence: 2100, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Keep KFC Out of Ormskirk",
+          place: "Ormskirk, Lancashire",
+          next: "Check Ormskirk appeal records",
+        }),
+        evidence: campaignEvidence([{ id: "activity-sanitized-dedupe", description: "Check Ormskirk appeal records", reason: "Sanitized activity note dedupe guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 58,
+        sourceLastSequence: 2100,
+        sourceDocumentSignature: `source:${id}:current-baseline`,
+        sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+        selectedSegment: "source_primary",
+        subject: "Local Ormskirk source draft",
+        body: "This browser-local source draft should retain a single sanitized note after another cleanup.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "overview",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [
+          { id: "workspace-sanitized", label: "Browser-local state was sanitized for this real campaign workspace; public source data was not changed." },
+          { id: "kept-local-note", label: "Kept Ormskirk local note after a second cleanup." },
+          { id: "fixture-leak", label: "Fixture school street note should be scrubbed before rendering." },
+        ],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=overview`);
+  await expect(page.getByText("Keep KFC Out of Ormskirk · Ormskirk, Lancashire")).toBeVisible();
+  await expect(page.getByText("Browser-local state was sanitized for this real campaign workspace; public source data was not changed.")).toHaveCount(1);
+  await expect(page.getByText("Kept Ormskirk local note after a second cleanup.")).toBeVisible();
+  await expect(page.getByText("Fixture school street note should be scrubbed before rendering.")).toHaveCount(0);
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "";
+  const parsed = JSON.parse(storedState) as { activity: Array<{ id: string; label: string }> };
+  expect(parsed.activity.filter((item) => item.id === "workspace-sanitized")).toHaveLength(1);
+  expect(storedState).toContain("Kept Ormskirk local note after a second cleanup");
+  expect(storedState).not.toContain("Fixture school street note should be scrubbed before rendering");
+});
+
 test("operations portfolio sanitizes malformed browser-local state before local counts", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
   const campaignTitles: Record<string, { title: string; place: string; status: "partial" | "completed" }> = {

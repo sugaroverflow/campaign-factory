@@ -860,6 +860,11 @@ function downloadClientFile(filename: string, content: string, type: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
+const workspaceSanitizedActivity: Activity = {
+  id: "workspace-sanitized",
+  label: "Browser-local state was sanitized for this real campaign workspace; public source data was not changed.",
+};
+
 function normaliseActivity(activity: unknown): Activity[] {
   if (!Array.isArray(activity)) return initialState.activity;
   const seenIds = new Set<string>();
@@ -873,6 +878,10 @@ function normaliseActivity(activity: unknown): Activity[] {
     normalised.push({ id: candidate.id, label: candidate.label });
   }
   return normalised;
+}
+
+function withWorkspaceSanitizedActivity(activity: Activity[]) {
+  return [workspaceSanitizedActivity, ...activity.filter((item) => item.id !== workspaceSanitizedActivity.id)].slice(0, 7);
 }
 
 const INVALID_LOCAL_ACTION_TITLE = "Local action unavailable";
@@ -1352,7 +1361,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     sourceWorkingCopy,
     activity:
       removedMismatchedLocalWork || resetTopLevelDraft || removedOrphanedDraftWorkflowActivity || resetAcknowledgedSourceBaseline || resetSourceRecheckBaseline || removedFixtureActivity
-        ? [{ id: "workspace-sanitized", label: "Browser-local state was sanitized for this real campaign workspace; public source data was not changed." }, ...activity].slice(0, 7)
+        ? withWorkspaceSanitizedActivity(activity)
         : state.activity,
   };
 }
