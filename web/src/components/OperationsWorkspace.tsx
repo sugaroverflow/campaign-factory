@@ -1283,12 +1283,19 @@ function sourceWorkingCopyMatchesCurrentSourceResource(copy: SourceWorkingCopy, 
   const copyDocument = normaliseOperationsSourceInlineText(copy.sourceDocument).toLowerCase();
   const copyTitle = normaliseOperationsSourceInlineText(copy.title).toLowerCase();
   const copyChannel = normaliseOperationsSourceInlineText(copy.channel).toLowerCase();
+  const copyWarnings = copy.warnings.map((warning) => normaliseOperationsSourceInlineText(warning).toLowerCase());
   return resources.some(
-    (resource) =>
-      canonicalSourceDocumentKey(resource.sourceDocumentKey) === copyDocumentKey &&
-      normaliseOperationsSourceInlineText(resource.sourceDocument).toLowerCase() === copyDocument &&
-      normaliseOperationsSourceInlineText(resource.title).toLowerCase() === copyTitle &&
-      normaliseOperationsSourceInlineText(resource.channel).toLowerCase() === copyChannel,
+    (resource) => {
+      const resourceWarnings = resource.warnings.map((warning) => normaliseOperationsSourceInlineText(warning).toLowerCase());
+      return (
+        canonicalSourceDocumentKey(resource.sourceDocumentKey) === copyDocumentKey &&
+        normaliseOperationsSourceInlineText(resource.sourceDocument).toLowerCase() === copyDocument &&
+        normaliseOperationsSourceInlineText(resource.title).toLowerCase() === copyTitle &&
+        normaliseOperationsSourceInlineText(resource.channel).toLowerCase() === copyChannel &&
+        copyWarnings.length === resourceWarnings.length &&
+        copyWarnings.every((warning, index) => warning === resourceWarnings[index])
+      );
+    },
   );
 }
 
