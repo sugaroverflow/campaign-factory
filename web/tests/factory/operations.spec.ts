@@ -13978,6 +13978,7 @@ test("operations workbench: order-only source metadata changes keep the acknowle
   let reflowCampaignBriefPlainText = false;
   let useComposedSourceAccents = false;
   let includeInvisibleSourceBreakHints = false;
+  let includeNoBreakSourceSpaces = false;
 
   const sourceEvidence = () => {
     const evidence = campaignEvidence(nextChecks, 2);
@@ -14021,15 +14022,23 @@ test("operations workbench: order-only source metadata changes keep the acknowle
           document.key === "campaign_brief"
             ? {
                 ...document,
-                flags: documentFlags,
+                flags: includeNoBreakSourceSpaces ? documentFlags.map((flag) => flag.replace("load-bearing claim", "load-bearing\u00a0claim")) : documentFlags,
                 plainText: (reflowCampaignBriefPlainText ? document.plainText.replace(/\n/g, "\n \n") : document.plainText).replace(
                   "same readable source boundary",
-                  includeInvisibleSourceBreakHints ? "same read\u00adable source\u200b \u200c\u200d\u2060boundary" : "same readable source boundary",
+                  includeInvisibleSourceBreakHints
+                    ? "same\u00a0read\u00adable source\u200b\u202f\u200c\u200d\u2060boundary"
+                    : includeNoBreakSourceSpaces
+                      ? "same\u00a0readable source\u202fboundary"
+                      : "same readable source boundary",
                 ),
                 html: wrapCampaignBriefHtml
                   ? `<section class="source-shell" data-route="campaign-brief">${document.html.replace(
                       "same readable source boundary",
-                      includeInvisibleSourceBreakHints ? "same read&shy;able source&#8203; &#8204;&#8205;&#8288;boundary" : "same readable source boundary",
+                      includeInvisibleSourceBreakHints
+                        ? "same&nbsp;read&shy;able source&#8203;&thinsp;&#8204;&#8205;&#8288;boundary"
+                        : includeNoBreakSourceSpaces
+                          ? "same&nbsp;readable source&thinsp;boundary"
+                          : "same readable source boundary",
                     )}</section>`
                   : document.html,
               }
@@ -14061,6 +14070,7 @@ test("operations workbench: order-only source metadata changes keep the acknowle
   reflowCampaignBriefPlainText = true;
   useComposedSourceAccents = true;
   includeInvisibleSourceBreakHints = true;
+  includeNoBreakSourceSpaces = true;
   await page.reload();
   await page.getByRole("button", { name: /Overview/ }).first().click();
 

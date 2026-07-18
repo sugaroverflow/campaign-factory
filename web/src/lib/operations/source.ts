@@ -61,10 +61,22 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
 
-function visibleRenderedText(value: string) {
+function normaliseSourcePresentationText(value: string) {
   return value
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&(?:nbsp|#160|#xA0);/gi, " ")
+    .normalize("NFC")
+    .replace(/[\u00ad\u200b\u200c\u200d\u2060\ufeff]/g, "")
+    .replace(/[\u2028\u2029]/g, "\n")
+    .replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, " ")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\t ]+/g, " ")
+    .trim();
+}
+
+function visibleRenderedText(value: string) {
+  return normaliseSourcePresentationText(
+    value
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&(?:nbsp|ensp|emsp|thinsp|hairsp|numsp|puncsp|mediumspace|nobreak|#160|#xA0);/gi, " ")
     .replace(/&#(\d+);/g, (_entity, codePoint: string) => {
       const parsed = Number.parseInt(codePoint, 10);
       return Number.isInteger(parsed) && parsed >= 0 && parsed <= 0x10ffff ? String.fromCodePoint(parsed) : "";
@@ -81,11 +93,11 @@ function visibleRenderedText(value: string) {
     .replace(/&amp;/gi, "&")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&[a-z0-9#]+;/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&[a-z0-9#]+;/gi, "")
+      .replace(/\s+/g, " "),
+  );
 }
 
 function hasRenderedText(value: unknown): value is string {
@@ -185,22 +197,25 @@ function isOptionalUniqueNonEmptyStringArray(value: unknown): value is string[] 
 
 function isOperationsDocumentFlag(value: unknown): value is string {
   if (!isNonEmptyString(value)) return false;
-  if (OPERATIONS_DOCUMENT_FLAGS.has(value)) return true;
-  if (!value.startsWith(OPERATIONS_DOCUMENT_FLAG_PREFIX_CLAIM)) return false;
-  return value.slice(OPERATIONS_DOCUMENT_FLAG_PREFIX_CLAIM.length).trim().length > 0;
+  const normalized = normaliseSourcePresentationText(value);
+  if (OPERATIONS_DOCUMENT_FLAGS.has(normalized)) return true;
+  if (!normalized.startsWith(OPERATIONS_DOCUMENT_FLAG_PREFIX_CLAIM)) return false;
+  return normalized.slice(OPERATIONS_DOCUMENT_FLAG_PREFIX_CLAIM.length).trim().length > 0;
 }
 
 function operationsDocumentFlagClaimText(value: string) {
-  if (!value.startsWith(OPERATIONS_DOCUMENT_FLAG_PREFIX_CLAIM)) return null;
-  return value.slice(OPERATIONS_DOCUMENT_FLAG_PREFIX_CLAIM.length).trim();
+  const normalized = normaliseSourcePresentationText(value);
+  if (!normalized.startsWith(OPERATIONS_DOCUMENT_FLAG_PREFIX_CLAIM)) return null;
+  return normalized.slice(OPERATIONS_DOCUMENT_FLAG_PREFIX_CLAIM.length).trim();
 }
 
 function isOperationsDocumentFlagArray(value: unknown): value is string[] {
   if (!Array.isArray(value)) return false;
   const seen = new Set<string>();
   for (const item of value) {
-    if (!isOperationsDocumentFlag(item) || seen.has(item)) return false;
-    seen.add(item);
+    const normalized = typeof item === "string" ? normaliseSourcePresentationText(item) : "";
+    if (!isOperationsDocumentFlag(item) || seen.has(normalized)) return false;
+    seen.add(normalized);
   }
   return true;
 }

@@ -2042,7 +2042,14 @@ function sourceSignatureHash(value: string) {
 }
 
 function sourceSignatureText(value: string) {
-  return value.normalize("NFC").replace(/[\u00ad\u200b\u200c\u200d\u2060\ufeff]/g, "").replace(/\r\n?/g, "\n").replace(/[\t ]+/g, " ").trim();
+  return value
+    .normalize("NFC")
+    .replace(/[\u00ad\u200b\u200c\u200d\u2060\ufeff]/g, "")
+    .replace(/[\u2028\u2029]/g, "\n")
+    .replace(/[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]/g, " ")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[\t ]+/g, " ")
+    .trim();
 }
 
 function sourceSignaturePlainText(value: string) {
@@ -2053,7 +2060,7 @@ function sourceSignatureHtmlText(value: string) {
   return sourceSignatureText(
     value
       .replace(/<[^>]*>/g, " ")
-      .replace(/&(?:nbsp|#160|#xA0);/gi, " ")
+      .replace(/&(?:nbsp|ensp|emsp|thinsp|hairsp|numsp|puncsp|mediumspace|nobreak|#160|#xA0);/gi, " ")
       .replace(/&#(\d+);/g, (_entity, codePoint: string) => {
         const parsed = Number.parseInt(codePoint, 10);
         return Number.isInteger(parsed) && parsed >= 0 && parsed <= 0x10ffff ? String.fromCodePoint(parsed) : "";
@@ -2109,7 +2116,7 @@ function sourceDocumentSignature(source: CampaignSource) {
   const documentStatuses = source.documents
     .map((doc) => {
       const documentText = sourceSignatureText(`${doc.name}\n${sourceSignaturePlainText(doc.plainText)}\n${sourceSignatureHtmlText(doc.html)}`);
-      const documentFlags = sourceSignatureStrings(doc.flags).join("~");
+      const documentFlags = sourceSignatureStrings(doc.flags.map(sourceSignatureText)).join("~");
       return `${doc.key}:${doc.status}:${doc.resourceCount}:${documentFlags}:${sourceSignatureHash(documentText)}`;
     })
     .sort(sourceSignatureCompare)
