@@ -147,29 +147,53 @@ const OPERATIONS_SOURCE_HTML_ENTITIES: Record<string, string> = {
   trade: "™",
 };
 
+const SOURCE_ENTITY_BOUNDARY = String.raw`(?=\s|$|[<.,:!?()[\]{}'"’”/\\-])`;
+const SOURCE_SPACE_ENTITY_RE = new RegExp(String.raw`&(?:nbsp|ensp|emsp|thinsp|hairsp|numsp|puncsp|mediumspace|nobreak|#160|#xA0)(?:;|${SOURCE_ENTITY_BOUNDARY})`, "gi");
+const SOURCE_DECIMAL_ENTITY_RE = new RegExp(String.raw`&#(\d+)(?:;|${SOURCE_ENTITY_BOUNDARY})`, "g");
+const SOURCE_HEX_ENTITY_RE = new RegExp(String.raw`&#x([0-9a-f]+)(?:;|${SOURCE_ENTITY_BOUNDARY})`, "gi");
+const SOURCE_NAMED_ENTITY_RE = new RegExp(String.raw`&([a-z][a-z0-9]+)(?:;|${SOURCE_ENTITY_BOUNDARY})`, "gi");
+const SOURCE_UNKNOWN_ENTITY_RE = new RegExp(String.raw`&[a-z0-9#]+(?:;|${SOURCE_ENTITY_BOUNDARY})`, "gi");
+
 function decodeOperationsSourceTextEntities(value: string) {
   return value
-    .replace(/&(?:nbsp|ensp|emsp|thinsp|hairsp|numsp|puncsp|mediumspace|nobreak|#160|#xA0);/gi, " ")
-    .replace(/&#(\d+);/g, (_entity, codePoint: string) => {
+    .replace(SOURCE_SPACE_ENTITY_RE, " ")
+    .replace(SOURCE_DECIMAL_ENTITY_RE, (_entity, codePoint: string) => {
       const parsed = Number.parseInt(codePoint, 10);
       return Number.isInteger(parsed) && parsed >= 0 && parsed <= 0x10ffff ? String.fromCodePoint(parsed) : "";
     })
-    .replace(/&#x([0-9a-f]+);/gi, (_entity, codePoint: string) => {
+    .replace(SOURCE_HEX_ENTITY_RE, (_entity, codePoint: string) => {
       const parsed = Number.parseInt(codePoint, 16);
       return Number.isInteger(parsed) && parsed >= 0 && parsed <= 0x10ffff ? String.fromCodePoint(parsed) : "";
     })
-    .replace(/&mdash;/gi, "—")
-    .replace(/&ndash;/gi, "–")
-    .replace(/&lsquo;|&rsquo;/gi, "'")
-    .replace(/&ldquo;|&rdquo;/gi, '"')
-    .replace(/&hellip;/gi, "…")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&([a-z][a-z0-9]+);/gi, (entity: string, name: string) => OPERATIONS_SOURCE_HTML_ENTITIES[name] ?? entity)
-    .replace(/&[a-z0-9#]+;/gi, "");
+    .replace(SOURCE_NAMED_ENTITY_RE, (entity: string, name: string) => {
+      const named = OPERATIONS_SOURCE_HTML_ENTITIES[name];
+      if (named) return named;
+      switch (name.toLowerCase()) {
+        case "mdash":
+          return "—";
+        case "ndash":
+          return "–";
+        case "lsquo":
+        case "rsquo":
+        case "apos":
+          return "'";
+        case "ldquo":
+        case "rdquo":
+        case "quot":
+          return '"';
+        case "hellip":
+          return "…";
+        case "amp":
+          return "&";
+        case "lt":
+          return "<";
+        case "gt":
+          return ">";
+        default:
+          return entity;
+      }
+    })
+    .replace(SOURCE_UNKNOWN_ENTITY_RE, "");
 }
 
 function visibleRenderedText(value: string) {

@@ -3441,7 +3441,7 @@ test("operations source API: normalizes recoverable legacy source references bef
   const documents = canonicalOperationsDocuments("Stop the leisure park redevelopment in Barnet");
   documents[0].flags = [
     "Unresolved load-bearing claim: Unresolved source claim 1",
-    "Unresolved load-bearing\u00a0claim: Unresolved source&nbsp;claim 1",
+    "Unresolved load-bearing\u00a0claim: Unresolved source&nbsp claim 1",
     "Unresolved load-bearing claim: Archived source claim from an older build",
   ];
   const evidence = campaignEvidence(
@@ -3455,7 +3455,7 @@ test("operations source API: normalizes recoverable legacy source references bef
   evidence.totals = { claims: 7, loadBearing: 7, verifiedLoadBearing: 5, unresolvedLoadBearing: 2 };
   const legacyClaim = evidence.groups[0].claims[0] as { id: string; text: string; affectedOutputs: string[]; contradictsClaimIds?: string[] | null; excerpt?: string | null };
   legacyClaim.id = " claim-1 ";
-  legacyClaim.text = "Unresolved&nbsp;source\n claim 1";
+  legacyClaim.text = "Unresolved&nbsp source\n claim 1";
   legacyClaim.excerpt = null;
   legacyClaim.affectedOutputs = [
     "Campaign&nbsp;Brief document",
@@ -3472,17 +3472,17 @@ test("operations source API: normalizes recoverable legacy source references bef
   evidence.conflicts = [legacyClaim, legacyClaim, { ...legacyClaim, id: "archived-claim-from-previous-build", contradictsClaimIds: ["claim-1"] }];
   const legacyNextCheck = evidence.nextChecks[0] as { claimIds?: string[] | null; affectedSections: string[]; description: string; reason: string };
   const legacyNextCheckReason = legacyNextCheck.reason;
-  legacyNextCheck.description = "Legacy&nbsp;source\n check keeps the current claim and drops historical ids.";
+  legacyNextCheck.description = "Legacy&nbsp source\n check keeps the current claim and drops historical ids.";
   legacyNextCheck.claimIds = [" claim-1 ", "claim-1", "archived-claim-from-previous-build"];
   legacyNextCheck.affectedSections = ["documents", "Campaign&nbsp;Strategy document", "Lobbying Pack document", "lobbying_pack", "Media Pack document", "Tactics &amp; Timeline document", "Research &amp; Evidence", "evidence base"];
   legacyNextCheck.reason = "";
-  evidence.nextChecks.push({ ...legacyNextCheck, reason: "Older public&nbsp;source builds can carry archived claim ids in next checks.", description: "Duplicate legacy\n source check should recover the valid source row." });
+  evidence.nextChecks.push({ ...legacyNextCheck, reason: "Older public&nbsp source builds can carry archived claim ids in next checks.", description: "Duplicate legacy\n source check should recover the valid source row." });
   evidence.nextChecks.push({ id: "legacy-null-optional", description: "Legacy source check drops null optional claim ids.", reason: "Older builds sometimes serialised missing optional arrays as null.", claimIds: null, affectedSections: ["Campaign Brief document"] });
   evidence.draftNotes = [
     null,
     { text: "Confirm the council source before using this pack line.", section: "Digital Campaign Pack" },
     { text: "Confirm the council source before using this pack line.", section: "Digital Campaign Pack" },
-    { text: "Confirm\n  the\u00a0council source before using this pack line.", section: "Digital&nbsp;Campaign Pack" },
+    { text: "Confirm\n  the\u00a0council source before using this pack line.", section: "Digital&nbsp Campaign Pack" },
     { text: "Confirm the council source before using this pack line.", section: "Digital\n  Campaign Pack" },
   ] as typeof evidence.draftNotes;
   evidence.terminalGaps = [
