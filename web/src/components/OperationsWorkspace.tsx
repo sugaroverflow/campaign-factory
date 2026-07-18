@@ -1098,6 +1098,7 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
       const title = typeof draft.title === "string" ? draft.title.trim() : "";
       const channel = typeof draft.channel === "string" ? draft.channel.trim() : "";
       const subject = typeof draft.subject === "string" ? draft.subject.trim() : "";
+      const body = typeof draft.body === "string" ? draft.body.trim() : "";
       const reviewerNote = typeof draft.reviewerNote === "string" ? draft.reviewerNote.trim() : "";
       if (!sourceWorkingCopy || !id || !title) return null;
       const malformed = workingDraftHasMalformedField(draft);
@@ -1109,7 +1110,7 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
         title: malformed ? INVALID_LOCAL_DRAFT_SUBJECT : title,
         channel: malformed ? "Malformed browser-local draft" : channel || sourceWorkingCopy.channel || "Source draft",
         subject: malformed ? INVALID_LOCAL_DRAFT_SUBJECT : subject || title,
-        body: malformed ? INVALID_LOCAL_DRAFT_BODY : typeof draft.body === "string" && draft.body ? draft.body : "",
+        body: malformed ? INVALID_LOCAL_DRAFT_BODY : body,
         reviewerNote: malformed ? "" : reviewerNote,
         status,
         queuedAt: status === "queued" ? parsedQueuedAt : null,
@@ -1124,13 +1125,16 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
   if (legacyCopy && !normalised.some((draft) => stableLowercase(draft.id) === stableLowercase(legacyCopy.id))) {
     const parsedQueuedAt = normaliseStoredTimestamp(legacyState.queuedAt);
     const status = normaliseQueuedStatus(legacyState.status, parsedQueuedAt);
+    const legacySubject = typeof legacyState.subject === "string" ? legacyState.subject.trim() : "";
+    const legacyBody = typeof legacyState.body === "string" ? legacyState.body.trim() : "";
+    const legacyReviewerNote = typeof legacyState.reviewerNote === "string" ? legacyState.reviewerNote.trim() : "";
     normalised.unshift({
       id: legacyCopy.id,
       title: legacyCopy.title,
       channel: legacyCopy.channel,
-      subject: typeof legacyState.subject === "string" && legacyState.subject ? legacyState.subject : legacyCopy.title,
-      body: typeof legacyState.body === "string" && legacyState.body ? legacyState.body : "",
-      reviewerNote: typeof legacyState.reviewerNote === "string" ? legacyState.reviewerNote : "",
+      subject: legacySubject || legacyCopy.title,
+      body: legacyBody,
+      reviewerNote: legacyReviewerNote,
       status,
       queuedAt: status === "queued" ? parsedQueuedAt : null,
       createdAt: legacyCopy.createdAt,
@@ -1172,12 +1176,14 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     : parsed.sourceWorkingCopy && workingDrafts[0]
       ? workingDrafts[0].id
       : null;
+  const subject = typeof parsed.subject === "string" ? parsed.subject.trim() : "";
+  const body = typeof parsed.body === "string" ? parsed.body.trim() : "";
   return {
     ...initialState,
     ...parsed,
     selectedSegment: isSegmentId(parsed.selectedSegment) ? parsed.selectedSegment : initialState.selectedSegment,
-    subject: typeof parsed.subject === "string" && parsed.subject ? parsed.subject : INVALID_LOCAL_DRAFT_SUBJECT,
-    body: typeof parsed.body === "string" && parsed.body ? parsed.body : INVALID_LOCAL_DRAFT_BODY,
+    subject: subject || INVALID_LOCAL_DRAFT_SUBJECT,
+    body: body || INVALID_LOCAL_DRAFT_BODY,
     status,
     activeDraft: draftLibrary.some((draft) => draft.id === parsed.activeDraft)
       ? (parsed.activeDraft as DraftId)
@@ -1193,7 +1199,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     sourceRecheckVisitedViews: Array.isArray(parsed.sourceRecheckVisitedViews)
       ? Array.from(new Set(parsed.sourceRecheckVisitedViews.filter((view): view is ViewId => viewIds.includes(view as ViewId))))
       : [],
-    reviewerNote: typeof parsed.reviewerNote === "string" ? parsed.reviewerNote : "",
+    reviewerNote: typeof parsed.reviewerNote === "string" ? parsed.reviewerNote.trim() : "",
     activeView: viewIds.includes(parsed.activeView as ViewId) ? (parsed.activeView as ViewId) : "overview",
     contactFilter: parsed.contactFilter === "all" || isSegmentId(parsed.contactFilter) ? parsed.contactFilter : initialState.contactFilter,
     contactReadinessFilter: ["all", "ready", "review", "blocked"].includes(parsed.contactReadinessFilter || "")
