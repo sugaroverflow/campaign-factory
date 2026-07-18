@@ -1088,6 +1088,13 @@ function normaliseStoredCampaignId(value: unknown) {
   return UUID_RE.test(campaignId) ? campaignId : null;
 }
 
+function legacyTopLevelDraftHasMalformedField(state: Partial<DemoState>) {
+  return ["subject", "body", "reviewerNote", "status"].some((field) => {
+    const value = state[field as keyof DemoState];
+    return value !== undefined && typeof value !== "string";
+  }) || (state.queuedAt !== undefined && state.queuedAt !== null && typeof state.queuedAt !== "string");
+}
+
 function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>): WorkingDraft[] {
   const drafts = Array.isArray(value) ? value : [];
   const normalised = drafts
@@ -1121,7 +1128,7 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
     })
     .filter((draft): draft is WorkingDraft => Boolean(draft));
 
-  const legacyCopy = normaliseSourceWorkingCopy(legacyState.sourceWorkingCopy);
+  const legacyCopy = legacyTopLevelDraftHasMalformedField(legacyState) ? null : normaliseSourceWorkingCopy(legacyState.sourceWorkingCopy);
   if (legacyCopy && !normalised.some((draft) => stableLowercase(draft.id) === stableLowercase(legacyCopy.id))) {
     const parsedQueuedAt = normaliseStoredTimestamp(legacyState.queuedAt);
     const status = normaliseQueuedStatus(legacyState.status, parsedQueuedAt);
@@ -1173,6 +1180,7 @@ function normaliseOptionalSourceSequence(value: unknown) {
 }
 
 function normaliseState(parsed: Partial<DemoState>): DemoState {
+  const malformedLegacyTopLevelDraft = legacyTopLevelDraftHasMalformedField(parsed);
   const workingDrafts = normaliseWorkingDrafts(parsed.workingDrafts, parsed);
   const parsedQueuedAt = normaliseStoredTimestamp(parsed.queuedAt);
   const status = normaliseQueuedStatus(parsed.status, parsedQueuedAt);
@@ -1223,7 +1231,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     localActions: normaliseLocalActions(parsed.localActions),
     workingDrafts,
     activeWorkingDraftId,
-    sourceWorkingCopy: normaliseSourceWorkingCopy(parsed.sourceWorkingCopy),
+    sourceWorkingCopy: malformedLegacyTopLevelDraft ? null : normaliseSourceWorkingCopy(parsed.sourceWorkingCopy),
     activity: staleQueueTimestamp ? normaliseActivity(parsed.activity).filter((item) => !activityLooksLikeQueueWorkflow(item)) : normaliseActivity(parsed.activity),
     mode: parsed.mode === "preview" ? "preview" : "compose",
   };

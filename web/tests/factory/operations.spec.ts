@@ -9885,6 +9885,93 @@ test("operations workbench trims restored legacy top-level source draft fields",
   expect(stored).not.toContain("  Campaign-specific legacy reviewer note.  ");
 });
 
+test("operations workbench rejects malformed legacy top-level source draft fields", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 15, lastSequence: 26, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          status: "completed",
+          next: "Check Barnet decision records",
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check Barnet decision records", reason: "Malformed legacy source draft guard", claimIds: [], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    const sourceCopy = {
+      id: `source:${campaignId}:resource:digital_pack:malformed-legacy-email`,
+      campaignId,
+      title: "Barnet malformed legacy supporter email",
+      channel: "Supporter email",
+      sourceDocument: "Digital Campaign Pack",
+      sourceDocumentKey: "digital_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: ["Confirm the current Barnet decision record before any external use."],
+      provenance: `Source campaign ${campaignId}; copied from the read-only Digital Campaign Pack into this browser-local workspace.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: 15,
+        sourceLastSequence: 26,
+        sourceDocumentSignature: `source:${campaignId}:documents:v1`,
+        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        selectedSegment: "source_primary",
+        subject: { text: "Malformed object subject must not survive" },
+        body: "Barnet malformed legacy source draft body should be removed before queueing.",
+        reviewerNote: ["Malformed reviewer note must not survive"],
+        status: "queued",
+        mode: "preview",
+        activeDraft: "supporter_email",
+        activeView: "outbox",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_next_check",
+        queuedAt: "2026-07-16T17:58:30.000Z",
+        localActions: [],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: sourceCopy,
+        activity: [{ id: "malformed-legacy-top-level-source-copy", label: "Barnet malformed legacy supporter email queued locally." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Barnet malformed legacy supporter email");
+  await expect(page.locator("main")).not.toContainText("Malformed object subject must not survive");
+  await expect(page.locator("main")).not.toContainText("Malformed reviewer note must not survive");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toBeTruthy();
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain('"sourceWorkingCopy":null');
+  expect(stored).toContain('"subject":"Local source draft reset"');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("Barnet malformed legacy supporter email");
+  expect(stored).not.toContain("Malformed object subject must not survive");
+  expect(stored).not.toContain("Malformed reviewer note must not survive");
+});
+
 test("operations workbench removes duplicated top-level source copy from real campaign state", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 
