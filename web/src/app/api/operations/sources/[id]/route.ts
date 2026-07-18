@@ -676,6 +676,15 @@ function normalizeSourceNonNegativeInteger(value: unknown) {
   return Number.isSafeInteger(count) ? count : value;
 }
 
+function normalizeSourceBoolean(value: unknown) {
+  if (typeof value === "boolean") return value;
+  if (typeof value !== "string") return value;
+  const normalized = normaliseOperationsSourceInlineText(value).toLowerCase();
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+  return value;
+}
+
 function normalizeSourceDocumentResourceCount(value: unknown) {
   return normalizeSourceNonNegativeInteger(value);
 }
@@ -735,6 +744,7 @@ function normalizeSourceEvidenceClaim(value: unknown, claimIds: Set<string>, fal
   const label = normalizeSourceVerificationLabel(record.label) ?? fallbackLabel;
   const type = normalizeSourceClaimType(record.type);
   const confidence = normalizeSourceClaimConfidence(record.confidence);
+  const loadBearing = normalizeSourceBoolean(record.loadBearing);
   const sourceCount = normalizeSourceNonNegativeInteger(record.sourceCount);
   return {
     ...record,
@@ -743,6 +753,7 @@ function normalizeSourceEvidenceClaim(value: unknown, claimIds: Set<string>, fal
     ...(label ? { label } : {}),
     ...(type ? { type } : {}),
     ...(confidence ? { confidence } : {}),
+    ...(loadBearing !== record.loadBearing ? { loadBearing } : {}),
     ...(sourceCount !== record.sourceCount ? { sourceCount } : {}),
     ...(record.excerpt === null ? { excerpt: undefined } : excerpt ? { excerpt } : {}),
     affectedOutputs,
