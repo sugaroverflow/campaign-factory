@@ -1057,6 +1057,8 @@ function sourceWorkingCopyIdTitleMatchesSourceTitle(copyId: string, title: strin
 function sourceWorkingCopyIdTitleMatchesWorkspaceTitle(copyId: string, title: string, campaignId: string) {
   const storedTitleSlug = sourceWorkingCopyIdStoredTitleSlug(copyId);
   const visibleTitleSlug = sourceResourceTitleSlug(title);
+  const campaignIdentitySlugs = CURATED_CAMPAIGN_TITLE_SLUG_PREFIXES[campaignId] ?? [];
+  if (campaignIdentitySlugs.includes(storedTitleSlug) || campaignIdentitySlugs.includes(visibleTitleSlug)) return false;
   return Boolean(
     storedTitleSlug &&
       visibleTitleSlug &&
