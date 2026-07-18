@@ -1364,7 +1364,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
   const removedMismatchedLocalWork = localActions.length !== state.localActions.length || workingDrafts.length !== state.workingDrafts.length;
   const removedFixtureSourceWorkingCopy = Boolean(state.sourceWorkingCopy && sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy));
   const removedMismatchedTopLevelSourceCopy = Boolean(state.sourceWorkingCopy && !sourceWorkingCopyCandidate && !removedFixtureSourceWorkingCopy);
-  const removedFixtureTopLevelCopy = !sourceWorkingCopy && topLevelDraftLooksFixtureBound(state);
+  const removedFixtureTopLevelCopy = !topLevelDraftLooksAlreadyReset(state) && topLevelDraftLooksFixtureBound(state);
   const removedForeignTopLevelCopy = !topLevelDraftLooksAlreadyReset(state) && !topLevelDraftReferencesOnlyExpectedCampaign(state, expectedWorkspaceKey);
   const removedUnprovenancedTopLevelReviewState = !sourceWorkingCopy && topLevelDraftHasUnprovenancedLocalCopy(state);
   const removedResetTopLevelWorkflowState = !sourceWorkingCopy && topLevelDraftResetRetainsWorkflowState(state);

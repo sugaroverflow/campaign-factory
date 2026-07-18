@@ -13688,6 +13688,86 @@ test("operations workbench resets top-level drafts that mention another curated 
   expect(storedState).not.toContain("Tower Hamlets");
 });
 
+test("operations workbench resets top-level source copies that still contain fixture campaign copy", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 63, lastSequence: 2125, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Keep KFC Out of Ormskirk",
+          place: "Ormskirk, Lancashire",
+          next: "Check Ormskirk appeal records before public escalation",
+        }),
+        evidence: campaignEvidence([{ id: "top-level-fixture-scrub", description: "Check Ormskirk appeal records", reason: "Top-level fixture campaign copy scrub guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 63,
+        sourceLastSequence: 2125,
+        sourceDocumentSignature: `source:${id}:current-baseline`,
+        sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+        selectedSegment: "source_primary",
+        subject: "Make the St John the Baptist school street permanent",
+        body: "This saved browser-local top-level copy still contains school street fixture campaign copy from Leicester City Council even though its source provenance now points at Ormskirk.",
+        reviewerNote: "Fixture school-run contacts were used before this became a real campaign source copy.",
+        status: "review",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "drafts",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: {
+          id: `source:${id}:digital-pack`,
+          campaignId: id,
+          title: "Ormskirk supporter email from source",
+          channel: "Email",
+          sourceDocument: "Digital Campaign Pack",
+          sourceDocumentKey: "digital_campaign_pack",
+          createdAt: "2026-07-17T20:05:00.000Z",
+          warnings: ["Confirm Ormskirk appeal status before stronger claims."],
+          provenance: `Source campaign ${id}; copied from Digital Campaign Pack into browser-local operations.`,
+        },
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "fixture-review-note", label: "Fixture school street draft moved to review." }],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=drafts`);
+  await expect(page.getByText("Keep KFC Out of Ormskirk · Ormskirk, Lancashire")).toBeVisible();
+  await expect(page.getByText("This browser-local draft was reset because it still contained fixture campaign copy or fixture-bound provenance.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Working copy: Ormskirk supporter email from source" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("St John the Baptist");
+  await expect(page.locator("main")).not.toContainText("Leicester City Council");
+  await expect(page.locator("main")).not.toContainText("school-run contacts");
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "";
+  expect(storedState).toContain("workspace-sanitized");
+  expect(storedState).toContain("Ormskirk supporter email from source");
+  expect(storedState).not.toContain("St John the Baptist");
+  expect(storedState).not.toContain("Leicester City Council");
+  expect(storedState).not.toContain("school-run contacts");
+});
+
 test("operations workbench scrubs shorthand curated campaign phrases from queued drafts before outbox and export", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 
