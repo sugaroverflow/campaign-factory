@@ -13976,6 +13976,7 @@ test("operations workbench: order-only source metadata changes keep the acknowle
   let documentFlags = ["Unresolved load-bearing claim: Unresolved source claim 1", "Unresolved load-bearing claim: Unresolved source claim 2"];
   let wrapCampaignBriefHtml = false;
   let reflowCampaignBriefPlainText = false;
+  let useComposedSourceAccents = false;
 
   const sourceEvidence = () => {
     const evidence = campaignEvidence(nextChecks, 2);
@@ -14010,7 +14011,12 @@ test("operations workbench: order-only source metadata changes keep the acknowle
       body: JSON.stringify({
         sourceOrigin: "https://campaign-factory.vercel.app",
         run: { campaignId, status: "partial", stateVersion: 44, lastSequence: 1909, events: [] },
-        documents: campaignOperationsDocuments({ title: "Keep KFC Out of Ormskirk", place: "Ormskirk, Lancashire", next: "Check Ormskirk appeal records" }).map((document) =>
+        documents: campaignOperationsDocuments(
+          { title: "Keep KFC Out of Ormskirk", place: "Ormskirk, Lancashire", next: "Check Ormskirk appeal records" },
+          {
+            campaign_brief: `Keep KFC Out of Ormskirk\n\nPlace: Ormskirk, Lancashire\n\nTHE PROBLEM\n${useComposedSourceAccents ? "Café owners" : "Café owners"} need the same readable source boundary.`,
+          },
+        ).map((document) =>
           document.key === "campaign_brief"
             ? {
                 ...document,
@@ -14044,6 +14050,7 @@ test("operations workbench: order-only source metadata changes keep the acknowle
   documentFlags = [...documentFlags].reverse();
   wrapCampaignBriefHtml = true;
   reflowCampaignBriefPlainText = true;
+  useComposedSourceAccents = true;
   await page.reload();
   await page.getByRole("button", { name: /Overview/ }).first().click();
 
