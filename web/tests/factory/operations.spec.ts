@@ -6572,6 +6572,101 @@ test("operations workbench removes legacy fixture contact and school-run variant
   expect(stored).not.toContain("Barnet supporter note queued locally.");
 });
 
+test("operations workbench removes foreign campaign UUID activity without dropping valid local work", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+  const towerHamletsId = "57678ae0-29fd-4b4b-8a53-5c711cdb21cf";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          status: "completed",
+          next: "Check Barnet decision records",
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check Barnet decision records", reason: "Foreign activity provenance guard", claimIds: [], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate(
+    ({ campaignId, staleCampaignId }) => {
+      const sourceCopy = {
+        id: `source:${campaignId}:resource:lobbying_pack:briefing-note`,
+        campaignId,
+        title: "Barnet briefing note",
+        channel: "Briefing note",
+        sourceDocument: "Lobbying Pack",
+        sourceDocumentKey: "lobbying_pack",
+        createdAt: "2026-07-16T17:52:30.000Z",
+        warnings: ["Confirm the current Barnet decision record before any external use."],
+        provenance: `Source campaign ${campaignId}; copied from the read-only Lobbying Pack into this browser-local workspace.`,
+      };
+      localStorage.setItem(
+        `cf_operations_demo_v3:${campaignId}`,
+        JSON.stringify({
+          workspaceKey: campaignId,
+          sourceStateVersion: null,
+          sourceLastSequence: null,
+          sourceDocumentSignature: null,
+          sourceAcknowledgedAt: null,
+          selectedSegment: "source_primary",
+          subject: "Barnet briefing note",
+          body: "Use the Barnet source pack before any local queue intent.",
+          reviewerNote: "Barnet reviewer note from the source pack.",
+          status: "queued",
+          mode: "preview",
+          activeDraft: "supporter_email",
+          activeView: "overview",
+          contactFilter: "source_primary",
+          contactReadinessFilter: "all",
+          scheduleIntent: "after_next_check",
+          queuedAt: "2026-07-16T17:58:30.000Z",
+          localActions: [],
+          workingDrafts: [],
+          activeWorkingDraftId: null,
+          sourceWorkingCopy: sourceCopy,
+          activity: [
+            { id: `activity:source:${staleCampaignId}:legacy-note`, label: `Foreign source campaign ${staleCampaignId} activity must not survive in Barnet.` },
+            { id: "barnet-queue", label: "Barnet briefing note queued locally." },
+          ],
+        }),
+      );
+    },
+    { campaignId: barnetId, staleCampaignId: towerHamletsId },
+  );
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=overview`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.locator("main")).toContainText("Browser-local state was sanitized for this real campaign workspace");
+  await expect(page.locator("main")).not.toContainText("Foreign source campaign");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByRole("heading", { name: /local queue item/ })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Barnet briefing note");
+  await expect(page.locator("main")).not.toContainText(towerHamletsId);
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).toContain('"status":"queued"');
+  expect(stored).toContain("Barnet briefing note");
+  expect(stored).not.toContain(towerHamletsId);
+  expect(stored).not.toContain("Foreign source campaign");
+});
+
 test("operations workbench removes activity tied only to removed local work identifiers from real campaign state", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
   const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
