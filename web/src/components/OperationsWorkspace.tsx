@@ -997,6 +997,10 @@ function workingDraftHasMalformedField(draft: Partial<WorkingDraft>) {
   }) || (draft.queuedAt !== undefined && draft.queuedAt !== null && typeof draft.queuedAt !== "string");
 }
 
+function normaliseOptionalSourceSequence(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
 function normaliseState(parsed: Partial<DemoState>): DemoState {
   const workingDrafts = normaliseWorkingDrafts(parsed.workingDrafts, parsed);
   const activeWorkingDraftId = workingDrafts.some((draft) => draft.id === parsed.activeWorkingDraftId)
@@ -1017,12 +1021,12 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
       ? (parsed.activeDraft as DraftId)
       : initialState.activeDraft,
     workspaceKey: typeof parsed.workspaceKey === "string" ? parsed.workspaceKey : initialState.workspaceKey,
-    sourceStateVersion: typeof parsed.sourceStateVersion === "number" ? parsed.sourceStateVersion : null,
-    sourceLastSequence: typeof parsed.sourceLastSequence === "number" ? parsed.sourceLastSequence : null,
+    sourceStateVersion: normaliseOptionalSourceSequence(parsed.sourceStateVersion),
+    sourceLastSequence: normaliseOptionalSourceSequence(parsed.sourceLastSequence),
     sourceDocumentSignature: typeof parsed.sourceDocumentSignature === "string" ? parsed.sourceDocumentSignature : null,
     sourceAcknowledgedAt: typeof parsed.sourceAcknowledgedAt === "string" && parsed.sourceAcknowledgedAt ? parsed.sourceAcknowledgedAt : null,
-    sourceRecheckStateVersion: typeof parsed.sourceRecheckStateVersion === "number" ? parsed.sourceRecheckStateVersion : null,
-    sourceRecheckLastSequence: typeof parsed.sourceRecheckLastSequence === "number" ? parsed.sourceRecheckLastSequence : null,
+    sourceRecheckStateVersion: normaliseOptionalSourceSequence(parsed.sourceRecheckStateVersion),
+    sourceRecheckLastSequence: normaliseOptionalSourceSequence(parsed.sourceRecheckLastSequence),
     sourceRecheckDocumentSignature: typeof parsed.sourceRecheckDocumentSignature === "string" ? parsed.sourceRecheckDocumentSignature : null,
     sourceRecheckVisitedViews: Array.isArray(parsed.sourceRecheckVisitedViews)
       ? Array.from(new Set(parsed.sourceRecheckVisitedViews.filter((view): view is ViewId => viewIds.includes(view as ViewId))))

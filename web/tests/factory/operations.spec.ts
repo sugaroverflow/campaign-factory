@@ -8044,6 +8044,94 @@ test("operations workbench removes incomplete source baseline metadata from real
   expect(stored).not.toContain('"sourceAcknowledgedAt":"2026-07-16T17:54:30.000Z"');
 });
 
+test("operations workbench removes malformed source baseline sequence metadata from real campaign state", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          status: "completed",
+          next: "Check Barnet decision records",
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check Barnet decision records", reason: "Malformed baseline sequence guard", claimIds: [], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: -1,
+        sourceLastSequence: 24.5,
+        sourceDocumentSignature: "real-barnet-source-baseline",
+        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        sourceRecheckStateVersion: -2,
+        sourceRecheckLastSequence: 25.5,
+        sourceRecheckDocumentSignature: "real-barnet-source-recheck-baseline",
+        sourceRecheckVisitedViews: ["evidence", "strategy"],
+        selectedSegment: "source_primary",
+        subject: "Barnet source update",
+        body: "Use the Barnet source pack before any local queue intent.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "overview",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_next_check",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        activity: [{ id: "legacy", label: "Barnet local workspace opened." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto("/operations");
+  const portfolio = page.getByLabel("Campaign operations portfolio");
+  const barnetRow = portfolio.locator("article").nth(2);
+  await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
+  await expect(barnetRow).not.toContainText("source update acknowledgement needed");
+  await expect(barnetRow).not.toContainText("source re-check");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=overview`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.locator("main")).toContainText("Browser-local state was sanitized for this real campaign workspace");
+  await expect(page.getByText("Source re-check pending")).toHaveCount(0);
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).toContain('"sourceStateVersion":14');
+  expect(stored).toContain('"sourceLastSequence":25');
+  expect(stored).toContain('"sourceRecheckVisitedViews":[]');
+  expect(stored).toContain('"sourceDocumentSignature":"source:');
+  expect(stored).not.toContain('"sourceStateVersion":-1');
+  expect(stored).not.toContain('"sourceLastSequence":24.5');
+  expect(stored).not.toContain('"sourceRecheckStateVersion":-2');
+  expect(stored).not.toContain('"sourceRecheckLastSequence":25.5');
+  expect(stored).not.toContain('"sourceAcknowledgedAt":"2026-07-16T17:54:30.000Z"');
+});
+
 test("operations workbench: failed or not-yet-usable real source loads do not fall back to the fixture", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
