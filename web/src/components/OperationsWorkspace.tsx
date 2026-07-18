@@ -1206,6 +1206,15 @@ function localActionTacticMatchesStoredSourceId(actionId: string, title: string,
   return Boolean(storedTitleSlug && canonicalTitleSlug && storedTitleSlug === canonicalTitleSlug && source.includes("tactics and timeline") && provenance.includes("tactic target"));
 }
 
+function generatedSourceCheckIdMatchesTitle(checkId: string, title: string) {
+  const generatedMatch = checkId.match(/^check-\d+-(.+)$/);
+  if (!generatedMatch) return true;
+  const generatedSlug = (generatedMatch[1] ?? "").replace(/(?:-\d+)+$/, "");
+  const titleSlug = sourceResourceTitleSlug(title.replace(/^check:\s*/i, ""));
+  if (!generatedSlug || generatedSlug.length < 4) return true;
+  return titleSlug.includes(generatedSlug) || generatedSlug.includes(titleSlug);
+}
+
 function localActionNextCheckMatchesStoredSourceId(actionId: string, title: string, source: string, provenance: string) {
   const match = actionId.match(/^source:[0-9a-f-]{36}:next-check:([a-z0-9_-]{1,80})$/);
   if (!match) return false;
@@ -1214,6 +1223,7 @@ function localActionNextCheckMatchesStoredSourceId(actionId: string, title: stri
   return Boolean(
     source.includes("evidence & checks") &&
       title.startsWith("check:") &&
+      generatedSourceCheckIdMatchesTitle(checkId, title) &&
       provenance.includes("derived from next check") &&
       provenance.includes(`next check ${checkId}`),
   );

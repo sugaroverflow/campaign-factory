@@ -18359,6 +18359,86 @@ test("operations workbench keeps source next-check actions with action-safe rest
   expect(storedState).toContain("check-2-committee-minute-42");
 });
 
+test("operations workbench rejects generated source next-check ids whose title drifts", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: barnetId, status: "completed", stateVersion: 83, lastSequence: 2330, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: campaignEvidence([
+          { id: "primary", description: "Check Barnet decision records", reason: "Primary next source check", affectedSections: ["strategy"] },
+          { id: "Committee Minute #42", description: "Confirm committee minute record", reason: "Source ids may contain readable punctuation", affectedSections: ["evidence"] },
+        ]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: null,
+        sourceLastSequence: null,
+        sourceDocumentSignature: null,
+        sourceAcknowledgedAt: null,
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local source next-check action should be sanitized before generated action ids are trusted.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "actions",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [
+          {
+            id: `source:${id}:next-check:check-2-committee-minute-42`,
+            title: "Check: Shadow planning record",
+            source: "Campaign source · Evidence & checks",
+            owner: "Reviewer",
+            timing: "Before related copy or tactics move forward",
+            priority: "Medium",
+            status: "next",
+            provenance: `Source campaign ${id}; derived from next check check-2-committee-minute-42; stored only in this browser.`,
+          },
+        ],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "next-check-generated-title-drift", label: "Created action: Check: Shadow planning record." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=actions`);
+  await expect(page.getByRole("heading", { name: "Owned local work from source checks" })).toBeVisible();
+  await expect(page.getByText("No local actions yet. Create the primary source-check action to turn the campaign boundary into owned work.")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Check: Shadow planning record");
+  await expect(page.locator("main")).not.toContainText("check-2-committee-minute-42");
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), barnetId)) ?? "";
+  expect(storedState).toContain("workspace-sanitized");
+  expect(storedState).not.toContain("Check: Shadow planning record");
+  expect(storedState).not.toContain("next-check-generated-title-drift");
+});
+
 test("operations workbench rejects source actions whose id kind disagrees with stored provenance", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 
