@@ -9524,6 +9524,109 @@ test("operations workbench rejects source copies with mismatched source document
   expect(stored).not.toContain("mismatched source key");
 });
 
+test("operations workbench rejects source copies whose stored id names a different source document key", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: campaignEvidence([{ id: "mismatched-source-copy-id-key", description: "Check Barnet decision records", reason: "Mismatched source-copy id key guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    const idKeyMismatchCopy = {
+      id: `source:${campaignId}:resource:digital_pack:lobbying-note`,
+      campaignId,
+      title: "Barnet lobbying note with mismatched id key",
+      channel: "Briefing note",
+      sourceDocument: "Lobbying Pack",
+      sourceDocumentKey: "lobbying_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: ["Confirm the current Barnet decision record before any external use."],
+      provenance: `Source campaign ${campaignId}; copied from Lobbying Pack into this browser-local workspace.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: 14,
+        sourceLastSequence: 25,
+        sourceDocumentSignature: `source:${campaignId}:current-baseline`,
+        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        selectedSegment: "source_primary",
+        subject: "Barnet top-level draft with mismatched id key",
+        body: "This queued browser-local copy names the Lobbying Pack but its stored source-copy id names digital_pack, so it must be reset before outbox or export can trust it.",
+        reviewerNote: "Do not keep this mismatched id-key note.",
+        status: "queued",
+        mode: "preview",
+        activeDraft: "supporter_email",
+        activeView: "outbox",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "tomorrow_morning",
+        queuedAt: "2026-07-16T18:04:30.000Z",
+        localActions: [],
+        workingDrafts: [
+          {
+            id: idKeyMismatchCopy.id,
+            title: idKeyMismatchCopy.title,
+            channel: "Briefing note",
+            subject: "Mismatched id-key draft should be removed",
+            body: "This Barnet working draft has a source-copy id whose document key disagrees with its saved source document key.",
+            reviewerNote: "Mismatched id-key review note.",
+            status: "queued",
+            queuedAt: "2026-07-16T18:02:30.000Z",
+            createdAt: "2026-07-16T17:52:30.000Z",
+            updatedAt: "2026-07-16T18:02:30.000Z",
+            sourceWorkingCopy: idKeyMismatchCopy,
+          },
+        ],
+        activeWorkingDraftId: idKeyMismatchCopy.id,
+        sourceWorkingCopy: {
+          ...idKeyMismatchCopy,
+          id: `${campaignId}:digital_pack:top-level-lobbying-note`,
+          title: "Barnet top-level source copy with mismatched id key",
+        },
+        activity: [
+          { id: "mismatched-id-key-draft", label: "Barnet mismatched id-key briefing queued locally." },
+          { id: "mismatched-id-key-top-level", label: "Barnet top-level source copy queued locally with mismatched id key." },
+        ],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Barnet mismatched id-key briefing");
+  await expect(page.locator("main")).not.toContainText("Barnet top-level source copy queued locally with mismatched id key");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=drafts`);
+  await expect(page.locator("main")).not.toContainText("Mismatched id-key draft should be removed");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain('"sourceWorkingCopy":null');
+  expect(stored).toContain('"subject":"Local source draft reset"');
+  expect(stored).toContain('"scheduleIntent":"after_approval"');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("Mismatched id-key draft should be removed");
+  expect(stored).not.toContain("top-level-lobbying-note");
+  expect(stored).not.toContain("mismatched id-key");
+});
+
 test("operations workbench rejects source copies and drafts with invisible saved text", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 

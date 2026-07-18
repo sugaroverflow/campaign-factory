@@ -965,6 +965,21 @@ function sourceWorkingCopyDocumentKeyMatchesSourceDocument(sourceDocumentKey: st
   return false;
 }
 
+function canonicalSourceDocumentKey(value: string) {
+  const key = value.trim().toLowerCase();
+  return key === "digital_campaign_pack" ? "digital_pack" : key;
+}
+
+function sourceWorkingCopyIdDocumentKeyMatchesSourceKey(copyId: string, sourceDocumentKey: string) {
+  const id = copyId.trim().toLowerCase();
+  const sourceKey = canonicalSourceDocumentKey(sourceDocumentKey);
+  const resourceMatch = id.match(/^source:[0-9a-f-]{36}:resource:([^:]+):/i);
+  if (resourceMatch) return canonicalSourceDocumentKey(resourceMatch[1] ?? "") === sourceKey;
+  const directMatch = id.match(/^[0-9a-f-]{36}:([^:]+):/i);
+  if (directMatch) return canonicalSourceDocumentKey(directMatch[1] ?? "") === sourceKey;
+  return false;
+}
+
 function sourceWorkingCopyHasMalformedOptionalField(copy: Partial<SourceWorkingCopy>) {
   const createdAt = copy.createdAt;
   const sourceDocument = typeof copy.sourceDocument === "string" ? copy.sourceDocument.trim() : "";
@@ -980,6 +995,7 @@ function sourceWorkingCopyHasMalformedOptionalField(copy: Partial<SourceWorkingC
     !storedTextHasVisibleText(sourceDocumentKey) ||
     !storedTextHasVisibleText(sourceDocument) ||
     !sourceWorkingCopyDocumentKeyMatchesSourceDocument(sourceDocumentKey, sourceDocument) ||
+    (typeof copy.id === "string" && !sourceWorkingCopyIdDocumentKeyMatchesSourceKey(copy.id, sourceDocumentKey)) ||
     typeof createdAt !== "string" ||
     !isValidStoredTimestamp(createdAt) ||
     (copy.warnings !== undefined && (!Array.isArray(copy.warnings) || copy.warnings.some((warning) => typeof warning !== "string" || storedTextIsInvisible(warning))));
