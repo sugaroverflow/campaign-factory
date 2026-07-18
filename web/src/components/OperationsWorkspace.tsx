@@ -1017,6 +1017,10 @@ function isValidStoredTimestamp(value: string) {
   return Number.isFinite(new Date(value).getTime());
 }
 
+function hasRecordedLocalQueue(status: DraftStatus, queuedAt: string | null) {
+  return status === "queued" && Boolean(queuedAt && isValidStoredTimestamp(queuedAt));
+}
+
 function normaliseStoredTimestamp(value: unknown) {
   return typeof value === "string" && value && isValidStoredTimestamp(value) ? value : null;
 }
@@ -1299,7 +1303,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
   const removedForeignTopLevelCopy = !topLevelDraftLooksAlreadyReset(state) && !topLevelDraftReferencesOnlyExpectedCampaign(state, expectedWorkspaceKey);
   const removedUnprovenancedTopLevelReviewState = !sourceWorkingCopy && topLevelDraftHasUnprovenancedLocalCopy(state);
   const removedResetTopLevelWorkflowState = !sourceWorkingCopy && topLevelDraftResetRetainsWorkflowState(state);
-  const demotedTopLevelQueueState = Boolean(sourceWorkingCopy && state.status === "queued" && !state.queuedAt);
+  const demotedTopLevelQueueState = Boolean(sourceWorkingCopy && state.status === "queued" && !hasRecordedLocalQueue(state.status, state.queuedAt));
   const removedFixtureAcknowledgedSourceBaseline = Boolean(state.sourceDocumentSignature && hasFixtureLeakage(state.sourceDocumentSignature));
   const removedFixtureSourceRecheckBaseline = Boolean(state.sourceRecheckDocumentSignature && hasFixtureLeakage(state.sourceRecheckDocumentSignature));
   const removedForeignAcknowledgedSourceBaseline = Boolean(state.sourceDocumentSignature && !textReferencesOnlyExpectedCampaign(state.sourceDocumentSignature, expectedWorkspaceKey));
@@ -1323,8 +1327,8 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
   const hasRetainedLocalWork = Boolean(localActions.length || workingDrafts.length || sourceWorkingCopy || state.status !== "draft" || state.queuedAt);
   const removedOrphanedDraftWorkflowActivity = !hasRetainedLocalWork && state.activity.some(activityLooksLikeDraftWorkflow);
   const removedQueuedWorkingDraft = state.workingDrafts.some((draft) => draft.status === "queued" && !workingDrafts.some((keptDraft) => keptDraft.id === draft.id));
-  const hasQueuedWorkingDraft = workingDrafts.some((draft) => draft.status === "queued");
-  const hasQueuedTopLevelSourceCopy = Boolean(sourceWorkingCopy && state.status === "queued" && state.queuedAt);
+  const hasQueuedWorkingDraft = workingDrafts.some((draft) => hasRecordedLocalQueue(draft.status, draft.queuedAt));
+  const hasQueuedTopLevelSourceCopy = Boolean(sourceWorkingCopy && hasRecordedLocalQueue(state.status, state.queuedAt));
   const demotedQueuedLocalWork = demotedWorkingDraftQueueState || demotedTopLevelQueueState;
   const resetScheduleIntent = (resetTopLevelDraft || removedQueuedWorkingDraft || removedOrphanedDraftWorkflowActivity || demotedQueuedLocalWork) && !hasQueuedWorkingDraft && !hasQueuedTopLevelSourceCopy;
   const resetAcknowledgedSourceBaseline =
@@ -1470,7 +1474,7 @@ function portfolioLocalCounts(campaignId: string, persistSanitized = false): Por
     actions: state.localActions.length,
     drafts: state.workingDrafts.length,
     reviews: (state.status === "review" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "review").length,
-    queued: (state.status === "queued" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "queued").length,
+    queued: (hasRecordedLocalQueue(state.status, state.queuedAt) ? 1 : 0) + state.workingDrafts.filter((draft) => hasRecordedLocalQueue(draft.status, draft.queuedAt)).length,
   };
 }
 
@@ -3027,7 +3031,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
   const canAcknowledgeSourceRefresh = !sourceBaselineChanged || missingSourceRecheckViews.length === 0;
   const reviewBlocked = !canRequestReview;
   const reviewItemCount = (state.status === "review" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "review").length;
-  const queuedItemCount = (state.status === "queued" ? 1 : 0) + state.workingDrafts.filter((draft) => draft.status === "queued").length;
+  const queuedItemCount = (hasRecordedLocalQueue(state.status, state.queuedAt) ? 1 : 0) + state.workingDrafts.filter((draft) => hasRecordedLocalQueue(draft.status, draft.queuedAt)).length;
   const queuedCount = queuedItemCount ? String(queuedItemCount) : undefined;
   const reviewBadge = sourceBaselineChanged && sourceRecheckItemCount ? String(sourceRecheckItemCount) : reviewItemCount ? String(reviewItemCount) : undefined;
   const sourceRecheckNavState = (view: ViewId) => {
@@ -3557,7 +3561,7 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
 
   const buildOperationsPack = () => {
     const queuedDrafts = [
-      ...(state.status === "queued"
+      ...(hasRecordedLocalQueue(state.status, state.queuedAt)
         ? [
             {
               id: "seeded-supporter-email",
@@ -4581,10 +4585,10 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           </div>
           {queuedItemCount ? (
             [
-              ...(state.status === "queued"
+              ...(hasRecordedLocalQueue(state.status, state.queuedAt)
                 ? [{ id: "seeded-supporter-email", subject: state.subject, sourceDocument: state.sourceWorkingCopy?.sourceDocument, queuedAt: state.queuedAt, sourceCopy: state.sourceWorkingCopy }]
                 : []),
-              ...state.workingDrafts.filter((draft) => draft.status === "queued").map((draft) => ({ id: draft.id, subject: draft.subject, sourceDocument: draft.sourceWorkingCopy.sourceDocument, queuedAt: draft.queuedAt, sourceCopy: draft.sourceWorkingCopy })),
+              ...state.workingDrafts.filter((draft) => hasRecordedLocalQueue(draft.status, draft.queuedAt)).map((draft) => ({ id: draft.id, subject: draft.subject, sourceDocument: draft.sourceWorkingCopy.sourceDocument, queuedAt: draft.queuedAt, sourceCopy: draft.sourceWorkingCopy })),
             ].map((item) => (
               <div key={item.id} className="grid gap-3 border-b border-border px-4 py-4 text-sm last:border-0 md:grid-cols-[1.1fr_0.8fr_0.7fr_0.8fr]">
                 <div>
