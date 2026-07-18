@@ -1013,8 +1013,11 @@ function workingDraftMatchesWorkspace(draft: WorkingDraft, expectedWorkspaceKey:
   return sourceWorkingCopyMatchesWorkspace(draft.sourceWorkingCopy, expectedWorkspaceKey);
 }
 
+const STORED_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
 function isValidStoredTimestamp(value: string) {
-  return Number.isFinite(new Date(value).getTime());
+  if (!STORED_TIMESTAMP_RE.test(value)) return false;
+  return new Date(value).toISOString() === value;
 }
 
 function hasRecordedLocalQueue(status: DraftStatus, queuedAt: string | null) {
