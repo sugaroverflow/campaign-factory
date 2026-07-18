@@ -1256,7 +1256,9 @@ function legacyTopLevelDraftHasMalformedField(state: Partial<DemoState>) {
   return ["subject", "body", "reviewerNote", "status"].some((field) => {
     const value = state[field as keyof DemoState];
     return (value !== undefined && typeof value !== "string") || storedTextIsInvisible(value);
-  }) || (state.queuedAt !== undefined && state.queuedAt !== null && typeof state.queuedAt !== "string");
+  }) ||
+    (state.queuedAt !== undefined && state.queuedAt !== null && typeof state.queuedAt !== "string") ||
+    (typeof state.queuedAt === "string" && !isCurrentOrPastStoredTimestamp(state.queuedAt));
 }
 
 function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>): WorkingDraft[] {
@@ -1339,8 +1341,9 @@ function workingDraftHasMalformedField(draft: Partial<WorkingDraft>) {
     typeof draft.updatedAt !== "string" ||
     !isCurrentOrPastStoredTimestamp(draft.updatedAt) ||
     storedTimestampIsBefore(draft.updatedAt, draft.createdAt) ||
-    (typeof draft.queuedAt === "string" && isCurrentOrPastStoredTimestamp(draft.queuedAt) && storedTimestampIsBefore(draft.queuedAt, draft.createdAt)) ||
-    (typeof draft.queuedAt === "string" && isCurrentOrPastStoredTimestamp(draft.queuedAt) && storedTimestampIsBefore(draft.queuedAt, draft.updatedAt)) ||
+    (typeof draft.queuedAt === "string" && !isCurrentOrPastStoredTimestamp(draft.queuedAt)) ||
+    (typeof draft.queuedAt === "string" && storedTimestampIsBefore(draft.queuedAt, draft.createdAt)) ||
+    (typeof draft.queuedAt === "string" && storedTimestampIsBefore(draft.queuedAt, draft.updatedAt)) ||
     (draft.queuedAt !== undefined && draft.queuedAt !== null && typeof draft.queuedAt !== "string");
 }
 

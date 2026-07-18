@@ -8252,6 +8252,97 @@ test("operations workbench rejects source working drafts with malformed draft ti
   expect(stored).not.toContain("Malformed updatedAt working draft should not render");
 });
 
+test("operations workbench rejects source working drafts with invalid queued timestamps", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: campaignEvidence([{ id: "next", description: "Check Barnet decision records", reason: "Invalid queued timestamp guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    const sourceCopy = {
+      id: `source:${campaignId}:resource:lobbying_pack:invalid-queued-at-copy`,
+      campaignId,
+      title: "Barnet source draft with invalid queued timestamp",
+      channel: "Briefing note",
+      sourceDocument: "Lobbying Pack",
+      sourceDocumentKey: "lobbying_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: ["Confirm the current Barnet decision record before any external use."],
+      provenance: `Source campaign ${campaignId}; copied from the read-only Lobbying Pack into this browser-local workspace.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: 14,
+        sourceLastSequence: 25,
+        sourceDocumentSignature: `source:${campaignId}:real-barnet-source-baseline`,
+        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local draft was already reset; only the invalid queued timestamp working draft should be removed.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "outbox",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "tomorrow_morning",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [
+          {
+            id: sourceCopy.id,
+            title: sourceCopy.title,
+            channel: "Briefing note",
+            subject: "Invalid queuedAt working draft should not queue",
+            body: "This source-bound browser-local working draft should be removed because its saved queuedAt timestamp is not canonical ISO storage format.",
+            reviewerNote: "Invalid queuedAt draft note.",
+            status: "queued",
+            queuedAt: "2026-07-16 18:01:30",
+            createdAt: "2026-07-16T17:52:30.000Z",
+            updatedAt: "2026-07-16T17:59:30.000Z",
+            sourceWorkingCopy: sourceCopy,
+          },
+        ],
+        activeWorkingDraftId: sourceCopy.id,
+        sourceWorkingCopy: null,
+        activity: [{ id: "invalid-queued-at-copy", label: "Queued invalid queuedAt working draft locally." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Invalid queuedAt working draft should not queue");
+  await expect(page.locator("main")).not.toContainText("Queued invalid queuedAt working draft locally");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain('"scheduleIntent":"after_approval"');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("invalid-queued-at-copy");
+  expect(stored).not.toContain("2026-07-16 18:01:30");
+  expect(stored).not.toContain("Invalid queuedAt working draft should not queue");
+});
+
 test("operations workbench rejects source working drafts with reversed local timestamps", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 
