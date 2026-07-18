@@ -9,6 +9,7 @@ import {
   isOperationsRunReadModel,
   normaliseOperationsSourceInlineText,
   normaliseOperationsSourceOrigin,
+  normaliseOperationsSourcePresentationText,
   type OperationsSourcePayload,
 } from "@/lib/operations/source";
 import { VERIFICATION_LABELS } from "@/lib/pipeline/labels";
@@ -613,9 +614,23 @@ function uniqueSourceDocumentFlags(values: unknown) {
   return flags;
 }
 
+function normalizeSourceDocumentPlainText(value: unknown) {
+  if (typeof value !== "string") return value;
+  const normalized = normaliseOperationsSourcePresentationText(value);
+  return normalized.length > 0 ? normalized : value;
+}
+
 function normalizeSourceDocuments(value: unknown) {
   return Array.isArray(value)
-    ? value.map((document) => (typeof document === "object" && document !== null ? { ...(document as Record<string, unknown>), flags: uniqueSourceDocumentFlags((document as Record<string, unknown>).flags) } : document))
+    ? value.map((document) =>
+        typeof document === "object" && document !== null
+          ? {
+              ...(document as Record<string, unknown>),
+              plainText: normalizeSourceDocumentPlainText((document as Record<string, unknown>).plainText),
+              flags: uniqueSourceDocumentFlags((document as Record<string, unknown>).flags),
+            }
+          : document,
+      )
     : value;
 }
 

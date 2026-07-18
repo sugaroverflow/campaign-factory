@@ -76,6 +76,10 @@ function normaliseSourceInlineText(value: string) {
   return normaliseSourcePresentationText(value).replace(/\s+/g, " ");
 }
 
+export function normaliseOperationsSourcePresentationText(value: string) {
+  return normaliseSourcePresentationText(value);
+}
+
 export function normaliseOperationsSourceInlineText(value: string) {
   return normaliseSourceInlineText(value);
 }
