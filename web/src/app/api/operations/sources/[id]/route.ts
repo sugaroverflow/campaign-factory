@@ -57,6 +57,8 @@ const SOURCE_AFFECTED_SECTION_KEYS = new Set([
   "media_pack",
   "digital_pack",
 ]);
+const SOURCE_DOCUMENT_PACK_KEYS = new Set(["lobbying_pack", "media_pack", "digital_pack"]);
+const SOURCE_JOURNEY_SECTION_KEYS = new Set(["problem", "evidence", "objective", "decision_route", "power", "pressure", "strategy", "tactics", "organising"]);
 const SOURCE_AFFECTED_SECTION_ALIASES: Record<string, string> = {
   problemstatement: "problem",
   theproblem: "problem",
@@ -620,6 +622,21 @@ function normalizeSourceDocumentPlainText(value: unknown) {
   return normalized.length > 0 ? normalized : value;
 }
 
+function normalizeSourceDocumentSectionKeys(value: unknown, documentKey: unknown) {
+  if (typeof documentKey === "string" && SOURCE_DOCUMENT_PACK_KEYS.has(documentKey)) return [];
+  if (!Array.isArray(value)) return value;
+  const seen = new Set<string>();
+  const normalized: string[] = [];
+  for (const section of value) {
+    if (typeof section !== "string") continue;
+    const key = normalizeSourceAffectedSectionKey(section);
+    if (!SOURCE_JOURNEY_SECTION_KEYS.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    normalized.push(key);
+  }
+  return normalized;
+}
+
 function normalizeSourceDocuments(value: unknown) {
   return Array.isArray(value)
     ? value.map((document) =>
@@ -627,6 +644,7 @@ function normalizeSourceDocuments(value: unknown) {
           ? {
               ...(document as Record<string, unknown>),
               plainText: normalizeSourceDocumentPlainText((document as Record<string, unknown>).plainText),
+              sectionKeys: normalizeSourceDocumentSectionKeys((document as Record<string, unknown>).sectionKeys, (document as Record<string, unknown>).key),
               flags: uniqueSourceDocumentFlags((document as Record<string, unknown>).flags),
             }
           : document,
