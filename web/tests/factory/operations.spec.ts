@@ -3493,6 +3493,8 @@ test("operations source API: normalizes recoverable legacy source references bef
   (documents[3] as { name: unknown }).name = " Campaign&nbsp;Strategy ";
   (documents[3] as { num: unknown }).num = " 4 ";
   (documents[3] as { isPack: unknown }).isPack = " false ";
+  (documents[4] as { key: unknown }).key = "TACTICS_TIMELINE";
+  (documents[4] as { name: unknown }).name = "TACTICS AND TIMELINE";
   (documents[1] as { resourceCount: unknown }).resourceCount = " 0 ";
   (documents[6] as { resourceCount: unknown }).resourceCount = " 1 ";
   documents[8].plainText = withCompiledDocumentDisclaimer("DIGITAL CAMPAIGN PACK\n\nSupporter&nbsp email\n\nSubject: Source&nbsp update\n\nBefore you send this, check\n\nConfirm\n  the council&nbsp source before reusing this pack line.");
@@ -3534,6 +3536,7 @@ test("operations source API: normalizes recoverable legacy source references bef
     "Power & Stakeholder Map document",
     "Digital Campaign Pack document",
     "digital_pack",
+    "TACTICS_TIMELINE",
     "Research &amp; Evidence",
     "evidence base",
   ];
@@ -3544,7 +3547,7 @@ test("operations source API: normalizes recoverable legacy source references bef
   const legacyNextCheckReason = legacyNextCheck.reason;
   legacyNextCheck.description = "Legacy&nbsp source\n check keeps the current claim and drops historical ids.";
   legacyNextCheck.claimIds = [" claim-1 ", "claim-1", "archived-claim-from-previous-build"];
-  legacyNextCheck.affectedSections = ["documents", "Campaign&nbsp;Strategy document", "Lobbying Pack document", "lobbying_pack", "Media Pack document", "Tactics &amp; Timeline document", "Research &amp; Evidence", "evidence base"];
+  legacyNextCheck.affectedSections = ["documents", "Campaign&nbsp;Strategy document", "Lobbying Pack document", "lobbying_pack", "Media Pack document", "Tactics &amp; Timeline document", "OBJECTIVE_THEORY_OF_CHANGE", "Research &amp; Evidence", "evidence base"];
   legacyNextCheck.reason = "";
   evidence.nextChecks.push({ ...legacyNextCheck, reason: "Older public&nbsp source builds can carry archived claim ids in next checks.", description: "Duplicate legacy\n source check should recover the valid source row." });
   evidence.nextChecks.push({ id: "legacy-null-optional", description: "Legacy source check drops null optional claim ids.", reason: "Older builds sometimes serialised missing optional arrays as null.", claimIds: null, affectedSections: ["Campaign Brief document"] });
@@ -3591,6 +3594,7 @@ test("operations source API: normalizes recoverable legacy source references bef
     expect(body.documents?.[0]?.flags).toEqual(["Unresolved load-bearing claim: Unresolved source claim 1", "A source section is flagged needs verification."]);
     expect(body.documents?.[3]?.status).toBe("under review");
     expect(body.documents?.[3]).toMatchObject({ key: "campaign_strategy", num: 4, name: "Campaign Strategy", isPack: false });
+    expect(body.documents?.[4]).toMatchObject({ key: "tactics_timeline", name: "Tactics and Timeline" });
     expect(body.documents?.[8]).toMatchObject({ key: "digital_pack", num: 9, name: "Digital Campaign Pack", isPack: true });
     expect(body.documents?.[8]?.plainText).toContain("Supporter email");
     expect(body.documents?.[8]?.plainText).toContain("Subject: Source update");
@@ -3612,7 +3616,7 @@ test("operations source API: normalizes recoverable legacy source references bef
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.confidence).toBe("medium");
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.loadBearing).toBe(true);
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.sourceCount).toBe(1);
-    expect(body.evidence?.groups?.[0]?.claims?.[0]?.affectedOutputs).toEqual(["campaign_brief", "objective_theory_of_change", "power_stakeholder_map", "digital_pack", "evidence"]);
+    expect(body.evidence?.groups?.[0]?.claims?.[0]?.affectedOutputs).toEqual(["campaign_brief", "objective_theory_of_change", "power_stakeholder_map", "digital_pack", "tactics_timeline", "evidence"]);
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.excerpt).toBeUndefined();
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.contradictsClaimIds).toEqual(["claim-2"]);
     expect(body.evidence?.groups?.[0]?.claims?.[1]?.contradictsClaimIds).toBeUndefined();
@@ -3621,7 +3625,7 @@ test("operations source API: normalizes recoverable legacy source references bef
     expect(body.evidence?.nextChecks?.[0]?.claimIds).toEqual(["claim-1"]);
     expect(body.evidence?.nextChecks?.[0]?.description).toBe("Duplicate legacy source check should recover the valid source row.");
     expect(body.evidence?.nextChecks?.[0]?.reason).toBe("Older public source builds can carry archived claim ids in next checks.");
-    expect(body.evidence?.nextChecks?.[0]?.affectedSections).toEqual(["campaign_strategy", "lobbying_pack", "media_pack", "tactics_timeline", "evidence"]);
+    expect(body.evidence?.nextChecks?.[0]?.affectedSections).toEqual(["campaign_strategy", "lobbying_pack", "media_pack", "tactics_timeline", "objective_theory_of_change", "evidence"]);
     expect(body.evidence?.nextChecks?.[1]?.id).toBe("legacy-null-optional");
     expect(body.evidence?.nextChecks?.[1]?.claimIds).toBeUndefined();
     expect(body.evidence?.nextChecks?.[1]?.affectedSections).toEqual(["campaign_brief"]);

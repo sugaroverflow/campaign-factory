@@ -118,19 +118,31 @@ const SOURCE_DOCUMENT_STATUSES = new Set<string>(DOCUMENT_STATUSES);
 const SOURCE_DOCUMENT_STATUS_BY_VISIBLE_TEXT = new Map<string, string>(DOCUMENT_STATUSES.flatMap((status) => [[status, status], [status.replace(/ /g, "_"), status], [status.replace(/ /g, "-"), status]]));
 const SOURCE_CANONICAL_DOCUMENTS_BY_KEY = new Map<string, (typeof CANONICAL_DOCUMENTS)[number]>(CANONICAL_DOCUMENTS.map((document) => [document.key, document]));
 const SOURCE_DOCUMENT_KEY_BY_VISIBLE_TEXT = new Map<string, string>(
-  CANONICAL_DOCUMENTS.flatMap((document) => [
-    [normaliseOperationsSourceInlineText(document.key), document.key],
-    [normaliseOperationsSourceInlineText(document.name), document.key],
-    [normaliseOperationsSourceInlineText(`${document.name} document`), document.key],
-    [normaliseOperationsSourceInlineText(document.name.replace(/ and /g, " & ")), document.key],
-    [normaliseOperationsSourceInlineText(`${document.name.replace(/ and /g, " & ")} document`), document.key],
-  ]),
+  CANONICAL_DOCUMENTS.flatMap((document) => {
+    const variants = [
+      normaliseOperationsSourceInlineText(document.key),
+      normaliseOperationsSourceInlineText(document.name),
+      normaliseOperationsSourceInlineText(`${document.name} document`),
+      normaliseOperationsSourceInlineText(document.name.replace(/ and /g, " & ")),
+      normaliseOperationsSourceInlineText(`${document.name.replace(/ and /g, " & ")} document`),
+    ];
+    return variants.flatMap((variant): Array<[string, string]> => [
+      [variant, document.key],
+      [variant.toLowerCase(), document.key],
+    ]);
+  }),
 );
 const SOURCE_DOCUMENT_NAME_BY_VISIBLE_TEXT = new Map<string, string>(
-  CANONICAL_DOCUMENTS.flatMap((document) => [
-    [normaliseOperationsSourceInlineText(document.name), document.name],
-    [normaliseOperationsSourceInlineText(document.name.replace(/ and /g, " & ")), document.name],
-  ]),
+  CANONICAL_DOCUMENTS.flatMap((document) => {
+    const variants = [
+      normaliseOperationsSourceInlineText(document.name),
+      normaliseOperationsSourceInlineText(document.name.replace(/ and /g, " & ")),
+    ];
+    return variants.flatMap((variant): Array<[string, string]> => [
+      [variant, document.name],
+      [variant.toLowerCase(), document.name],
+    ]);
+  }),
 );
 const SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM = "Unresolved load-bearing claim: ";
 const SOURCE_DOCUMENT_FLAG_NEEDS_VERIFICATION = "A source section is flagged needs verification.";
@@ -583,9 +595,10 @@ function normalizeSourceRunStatus(value: unknown) {
 function normalizeSourceAffectedSectionKey(value: string) {
   const visibleValue = normaliseOperationsSourceInlineText(value);
   if (SOURCE_AFFECTED_SECTION_KEYS.has(visibleValue)) return visibleValue;
-  const folded = visibleValue
+  const lowerVisibleValue = visibleValue.toLowerCase();
+  if (SOURCE_AFFECTED_SECTION_KEYS.has(lowerVisibleValue)) return lowerVisibleValue;
+  const folded = lowerVisibleValue
     .trim()
-    .toLowerCase()
     .replace(/&/g, "and")
     .replace(/[^a-z0-9]+/g, "");
   return SOURCE_AFFECTED_SECTION_ALIASES[folded] ?? value;
@@ -768,19 +781,23 @@ function normalizeSourceDocumentKey(value: unknown) {
   if (typeof value !== "string") return value;
   const normalized = normaliseOperationsSourceInlineText(value);
   if (SOURCE_CANONICAL_DOCUMENTS_BY_KEY.has(normalized)) return normalized;
+  const lowerNormalized = normalized.toLowerCase();
+  if (SOURCE_CANONICAL_DOCUMENTS_BY_KEY.has(lowerNormalized)) return lowerNormalized;
   const folded = normalizeSourceAffectedSectionKey(value);
   if (SOURCE_CANONICAL_DOCUMENTS_BY_KEY.has(folded)) return folded;
-  return SOURCE_DOCUMENT_KEY_BY_VISIBLE_TEXT.get(normalized) ?? value;
+  return SOURCE_DOCUMENT_KEY_BY_VISIBLE_TEXT.get(normalized) ?? SOURCE_DOCUMENT_KEY_BY_VISIBLE_TEXT.get(lowerNormalized) ?? value;
 }
 
 function normalizeSourceDocumentName(value: unknown, documentKey: unknown) {
   if (typeof value !== "string") return value;
   const normalized = normaliseOperationsSourceInlineText(value);
+  const lowerNormalized = normalized.toLowerCase();
   if (typeof documentKey === "string") {
     const canonicalDocument = SOURCE_CANONICAL_DOCUMENTS_BY_KEY.get(documentKey);
-    if (canonicalDocument && SOURCE_DOCUMENT_NAME_BY_VISIBLE_TEXT.get(normalized) === canonicalDocument.name) return canonicalDocument.name;
+    const mappedName = SOURCE_DOCUMENT_NAME_BY_VISIBLE_TEXT.get(normalized) ?? SOURCE_DOCUMENT_NAME_BY_VISIBLE_TEXT.get(lowerNormalized);
+    if (canonicalDocument && mappedName === canonicalDocument.name) return canonicalDocument.name;
   }
-  return SOURCE_DOCUMENT_NAME_BY_VISIBLE_TEXT.get(normalized) ?? value;
+  return SOURCE_DOCUMENT_NAME_BY_VISIBLE_TEXT.get(normalized) ?? SOURCE_DOCUMENT_NAME_BY_VISIBLE_TEXT.get(lowerNormalized) ?? value;
 }
 
 function normalizeSourceDocumentNum(value: unknown) {
