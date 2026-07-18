@@ -19350,6 +19350,84 @@ test("operations workbench rejects non-canonical source acknowledgement signatur
   expect(JSON.stringify(storedState)).not.toContain(upperCampaignId);
 });
 
+test("operations workbench removes orphaned draft activity without dropping source actions", async ({ page }) => {
+  const campaignId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "completed", stateVersion: 73, lastSequence: 2230, events: [] },
+        documents: campaignOperationsDocuments({ title: "Stop the leisure park redevelopment in Barnet", place: "Barnet, London", next: "Check Barnet planning records" }),
+        evidence: campaignEvidence([{ id: "orphaned-draft-activity", description: "Check Barnet planning records", reason: "Orphaned draft activity guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 73,
+        sourceLastSequence: 2230,
+        sourceDocumentSignature: `source:${id}:completed:current-baseline`,
+        sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local workspace only has a valid source action; draft workflow history should not be retained without a draft.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "overview",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [
+          {
+            id: `source:${id}:next-check:orphaned-draft-activity`,
+            title: "Check Barnet planning records",
+            source: "Campaign source · Evidence & checks",
+            owner: "Campaigner",
+            timing: "Next",
+            priority: "High",
+            status: "next",
+            provenance: `Source campaign ${id}; derived from next check orphaned-draft-activity; stored only in this browser.`,
+          },
+        ],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [
+          { id: "orphaned-draft-queue", label: "Placed approved draft into the local demo queue for Barnet source copy." },
+          { id: "orphaned-draft-review", label: "Submitted local copy for review before queueing." },
+          { id: "orphaned-draft-activity-action", label: "Created action: Check Barnet planning records" },
+        ],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=overview`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByLabel("Local work requiring source re-check")).toContainText("1 local item needs source re-check");
+
+  const storedState = JSON.parse((await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "{}");
+  expect(storedState.localActions).toHaveLength(1);
+  expect(storedState.workingDrafts).toHaveLength(0);
+  expect(storedState.activity[0].id).toBe("workspace-sanitized");
+  expect(JSON.stringify(storedState.activity)).toContain("Created action: Check Barnet planning records");
+  expect(JSON.stringify(storedState.activity)).not.toContain("Placed approved draft");
+  expect(JSON.stringify(storedState.activity)).not.toContain("Submitted local copy for review");
+});
+
 test("operations workbench rejects non-required source re-check visited views from browser-local state", async ({ page }) => {
   const campaignId = "6b54225d-afa3-41d1-b053-89741094f153";
 

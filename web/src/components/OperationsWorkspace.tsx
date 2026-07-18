@@ -1651,8 +1651,8 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     : activeWorkingDraftId || sourceWorkingCopy || state.status !== "draft" || state.queuedAt
       ? "supporter_email"
       : state.activeDraft;
-  const hasRetainedLocalWork = Boolean(localActions.length || workingDrafts.length || sourceWorkingCopy || (!resetTopLevelDraft && (state.status !== "draft" || state.queuedAt)));
-  const removedOrphanedDraftWorkflowActivity = !hasRetainedLocalWork && state.activity.some(activityLooksLikeDraftWorkflow);
+  const hasRetainedDraftWork = Boolean(workingDrafts.length || sourceWorkingCopy || (!resetTopLevelDraft && (state.status !== "draft" || state.queuedAt)));
+  const removedOrphanedDraftWorkflowActivity = !hasRetainedDraftWork && state.activity.some(activityLooksLikeDraftWorkflow);
   const removedQueuedWorkingDraft = state.workingDrafts.some((draft) => draft.status === "queued" && !workingDrafts.some((keptDraft) => keptDraft.id === draft.id));
   const hasQueuedWorkingDraft = workingDrafts.some((draft) => hasRecordedLocalQueue(draft.status, draft.queuedAt));
   const hasQueuedTopLevelSourceCopy = Boolean(sourceWorkingCopy && hasRecordedLocalQueue(state.status, state.queuedAt) && !reversedTopLevelQueueTimestamp);
