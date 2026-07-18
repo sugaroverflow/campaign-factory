@@ -1045,6 +1045,12 @@ function activityLooksTiedToRemovedLocalWork(activity: Activity, removedLocalWor
   });
 }
 
+function activityLooksLikeTopLevelDraftWorkflow(activity: Activity) {
+  return /\b(marked the draft ready|human approval recorded|placed approved draft|approved draft|local demo queue|queued local draft|submitted for review|ready for human review)\b/i.test(
+    activity.label,
+  );
+}
+
 function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: string): DemoState {
   if (!UUID_RE.test(expectedWorkspaceKey)) return state;
   const selectedSegment = isSourceSegmentId(state.selectedSegment) ? state.selectedSegment : SOURCE_PRIMARY_SEGMENT_ID;
@@ -1132,8 +1138,12 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
         unprovenancedActiveDraft?.channel,
       ].filter((reference): reference is string => typeof reference === "string" && reference.length > 0)
     : [];
+  const removedTopLevelDraftWorkflowActivity = resetTopLevelDraft && !hasQueuedWorkingDraft && !hasQueuedTopLevelSourceCopy;
   const activity = state.activity.filter(
-    (item) => !activityLooksFixtureBound(item) && !activityLooksTiedToRemovedLocalWork(item, [...removedLocalWorkReferences, ...topLevelDraftResetReferences]),
+    (item) =>
+      !activityLooksFixtureBound(item) &&
+      !activityLooksTiedToRemovedLocalWork(item, [...removedLocalWorkReferences, ...topLevelDraftResetReferences]) &&
+      !(removedTopLevelDraftWorkflowActivity && activityLooksLikeTopLevelDraftWorkflow(item)),
   );
   const removedFixtureActivity = activity.length !== state.activity.length;
 

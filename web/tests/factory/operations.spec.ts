@@ -7113,7 +7113,10 @@ test("operations workbench removes unprovenanced top-level review state from rea
         workingDrafts: [],
         activeWorkingDraftId: null,
         sourceWorkingCopy: null,
-        activity: [{ id: "legacy", label: "Queued supporter_email locally from a legacy top-level draft without source-copy provenance." }],
+        activity: [
+          { id: "legacy", label: "Queued supporter_email locally from a legacy top-level draft without source-copy provenance." },
+          { id: "legacy-generic-queue", label: "Placed approved draft into the local demo queue. No provider connection used." },
+        ],
       }),
     );
   }, barnetId);
@@ -7136,6 +7139,7 @@ test("operations workbench removes unprovenanced top-level review state from rea
   expect(stored).toContain("did not retain source-resource provenance");
   expect(stored).not.toContain("Legacy reviewer note without source-copy provenance");
   expect(stored).not.toContain("Queued supporter_email locally");
+  expect(stored).not.toContain("Placed approved draft into the local demo queue");
   expect(stored).not.toContain('"queuedAt":"2026-07-16T17:58:30.000Z"');
 });
 
