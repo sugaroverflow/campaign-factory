@@ -7304,6 +7304,108 @@ test("operations workbench rejects malformed source working-copy fields from rea
   expect(stored).not.toContain("malformed-copy");
 });
 
+test("operations workbench rejects malformed working-draft and activity fields from real campaign state", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 14, lastSequence: 25, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: "Check Barnet decision records", reason: "Malformed working-draft guard", claimIds: [], affectedSections: ["problem"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: 14,
+        sourceLastSequence: 25,
+        sourceDocumentSignature: "real-barnet-source-baseline",
+        sourceAcknowledgedAt: "2026-07-16T17:54:30.000Z",
+        selectedSegment: "source_primary",
+        subject: "Barnet local update",
+        body: "Hi — can you support the campaign after the next source check?",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "drafts",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [
+          {
+            id: { text: `source:${campaignId}:resource:lobbying_pack:bad-id` },
+            title: { text: "Barnet malformed working draft" },
+            channel: ["Briefing note"],
+            subject: "Malformed working draft should not render",
+            body: "This malformed draft should be dropped before React renders it.",
+            reviewerNote: "Malformed local reviewer note.",
+            status: "queued",
+            queuedAt: "2026-07-16T18:02:30.000Z",
+            createdAt: "2026-07-16T17:52:30.000Z",
+            updatedAt: "2026-07-16T18:02:30.000Z",
+            sourceWorkingCopy: {
+              id: `source:${campaignId}:resource:lobbying_pack:bad-id`,
+              campaignId,
+              title: "Barnet briefing note",
+              channel: "Briefing note",
+              sourceDocument: "Lobbying Pack",
+              sourceDocumentKey: "lobbying_pack",
+              createdAt: "2026-07-16T17:52:30.000Z",
+              warnings: ["Confirm the current Barnet decision record before any external use."],
+              provenance: `Source campaign ${campaignId}; copied from the read-only Lobbying Pack into this browser-local workspace.`,
+            },
+          },
+        ],
+        activeWorkingDraftId: { text: `source:${campaignId}:resource:lobbying_pack:bad-id` },
+        sourceWorkingCopy: null,
+        activity: [
+          { id: { text: "malformed-activity-id" }, label: "Malformed object id should be removed." },
+          { id: "malformed-activity-label", label: { text: "Malformed object label should be removed." } },
+        ],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=drafts`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Barnet malformed working draft");
+  await expect(page.locator("main")).not.toContainText("Malformed working draft should not render");
+  await expect(page.locator("main")).not.toContainText("Malformed object label should be removed");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=outbox`);
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("Malformed working draft should not render");
+  expect(stored).not.toContain("Malformed object label should be removed");
+  expect(stored).not.toContain("Malformed object id should be removed");
+});
+
 test("operations workbench removes duplicated top-level source copy from real campaign state", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
 

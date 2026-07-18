@@ -860,6 +860,15 @@ function downloadClientFile(filename: string, content: string, type: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 500);
 }
 
+function normaliseActivity(activity: unknown): Activity[] {
+  if (!Array.isArray(activity)) return initialState.activity;
+  const normalised = activity
+    .filter((item): item is Partial<Activity> => Boolean(item) && typeof item === "object")
+    .filter((item) => typeof item.id === "string" && item.id && typeof item.label === "string" && item.label)
+    .map((item) => ({ id: item.id as string, label: item.label as string }));
+  return normalised.length ? normalised : [];
+}
+
 function normaliseLocalActions(actions: unknown): LocalAction[] {
   if (!Array.isArray(actions)) return [];
   return actions
@@ -918,12 +927,12 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
     .filter((draft): draft is Partial<WorkingDraft> => Boolean(draft) && typeof draft === "object")
     .map((draft) => {
       const sourceWorkingCopy = normaliseSourceWorkingCopy(draft.sourceWorkingCopy);
-      if (!sourceWorkingCopy || !draft.id || !draft.title) return null;
+      if (!sourceWorkingCopy || typeof draft.id !== "string" || !draft.id || typeof draft.title !== "string" || !draft.title) return null;
       const createdAt = typeof draft.createdAt === "string" && draft.createdAt ? draft.createdAt : sourceWorkingCopy.createdAt;
       return {
         id: draft.id,
         title: draft.title,
-        channel: draft.channel || sourceWorkingCopy.channel || "Source draft",
+        channel: typeof draft.channel === "string" && draft.channel ? draft.channel : sourceWorkingCopy.channel || "Source draft",
         subject: typeof draft.subject === "string" && draft.subject ? draft.subject : draft.title,
         body: typeof draft.body === "string" && draft.body ? draft.body : "",
         reviewerNote: typeof draft.reviewerNote === "string" ? draft.reviewerNote : "",
@@ -1000,7 +1009,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     workingDrafts,
     activeWorkingDraftId,
     sourceWorkingCopy: normaliseSourceWorkingCopy(parsed.sourceWorkingCopy),
-    activity: parsed.activity?.length ? parsed.activity : initialState.activity,
+    activity: normaliseActivity(parsed.activity),
     mode: parsed.mode === "preview" ? "preview" : "compose",
   };
 }
