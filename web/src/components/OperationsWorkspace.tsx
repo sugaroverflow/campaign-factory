@@ -1134,6 +1134,8 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
   if (legacyCopy && !normalised.some((draft) => stableLowercase(draft.id) === stableLowercase(legacyCopy.id))) {
     const parsedQueuedAt = normaliseStoredTimestamp(legacyState.queuedAt);
     const status = normaliseQueuedStatus(legacyState.status, parsedQueuedAt);
+    const legacyQueuePrecedesSourceCopy = Boolean(status === "queued" && parsedQueuedAt && storedTimestampIsBefore(parsedQueuedAt, legacyCopy.createdAt));
+    const restoredStatus = legacyQueuePrecedesSourceCopy ? "approved" : status;
     const legacySubject = typeof legacyState.subject === "string" ? legacyState.subject.trim() : "";
     const legacyBody = typeof legacyState.body === "string" ? legacyState.body.trim() : "";
     const legacyReviewerNote = typeof legacyState.reviewerNote === "string" ? legacyState.reviewerNote.trim() : "";
@@ -1144,8 +1146,8 @@ function normaliseWorkingDrafts(value: unknown, legacyState: Partial<DemoState>)
       subject: legacySubject || legacyCopy.title,
       body: legacyBody,
       reviewerNote: legacyReviewerNote,
-      status,
-      queuedAt: status === "queued" ? parsedQueuedAt : null,
+      status: restoredStatus,
+      queuedAt: restoredStatus === "queued" ? parsedQueuedAt : null,
       createdAt: legacyCopy.createdAt,
       updatedAt: legacyCopy.createdAt,
       sourceWorkingCopy: legacyCopy,
@@ -1186,7 +1188,10 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
   const workingDrafts = normaliseWorkingDrafts(parsed.workingDrafts, parsed);
   const parsedQueuedAt = normaliseStoredTimestamp(parsed.queuedAt);
   const status = normaliseQueuedStatus(parsed.status, parsedQueuedAt);
-  const queuedAt = status === "queued" ? parsedQueuedAt : null;
+  const sourceWorkingCopy = malformedLegacyTopLevelDraft ? null : normaliseSourceWorkingCopy(parsed.sourceWorkingCopy);
+  const topLevelQueuePrecedesSourceCopy = Boolean(sourceWorkingCopy && status === "queued" && parsedQueuedAt && storedTimestampIsBefore(parsedQueuedAt, sourceWorkingCopy.createdAt));
+  const restoredStatus = topLevelQueuePrecedesSourceCopy ? "approved" : status;
+  const queuedAt = restoredStatus === "queued" ? parsedQueuedAt : null;
   const staleQueueTimestamp = Boolean(parsedQueuedAt && status !== "queued");
   const activeWorkingDraftId = workingDrafts.some((draft) => draft.id === parsed.activeWorkingDraftId)
     ? parsed.activeWorkingDraftId ?? null
@@ -1201,7 +1206,7 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     selectedSegment: isSegmentId(parsed.selectedSegment) ? parsed.selectedSegment : initialState.selectedSegment,
     subject: subject || INVALID_LOCAL_DRAFT_SUBJECT,
     body: body || INVALID_LOCAL_DRAFT_BODY,
-    status,
+    status: restoredStatus,
     activeDraft: draftLibrary.some((draft) => draft.id === parsed.activeDraft)
       ? (parsed.activeDraft as DraftId)
       : initialState.activeDraft,
@@ -1233,8 +1238,8 @@ function normaliseState(parsed: Partial<DemoState>): DemoState {
     localActions: normaliseLocalActions(parsed.localActions),
     workingDrafts,
     activeWorkingDraftId,
-    sourceWorkingCopy: malformedLegacyTopLevelDraft ? null : normaliseSourceWorkingCopy(parsed.sourceWorkingCopy),
-    activity: staleQueueTimestamp ? normaliseActivity(parsed.activity).filter((item) => !activityLooksLikeQueueWorkflow(item)) : normaliseActivity(parsed.activity),
+    sourceWorkingCopy,
+    activity: staleQueueTimestamp || topLevelQueuePrecedesSourceCopy ? normaliseActivity(parsed.activity).filter((item) => !activityLooksLikeQueueWorkflow(item)) : normaliseActivity(parsed.activity),
     mode: parsed.mode === "preview" ? "preview" : "compose",
   };
 }
@@ -1416,6 +1421,13 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
   const removedResetTopLevelWorkflowState = !sourceWorkingCopy && topLevelDraftResetRetainsWorkflowState(state);
   const demotedTopLevelQueueState = Boolean(sourceWorkingCopy && state.status === "queued" && !hasRecordedLocalQueue(state.status, state.queuedAt));
   const staleTopLevelQueueTimestamp = Boolean(sourceWorkingCopy && state.status !== "queued" && state.queuedAt);
+  const reversedTopLevelQueueTimestamp = Boolean(
+    sourceWorkingCopy &&
+      state.status === "queued" &&
+      state.queuedAt &&
+      isValidStoredTimestamp(state.queuedAt) &&
+      storedTimestampIsBefore(state.queuedAt, sourceWorkingCopy.createdAt),
+  );
   const removedFixtureAcknowledgedSourceBaseline = Boolean(state.sourceDocumentSignature && hasFixtureLeakage(state.sourceDocumentSignature));
   const removedFixtureSourceRecheckBaseline = Boolean(state.sourceRecheckDocumentSignature && hasFixtureLeakage(state.sourceRecheckDocumentSignature));
   const removedForeignAcknowledgedSourceBaseline = Boolean(state.sourceDocumentSignature && !textReferencesOnlyExpectedCampaign(state.sourceDocumentSignature, expectedWorkspaceKey));
@@ -1451,8 +1463,8 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
   const removedOrphanedDraftWorkflowActivity = !hasRetainedLocalWork && state.activity.some(activityLooksLikeDraftWorkflow);
   const removedQueuedWorkingDraft = state.workingDrafts.some((draft) => draft.status === "queued" && !workingDrafts.some((keptDraft) => keptDraft.id === draft.id));
   const hasQueuedWorkingDraft = workingDrafts.some((draft) => hasRecordedLocalQueue(draft.status, draft.queuedAt));
-  const hasQueuedTopLevelSourceCopy = Boolean(sourceWorkingCopy && hasRecordedLocalQueue(state.status, state.queuedAt));
-  const demotedQueuedLocalWork = demotedWorkingDraftQueueState || demotedTopLevelQueueState;
+  const hasQueuedTopLevelSourceCopy = Boolean(sourceWorkingCopy && hasRecordedLocalQueue(state.status, state.queuedAt) && !reversedTopLevelQueueTimestamp);
+  const demotedQueuedLocalWork = demotedWorkingDraftQueueState || demotedTopLevelQueueState || reversedTopLevelQueueTimestamp;
   const staleQueueTimestamp = staleWorkingDraftQueueTimestamp || staleTopLevelQueueTimestamp;
   const resetScheduleIntent = (resetTopLevelDraft || removedQueuedWorkingDraft || removedOrphanedDraftWorkflowActivity || demotedQueuedLocalWork || staleQueueTimestamp) && !hasQueuedWorkingDraft && !hasQueuedTopLevelSourceCopy;
   const resetAcknowledgedSourceBaseline =
@@ -1542,8 +1554,8 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
               : "This browser-local draft was reset because it still contained fixture campaign copy or fixture-bound provenance. Use this real campaign's source material before review or local queueing."
       : state.body,
     reviewerNote: resetTopLevelDraft ? "" : state.reviewerNote,
-    status: resetTopLevelDraft ? "draft" : demotedTopLevelQueueState ? "approved" : state.status,
-    queuedAt: resetTopLevelDraft || demotedTopLevelQueueState || staleTopLevelQueueTimestamp ? null : state.queuedAt,
+    status: resetTopLevelDraft ? "draft" : demotedTopLevelQueueState || reversedTopLevelQueueTimestamp ? "approved" : state.status,
+    queuedAt: resetTopLevelDraft || demotedTopLevelQueueState || reversedTopLevelQueueTimestamp || staleTopLevelQueueTimestamp ? null : state.queuedAt,
     scheduleIntent: resetScheduleIntent ? initialState.scheduleIntent : state.scheduleIntent,
     localActions,
     workingDrafts,

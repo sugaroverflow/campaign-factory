@@ -15397,6 +15397,99 @@ test("operations workbench demotes queued top-level source drafts with malformed
   expect(storedState).not.toContain("top-level-bad-queue-time");
 });
 
+test("operations workbench demotes queued top-level source drafts queued before their source copy", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 72, lastSequence: 2220, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Keep KFC Out of Ormskirk",
+          place: "Ormskirk, Lancashire",
+          next: "Check Ormskirk appeal records before public escalation",
+        }),
+        evidence: campaignEvidence([{ id: "reversed-top-level-queued-at", description: "Check Ormskirk appeal records", reason: "Top-level queue chronology scrub guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 72,
+        sourceLastSequence: 2220,
+        sourceDocumentSignature: `source:${id}:current-baseline`,
+        sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+        selectedSegment: "source_primary",
+        subject: "Keep KFC Out of Ormskirk update",
+        body: "This browser-local source draft has valid campaign provenance but was restored as queued before the source copy existed, so it must return to approved state.",
+        reviewerNote: "Approved before a reversed queue timestamp was restored.",
+        status: "queued",
+        mode: "preview",
+        activeDraft: "supporter_email",
+        activeView: "outbox",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "tomorrow_morning",
+        queuedAt: "2026-07-17T20:01:00.000Z",
+        localActions: [],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: {
+          id: `source:${id}:digital-pack-top-level-reversed-queued-at`,
+          campaignId: id,
+          title: "Ormskirk supporter email from source",
+          channel: "Email",
+          sourceDocument: "Digital Campaign Pack",
+          sourceDocumentKey: "digital_campaign_pack",
+          createdAt: "2026-07-17T20:05:00.000Z",
+          warnings: ["Confirm Ormskirk appeal records before stronger claims."],
+          provenance: `Source campaign ${id}; copied from Digital Campaign Pack into browser-local operations.`,
+        },
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [
+          { id: "top-level-reversed-approval-note", label: "Human approval recorded for this local demo draft." },
+          { id: "top-level-reversed-queue-time", label: "Placed approved draft in local demo queue before source copy existed." },
+        ],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=outbox`);
+  await expect(page.getByText("Keep KFC Out of Ormskirk · Ormskirk, Lancashire")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nothing queued yet" })).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Queued locally");
+
+  const [jsonDownload] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download JSON" }).click(),
+  ]);
+  const jsonPath = await jsonDownload.path();
+  expect(jsonPath).toBeTruthy();
+  const packText = await readFile(jsonPath!, "utf8");
+  expect(packText).toContain('"queuedCount": 0');
+  expect(packText).not.toContain("2026-07-17T20:01:00.000Z");
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "";
+  expect(storedState).toContain("workspace-sanitized");
+  expect(storedState).toContain('"status":"approved"');
+  expect(storedState).toContain('"queuedAt":null');
+  expect(storedState).toContain('"scheduleIntent":"after_approval"');
+  expect(storedState).toContain("Approved before a reversed queue timestamp was restored.");
+  expect(storedState).not.toContain('"status":"queued"');
+  expect(storedState).not.toContain("top-level-reversed-queue-time");
+  expect(storedState).not.toContain("2026-07-17T20:01:00.000Z");
+});
+
 test("operations workbench demotes queued source drafts with date-only queue values", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 
