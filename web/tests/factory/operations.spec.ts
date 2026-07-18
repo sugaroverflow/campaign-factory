@@ -17608,6 +17608,88 @@ test("operations workbench rejects source actions whose stored provenance requir
   expect(storedState).not.toContain("source-action-reverse-kind-drift");
 });
 
+test("operations workbench rejects padded source action metadata before portfolio or workspace counts", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: barnetId, status: "completed", stateVersion: 60, lastSequence: 2120, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet decision records",
+        }),
+        evidence: campaignEvidence([{ id: "source-action-padded-metadata", description: "Check Barnet decision records", reason: "Source action metadata padding scrub guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: null,
+        sourceLastSequence: null,
+        sourceDocumentSignature: null,
+        sourceAcknowledgedAt: null,
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local action state should be sanitized before source action metadata is trusted.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "actions",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [
+          {
+            id: `source:${id}:next-check:padded-metadata`,
+            title: " Check Barnet decision records ",
+            source: "Campaign source · Evidence & checks",
+            owner: "Campaigner",
+            timing: "Next",
+            priority: "High",
+            status: "next",
+            provenance: `Source campaign ${id}; next check: Confirm the decision route before stronger public claims.`,
+          },
+        ],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "source-action-padded-metadata", label: "Created action: Check Barnet decision records." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto("/operations");
+  const barnetRow = page.locator("article").filter({ hasText: "Stop the leisure park redevelopment in Barnet" });
+  await expect(barnetRow).toContainText("Local signals: no browser-local operations work yet for this campaign.");
+  await expect(barnetRow).not.toContainText("1 action");
+  await expect(barnetRow).not.toContainText("padded-metadata");
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=actions`);
+  await expect(page.getByRole("heading", { name: "Owned local work from source checks" })).toBeVisible();
+  await expect(page.getByText("No local actions yet. Create the primary source-check action to turn the campaign boundary into owned work.")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("next-check:padded-metadata");
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), barnetId)) ?? "";
+  expect(storedState).toContain("workspace-sanitized");
+  expect(storedState).not.toContain("next-check:padded-metadata");
+  expect(storedState).not.toContain("source-action-padded-metadata");
+});
+
 test("operations portfolio scrubs foreign place-name shorthand from local signals", async ({ page }) => {
   const ormskirkId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const campaignTitles: Record<string, { title: string; place: string; status: "partial" | "completed" }> = {
