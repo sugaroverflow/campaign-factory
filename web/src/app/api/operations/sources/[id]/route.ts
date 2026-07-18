@@ -434,25 +434,51 @@ function normalizeSourceEvidence(value: unknown) {
       }
     }
   }
+  const groups = Array.isArray(record.groups)
+    ? record.groups.map((group) => (typeof group === "object" && group !== null && Array.isArray((group as Record<string, unknown>).claims) ? { ...(group as Record<string, unknown>), claims: ((group as Record<string, unknown>).claims as unknown[]).map((claim) => normalizeSourceEvidenceClaim(claim, claimIds)) } : group))
+    : record.groups;
+  const currentClaims: Record<string, unknown>[] = [];
+  if (Array.isArray(groups)) {
+    for (const group of groups) {
+      if (typeof group !== "object" || group === null || !Array.isArray((group as Record<string, unknown>).claims)) continue;
+      for (const claim of (group as Record<string, unknown>).claims as unknown[]) {
+        if (typeof claim === "object" && claim !== null) currentClaims.push(claim as Record<string, unknown>);
+      }
+    }
+  }
+  const seenNextCheckIds = new Set<string>();
+  const seenTerminalGapIds = new Set<string>();
   return {
     ...record,
-    groups: Array.isArray(record.groups)
-      ? record.groups.map((group) => (typeof group === "object" && group !== null && Array.isArray((group as Record<string, unknown>).claims) ? { ...(group as Record<string, unknown>), claims: ((group as Record<string, unknown>).claims as unknown[]).map((claim) => normalizeSourceEvidenceClaim(claim, claimIds)) } : group))
-      : record.groups,
-    conflicts: Array.isArray(record.conflicts) ? record.conflicts.map((claim) => normalizeSourceEvidenceClaim(claim, claimIds)) : record.conflicts,
+    groups,
+    conflicts: currentClaims.filter((claim) => claim.label === "Conflicting evidence" || (Array.isArray(claim.contradictsClaimIds) && claim.contradictsClaimIds.length > 0)),
     nextChecks: Array.isArray(record.nextChecks)
-      ? record.nextChecks.map((check) => {
-          if (typeof check !== "object" || check === null) return check;
+      ? record.nextChecks.flatMap((check) => {
+          if (typeof check !== "object" || check === null) return [check];
           const checkRecord = check as Record<string, unknown>;
+          if (typeof checkRecord.id === "string") {
+            if (seenNextCheckIds.has(checkRecord.id)) return [];
+            seenNextCheckIds.add(checkRecord.id);
+          }
           const checkClaimIds = Array.isArray(checkRecord.claimIds) ? (uniqueStrings(checkRecord.claimIds) as string[]) : checkRecord.claimIds;
           const affectedSections = Array.isArray(checkRecord.affectedSections) ? (uniqueStrings(checkRecord.affectedSections) as string[]) : checkRecord.affectedSections;
-          return {
+          return [{
             ...checkRecord,
             claimIds: Array.isArray(checkClaimIds) && claimIds.size > 0 ? checkClaimIds.filter((claimId) => claimIds.has(claimId)) : checkClaimIds,
             affectedSections: Array.isArray(affectedSections) ? affectedSections.filter((section) => SOURCE_AFFECTED_SECTION_KEYS.has(section)) : affectedSections,
-          };
+          }];
         })
       : record.nextChecks,
+    terminalGaps: Array.isArray(record.terminalGaps)
+      ? record.terminalGaps.flatMap((gap) => {
+          if (typeof gap !== "object" || gap === null) return [gap];
+          const gapRecord = gap as Record<string, unknown>;
+          if (typeof gapRecord.id !== "string") return [gap];
+          if (seenTerminalGapIds.has(gapRecord.id)) return [];
+          seenTerminalGapIds.add(gapRecord.id);
+          return [gapRecord];
+        })
+      : record.terminalGaps,
   };
 }
 

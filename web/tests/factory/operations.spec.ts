@@ -3445,14 +3445,20 @@ test("operations source API: normalizes recoverable legacy source references bef
   ];
   const evidence = campaignEvidence(
     [{ id: "legacy-reference", description: "Legacy source check keeps the current claim and drops historical ids.", reason: "Older public source builds can carry archived claim ids in next checks.", affectedSections: ["documents", "lobbying_pack", "evidence"] }],
-    1,
+    2,
   );
   const legacyClaim = evidence.groups[0].claims[0] as { affectedOutputs: string[]; contradictsClaimIds?: string[] };
   legacyClaim.affectedOutputs = ["campaign_brief", "campaign_brief", "digital_pack"];
-  legacyClaim.contradictsClaimIds = ["claim-1", "claim-1", "archived-claim-from-previous-build"];
+  legacyClaim.contradictsClaimIds = ["claim-2", "claim-2", "archived-claim-from-previous-build"];
+  evidence.conflicts = [legacyClaim, legacyClaim, { ...legacyClaim, id: "archived-claim-from-previous-build", contradictsClaimIds: ["claim-1"] }];
   const legacyNextCheck = evidence.nextChecks[0] as { claimIds?: string[]; affectedSections: string[] };
   legacyNextCheck.claimIds = ["claim-1", "claim-1", "archived-claim-from-previous-build"];
   legacyNextCheck.affectedSections = ["documents", "lobbying_pack", "lobbying_pack", "evidence"];
+  evidence.nextChecks.push({ ...legacyNextCheck, description: "Duplicate legacy source check should be ignored." });
+  evidence.terminalGaps = [
+    { id: "legacy-gap", description: "Legacy terminal gap appears once.", at: "2026-07-17T10:00:00.000Z" },
+    { id: "legacy-gap", description: "Duplicated legacy terminal gap is recoverable.", at: "2026-07-17T10:00:00.000Z" },
+  ];
   const documentsBody = JSON.stringify({ documents, evidence });
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -3477,12 +3483,15 @@ test("operations source API: normalizes recoverable legacy source references bef
     expect(response.status).toBe(200);
     expectPublicSourceJsonBoundary(response.headers, "normalized legacy source references");
 
-    const body = (await response.json()) as { documents?: Array<{ flags?: string[] }>; evidence?: { groups?: Array<{ claims?: Array<{ affectedOutputs?: string[]; contradictsClaimIds?: string[] }> }>; nextChecks?: Array<{ claimIds?: string[]; affectedSections?: string[] }> }; sourceFailureKind?: string };
+    const body = (await response.json()) as { documents?: Array<{ flags?: string[] }>; evidence?: { groups?: Array<{ claims?: Array<{ affectedOutputs?: string[]; contradictsClaimIds?: string[] }> }>; conflicts?: Array<{ id?: string; contradictsClaimIds?: string[] }>; nextChecks?: Array<{ claimIds?: string[]; affectedSections?: string[] }>; terminalGaps?: Array<{ id?: string }> }; sourceFailureKind?: string };
     expect(body.documents?.[0]?.flags).toEqual(["Unresolved load-bearing claim: Unresolved source claim 1"]);
     expect(body.evidence?.groups?.[0]?.claims?.[0]?.affectedOutputs).toEqual(["campaign_brief", "digital_pack"]);
-    expect(body.evidence?.groups?.[0]?.claims?.[0]?.contradictsClaimIds).toEqual([]);
+    expect(body.evidence?.groups?.[0]?.claims?.[0]?.contradictsClaimIds).toEqual(["claim-2"]);
+    expect(body.evidence?.conflicts).toEqual([{ ...body.evidence?.groups?.[0]?.claims?.[0], contradictsClaimIds: ["claim-2"] }]);
+    expect(body.evidence?.nextChecks).toHaveLength(1);
     expect(body.evidence?.nextChecks?.[0]?.claimIds).toEqual(["claim-1"]);
     expect(body.evidence?.nextChecks?.[0]?.affectedSections).toEqual(["lobbying_pack", "evidence"]);
+    expect(body.evidence?.terminalGaps).toEqual([{ id: "legacy-gap", description: "Legacy terminal gap appears once.", at: "2026-07-17T10:00:00.000Z" }]);
     expect(body.sourceFailureKind).toBeUndefined();
     expect(requestedUrls).toEqual([
       `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
