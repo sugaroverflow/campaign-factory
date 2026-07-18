@@ -3016,10 +3016,11 @@ function SourceStateShell({ state, onRetry }: { state: Exclude<SourceState, { st
 }
 
 export function OperationsWorkspace({ campaignId, fixtureMode = false, initialView }: { campaignId?: string; fixtureMode?: boolean; initialView?: string }) {
-  if (!campaignId && !fixtureMode) {
+  const normalizedCampaignId = campaignId?.trim().toLowerCase();
+  if (!normalizedCampaignId && !fixtureMode) {
     return <OperationsPortfolio />;
   }
-  return <OperationsCampaignWorkspace campaignId={campaignId} initialView={initialView} />;
+  return <OperationsCampaignWorkspace campaignId={normalizedCampaignId} initialView={initialView} />;
 }
 
 function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?: string; initialView?: string }) {

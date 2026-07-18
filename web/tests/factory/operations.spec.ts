@@ -14960,6 +14960,50 @@ test("operations workbench: all real campaign routes export source-specific loca
   }
 });
 
+test("operations workbench: case-folds campaignId query params before source hydration", async ({ page }) => {
+  const campaignId = "6b54225d-afa3-41d1-b053-89741094f153";
+  const upperCampaignId = campaignId.toUpperCase();
+  const campaign = {
+    title: "Stop the leisure park redevelopment in Barnet",
+    place: "Barnet, London",
+    status: "completed",
+    next: "Retrieve the GLA decision report and Barnet committee minutes",
+  };
+  const requestedSourceIds: string[] = [];
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? "";
+    requestedSourceIds.push(id);
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: campaign.status, stateVersion: 9, lastSequence: 18, events: [] },
+        documents: campaignOperationsDocuments({
+          title: campaign.title,
+          place: campaign.place,
+          status: campaign.status,
+          next: campaign.next,
+        }),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [{ id: "next", description: campaign.next, reason: "Uppercase campaignId route guard", claimIds: [], affectedSections: ["evidence"] }],
+          terminalGaps: [],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${upperCampaignId}&view=brief`);
+  await expect(page.getByText(`${campaign.title} · ${campaign.place}`)).toBeVisible();
+  await expect(page.getByText("Campaign source unavailable")).toHaveCount(0);
+  expect(requestedSourceIds[0]).toBe(campaignId);
+  expect(requestedSourceIds).not.toContain(upperCampaignId);
+});
+
 test("operations workbench: campaignId route loads a read-only public campaign source", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
   const documentRows = [
