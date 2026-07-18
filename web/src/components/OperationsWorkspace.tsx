@@ -1188,7 +1188,6 @@ function localActionIncompleteDocumentMatchesStoredSourceId(actionId: string, ti
 }
 
 function localActionSourceMatchesStoredSourceId(action: LocalAction) {
-  const id = action.id.toLowerCase();
   const source = normaliseOperationsSourceInlineText(action.source).toLowerCase();
   const title = normaliseOperationsSourceInlineText(action.title).toLowerCase();
   const provenance = normaliseOperationsSourceInlineText(action.provenance).toLowerCase();
@@ -1204,7 +1203,7 @@ function localActionSourceMatchesStoredSourceId(action: LocalAction) {
   if (/^source:[0-9a-f-]{36}:tactic:/i.test(action.id)) {
     return describesTacticTarget;
   }
-  return id.startsWith("source:") && !describesNextCheck && !localActionIncompleteDocumentMatchesStoredSourceId(action.id, title, source, provenance) && !describesTacticTarget;
+  return false;
 }
 
 function sourceWorkingCopyMatchesWorkspace(copy: SourceWorkingCopy, expectedWorkspaceKey: string) {

@@ -19425,6 +19425,77 @@ test("operations workbench rejects non-canonical source-scoped local action ids"
   expect(JSON.stringify(storedState)).not.toContain(upperCampaignId);
 });
 
+test("operations workbench rejects unrecognized source-scoped local action ids", async ({ page }) => {
+  const campaignId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "completed", stateVersion: 78, lastSequence: 2280, events: [] },
+        documents: campaignOperationsDocuments({ title: "Stop the leisure park redevelopment in Barnet", place: "Barnet, London", next: "Check Barnet planning records" }),
+        evidence: campaignEvidence([{ id: "shadow-source-action", description: "Check Barnet planning records", reason: "Unrecognized source action id guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 78,
+        sourceLastSequence: 2280,
+        sourceDocumentSignature: `source:${id}:completed:current-baseline`,
+        sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local workspace has a source-scoped action id that does not match a canonical source check, incomplete document, or tactic.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "actions",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [
+          {
+            id: `source:${id}:shadow-action:planning-records`,
+            title: "Check Barnet planning records",
+            source: "Campaign source · Shadow action",
+            owner: "Campaigner",
+            timing: "Next",
+            priority: "High",
+            status: "next",
+            provenance: `Source campaign ${id}; shadow source action saved only in this browser.`,
+          },
+        ],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "shadow-source-action", label: "Created action: Check Barnet planning records" }],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=actions`);
+  await expect(page.getByRole("heading", { name: "Owned local work from source checks" })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Actions: 0 local items");
+
+  const storedState = JSON.parse((await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "{}");
+  expect(storedState.localActions).toHaveLength(0);
+  expect(storedState.activity.some((item: { id: string }) => item.id === "workspace-sanitized")).toBe(true);
+  expect(JSON.stringify(storedState)).not.toContain("shadow-action");
+});
+
 test("operations workbench rejects source actions for non-canonical incomplete documents", async ({ page }) => {
   const campaignId = "6b54225d-afa3-41d1-b053-89741094f153";
 
