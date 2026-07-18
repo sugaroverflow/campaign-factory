@@ -10284,6 +10284,106 @@ Before you send this, check
   expect(stored).not.toContain("drifted-source-warning");
 });
 
+test("operations workbench rejects source working drafts whose provenance names another current document", async ({ page }) => {
+  const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    const id = route.request().url().match(/sources\/([^/]+)$/)?.[1] ?? barnetId;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId: id, status: "completed", stateVersion: 19, lastSequence: 34, events: [] },
+        documents: campaignOperationsDocuments(
+          {
+            title: "Stop the leisure park redevelopment in Barnet",
+            place: "Barnet, London",
+            next: "Check Barnet decision records",
+          },
+          {
+            digital_pack: `Supporter email
+
+Subject: Barnet supporter source update
+
+Use this current Digital Campaign Pack copy only after source-resource provenance is checked.`,
+          },
+        ),
+        evidence: campaignEvidence([{ id: "current-resource-document-provenance", description: "Check Barnet decision records", reason: "Current source-resource document provenance guard", affectedSections: ["digital_pack"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((campaignId) => {
+    const copy = {
+      id: `source:${campaignId}:resource:digital_pack:supporter-email`,
+      campaignId,
+      title: "Supporter email",
+      channel: "Supporter email",
+      sourceDocument: "Digital Campaign Pack",
+      sourceDocumentKey: "digital_pack",
+      createdAt: "2026-07-16T17:52:30.000Z",
+      warnings: [],
+      provenance: `Source campaign ${campaignId}; copied from Lobbying Pack and Digital Campaign Pack into browser-local operations.`,
+    };
+    localStorage.setItem(
+      `cf_operations_demo_v3:${campaignId}`,
+      JSON.stringify({
+        workspaceKey: campaignId,
+        sourceStateVersion: null,
+        sourceLastSequence: null,
+        sourceDocumentSignature: null,
+        sourceAcknowledgedAt: null,
+        selectedSegment: "source_primary",
+        subject: "Barnet supporter source update",
+        body: "This browser-local source copy names a different canonical source document in provenance and must not survive as reviewable local work.",
+        reviewerNote: "Review before any local queueing.",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "drafts",
+        contactFilter: "source_primary",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [],
+        workingDrafts: [
+          {
+            id: copy.id,
+            title: copy.title,
+            channel: copy.channel,
+            subject: "Barnet supporter source update",
+            body: "This local source copy should fail closed because its provenance also names Lobbying Pack.",
+            reviewerNote: "Review before any local queueing.",
+            status: "review",
+            queuedAt: null,
+            createdAt: "2026-07-16T17:52:30.000Z",
+            updatedAt: "2026-07-16T18:02:30.000Z",
+            sourceWorkingCopy: copy,
+          },
+        ],
+        activeWorkingDraftId: copy.id,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "mixed-document-provenance", label: "Created local copy from source resource: Supporter email with Lobbying Pack provenance." }],
+      }),
+    );
+  }, barnetId);
+
+  await page.goto(`/operations?campaignId=${barnetId}&view=drafts`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("provenance also names Lobbying Pack");
+
+  const stored = await page.evaluate((campaignId) => localStorage.getItem(`cf_operations_demo_v3:${campaignId}`), barnetId);
+  expect(stored).toContain('"workingDrafts":[]');
+  expect(stored).toContain("Browser-local state was sanitized for this real campaign workspace");
+  expect(stored).not.toContain("Lobbying Pack");
+  expect(stored).not.toContain("mixed-document-provenance");
+});
+
 test("operations portfolio rejects source working drafts whose heading is not in the current source resources before counts", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
   const campaignTitles: Record<string, { title: string; place: string; status: "partial" | "completed" }> = {

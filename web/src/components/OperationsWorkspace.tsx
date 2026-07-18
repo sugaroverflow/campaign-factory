@@ -1278,6 +1278,13 @@ function sourceWorkingCopyMatchesWorkspace(copy: SourceWorkingCopy, expectedWork
   return provenanceCampaignId === expectedCampaignId;
 }
 
+function sourceWorkingCopyProvenanceNamesOnlySourceDocument(provenance: string, sourceDocument: string) {
+  const normalizedProvenance = normaliseOperationsSourceInlineText(provenance).toLowerCase();
+  const normalizedSourceDocument = normaliseOperationsSourceInlineText(sourceDocument).toLowerCase();
+  const namedDocuments = CANONICAL_DOCUMENTS.map((document) => normaliseOperationsSourceInlineText(document.name).toLowerCase()).filter((documentName) => normalizedProvenance.includes(documentName));
+  return namedDocuments.length > 0 && namedDocuments.every((documentName) => documentName === normalizedSourceDocument);
+}
+
 function sourceWorkingCopyMatchesCurrentSourceResource(copy: SourceWorkingCopy, resources: SourceResource[]) {
   const copyDocumentKey = canonicalSourceDocumentKey(copy.sourceDocumentKey);
   const copyDocument = normaliseOperationsSourceInlineText(copy.sourceDocument).toLowerCase();
@@ -1295,6 +1302,7 @@ function sourceWorkingCopyMatchesCurrentSourceResource(copy: SourceWorkingCopy, 
         normaliseOperationsSourceInlineText(resource.title).toLowerCase() === copyTitle &&
         normaliseOperationsSourceInlineText(resource.channel).toLowerCase() === copyChannel &&
         copyProvenance.includes(resourceDocument) &&
+        sourceWorkingCopyProvenanceNamesOnlySourceDocument(copy.provenance, resource.sourceDocument) &&
         copyWarnings.length === resourceWarnings.length &&
         copyWarnings.every((warning, index) => warning === resourceWarnings[index])
       );
@@ -2107,9 +2115,13 @@ function localSignalPhrases(counts: PortfolioLocalCounts, sourceRecheckItemCount
 }
 
 function storedSourceRecheckSummary(campaignId: string, source: CampaignSource) {
-  const state = loadSanitizedWorkspaceState(campaignId);
-  if (!state) return null;
+  const loadedState = loadSanitizedWorkspaceState(campaignId);
+  if (!loadedState) return null;
   const currentDocumentSignature = sourceDocumentSignature(source);
+  const state = sanitizeStateForCurrentSourceResources(loadedState, source, extractSourceResources(source), currentDocumentSignature);
+  if (state !== loadedState && typeof window !== "undefined") {
+    localStorage.setItem(localStorageKeyFor(campaignId), JSON.stringify(state));
+  }
   const baselineChanged = Boolean(
     (state.sourceStateVersion === null && sourceBoundLocalWorkCount(state) > 0) ||
       (state.sourceStateVersion !== null &&
