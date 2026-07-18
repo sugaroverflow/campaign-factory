@@ -103,6 +103,10 @@ const SOURCE_UNRESOLVED_LABELS = new Set(["Conflicting evidence", "Verification 
 const SOURCE_CLAIM_TYPES = new Set(["authority", "process", "deadline", "officeholder", "policy", "stakeholder_position", "number", "context", "other"]);
 const SOURCE_CLAIM_CONFIDENCES = new Set(["high", "medium", "low"]);
 const SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM = "Unresolved load-bearing claim: ";
+const SOURCE_DOCUMENT_FLAG_NEEDS_VERIFICATION = "A source section is flagged needs verification.";
+const SOURCE_DOCUMENT_FLAG_PLACEHOLDERS = "Contains explicit verification placeholders.";
+const SOURCE_DOCUMENT_NEEDS_VERIFICATION_NOTE = "Some facts in this section couldn't be fully checked in time";
+const SOURCE_PACK_VERIFICATION_NOTES_HEADING = "Before you send this, check";
 // Operations only needs the source run header; request an event-free polling
 // page when recovering from an empty canonical run-read failure so large public
 // event streams do not block real workspace hydration.
@@ -622,6 +626,32 @@ function normalizeSourceDocumentPlainText(value: unknown) {
   return normalized.length > 0 ? normalized : value;
 }
 
+function normalizeSourceRenderedHtmlText(value: unknown) {
+  if (typeof value !== "string") return undefined;
+  const normalized = normaliseOperationsSourcePresentationText(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " "));
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function sourceTextIncludes(value: unknown, expected: string) {
+  if (typeof value !== "string") return false;
+  return normaliseOperationsSourceInlineText(value).includes(normaliseOperationsSourceInlineText(expected));
+}
+
+function normalizeSourceDocumentFlags(value: unknown, document: Record<string, unknown>) {
+  const flags = uniqueSourceDocumentFlags(value);
+  if (!Array.isArray(flags)) return flags;
+
+  const renderedHtmlText = normalizeSourceRenderedHtmlText(document.html);
+  const hasVerificationNote = sourceTextIncludes(document.plainText, SOURCE_DOCUMENT_NEEDS_VERIFICATION_NOTE) && sourceTextIncludes(renderedHtmlText, SOURCE_DOCUMENT_NEEDS_VERIFICATION_NOTE);
+  const hasPackVerificationNotes =
+    document.isPack === true && sourceTextIncludes(document.plainText, SOURCE_PACK_VERIFICATION_NOTES_HEADING) && sourceTextIncludes(renderedHtmlText, SOURCE_PACK_VERIFICATION_NOTES_HEADING);
+
+  const recoveredFlags = [...flags];
+  if (hasVerificationNote) recoveredFlags.push(SOURCE_DOCUMENT_FLAG_NEEDS_VERIFICATION);
+  if (hasPackVerificationNotes) recoveredFlags.push(SOURCE_DOCUMENT_FLAG_PLACEHOLDERS);
+  return uniqueSourceDocumentFlags(recoveredFlags);
+}
+
 function normalizeSourceDocumentSectionKeys(value: unknown, documentKey: unknown) {
   if (typeof documentKey === "string" && SOURCE_DOCUMENT_PACK_KEYS.has(documentKey)) return [];
   if (!Array.isArray(value)) return value;
@@ -639,16 +669,15 @@ function normalizeSourceDocumentSectionKeys(value: unknown, documentKey: unknown
 
 function normalizeSourceDocuments(value: unknown) {
   return Array.isArray(value)
-    ? value.map((document) =>
-        typeof document === "object" && document !== null
-          ? {
-              ...(document as Record<string, unknown>),
-              plainText: normalizeSourceDocumentPlainText((document as Record<string, unknown>).plainText),
-              sectionKeys: normalizeSourceDocumentSectionKeys((document as Record<string, unknown>).sectionKeys, (document as Record<string, unknown>).key),
-              flags: uniqueSourceDocumentFlags((document as Record<string, unknown>).flags),
-            }
-          : document,
-      )
+    ? value.map((document) => {
+        if (typeof document !== "object" || document === null) return document;
+        const normalizedDocument = {
+          ...(document as Record<string, unknown>),
+          plainText: normalizeSourceDocumentPlainText((document as Record<string, unknown>).plainText),
+          sectionKeys: normalizeSourceDocumentSectionKeys((document as Record<string, unknown>).sectionKeys, (document as Record<string, unknown>).key),
+        };
+        return { ...normalizedDocument, flags: normalizeSourceDocumentFlags((document as Record<string, unknown>).flags, normalizedDocument) };
+      })
     : value;
 }
 

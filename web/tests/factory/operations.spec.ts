@@ -3444,8 +3444,11 @@ test("operations source API: normalizes recoverable legacy source references bef
     "Unresolved load-bearing\u00a0claim: Unresolved source&nbsp claim 1",
     "Unresolved load-bearing claim: Archived source claim from an older build",
   ];
-  documents[8].plainText = withCompiledDocumentDisclaimer("DIGITAL CAMPAIGN PACK\n\nSupporter&nbsp email\n\nSubject: Source&nbsp update\n\nConfirm\n  the council&nbsp source before reusing this pack line.");
+  documents[0].plainText = withCompiledDocumentDisclaimer(`Stop the leisure park redevelopment in Barnet\n\n${COMPILED_DOCUMENT_NEEDS_VERIFICATION_NOTE}\n\nCanonical source document shell.`);
+  documents[0].html = `<p>${documents[0].plainText}</p>`;
+  documents[8].plainText = withCompiledDocumentDisclaimer("DIGITAL CAMPAIGN PACK\n\nSupporter&nbsp email\n\nSubject: Source&nbsp update\n\nBefore you send this, check\n\nConfirm\n  the council&nbsp source before reusing this pack line.");
   documents[8].html = `<p>${documents[8].plainText}</p>`;
+  documents[8].flags = [];
   documents[8].sectionKeys = ["Digital Campaign Pack document", "digital_pack", "Digital&nbsp;Campaign&nbsp;Pack"];
   const evidence = campaignEvidence(
     [{ id: "legacy-reference", description: "Legacy source check keeps the current claim and drops historical ids.", reason: "Older public source builds can carry archived claim ids in next checks.", affectedSections: ["documents", "lobbying_pack", "evidence"] }],
@@ -3525,11 +3528,13 @@ test("operations source API: normalizes recoverable legacy source references bef
 
     const body = (await response.json()) as { run?: { batchId?: unknown }; documents?: Array<{ flags?: string[]; plainText?: string; sectionKeys?: string[] }>; evidence?: { groups?: Array<{ count?: number; claims?: Array<{ id?: string; text?: string; type?: string; confidence?: string; affectedOutputs?: string[]; contradictsClaimIds?: string[]; excerpt?: unknown }> }>; totals?: { claims?: number; loadBearing?: number; verifiedLoadBearing?: number; unresolvedLoadBearing?: number }; conflicts?: Array<{ id?: string; contradictsClaimIds?: string[] }>; nextChecks?: Array<{ id?: string; description?: string; reason?: string; claimIds?: string[]; affectedSections?: string[] }>; terminalGaps?: Array<{ id?: string; description?: string }>; draftNotes?: Array<{ text?: string; section?: string }> }; sourceFailureKind?: string };
     expect(body.run).not.toHaveProperty("batchId");
-    expect(body.documents?.[0]?.flags).toEqual(["Unresolved load-bearing claim: Unresolved source claim 1"]);
+    expect(body.documents?.[0]?.flags).toEqual(["Unresolved load-bearing claim: Unresolved source claim 1", "A source section is flagged needs verification."]);
     expect(body.documents?.[8]?.plainText).toContain("Supporter email");
     expect(body.documents?.[8]?.plainText).toContain("Subject: Source update");
+    expect(body.documents?.[8]?.plainText).toContain("Before you send this, check");
     expect(body.documents?.[8]?.plainText).toContain("Confirm\n the council source before reusing this pack line.");
     expect(body.documents?.[8]?.plainText).not.toContain("&nbsp");
+    expect(body.documents?.[8]?.flags).toEqual(["Contains explicit verification placeholders."]);
     expect(body.documents?.[8]?.sectionKeys).toEqual([]);
     expect(body.evidence?.groups).toHaveLength(1);
     expect(body.evidence?.groups?.[0]?.count).toBe(2);
