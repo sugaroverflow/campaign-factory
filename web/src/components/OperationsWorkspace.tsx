@@ -1760,6 +1760,10 @@ function activityLooksFixtureBound(activity: Activity) {
   return hasFixtureLeakage([activity.id, activity.label].join("\n"));
 }
 
+function activityClaimsExternalOutcome(activity: Activity) {
+  return /\b(?:sent|delivered|opened|clicked|replied|received replies|provider connected|contacts imported|imported contacts|synced to provider|scheduled externally|production scheduled)\b/i.test(activity.label);
+}
+
 function activityReferencesOnlyExpectedCampaign(activity: Activity, expectedWorkspaceKey: string) {
   return textFieldsReferenceOnlyExpectedCampaign([activity.id, activity.label], expectedWorkspaceKey);
 }
@@ -1972,6 +1976,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
   const activity = state.activity.filter(
     (item) =>
       !activityLooksFixtureBound(item) &&
+      !activityClaimsExternalOutcome(item) &&
       activityReferencesOnlyExpectedCampaign(item, expectedWorkspaceKey) &&
       !activityLooksTiedToRemovedLocalWork(item, [...removedLocalWorkReferences, ...topLevelDraftResetReferences]) &&
       !(removedTopLevelDraftWorkflowActivity && activityLooksLikeTopLevelDraftWorkflow(item)) &&
