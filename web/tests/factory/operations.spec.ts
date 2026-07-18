@@ -12127,6 +12127,101 @@ test("operations workbench restores top-level source copies to the editable supp
   expect(storedState).toContain("Top-level Ormskirk source copy");
 });
 
+test("operations workbench restores active working copies to the editable draft tab", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+  const workingCopyId = `source:${campaignId}:digital-supporter-email`;
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 57, lastSequence: 2090, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Keep KFC Out of Ormskirk",
+          place: "Ormskirk, Lancashire",
+          next: "Check Ormskirk appeal records",
+        }),
+        evidence: campaignEvidence([{ id: "working-copy-tab", description: "Check Ormskirk appeal records", reason: "Active working copy tab guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate(
+    ({ id, draftId }) => {
+      localStorage.setItem(
+        `cf_operations_demo_v3:${id}`,
+        JSON.stringify({
+          workspaceKey: id,
+          sourceStateVersion: 57,
+          sourceLastSequence: 2090,
+          sourceDocumentSignature: `source:${id}:current-baseline`,
+          sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+          selectedSegment: "source_primary",
+          subject: "Fixture supporter tab should not stay selected",
+          body: "This top-level body is not the active working copy; the valid source working copy should remain the editable surface after sanitization.",
+          reviewerNote: "",
+          status: "draft",
+          mode: "compose",
+          activeDraft: "press_pitch",
+          activeView: "drafts",
+          contactFilter: "all",
+          contactReadinessFilter: "all",
+          scheduleIntent: "after_approval",
+          queuedAt: null,
+          localActions: [],
+          workingDrafts: [
+            {
+              id: draftId,
+              title: "Ormskirk supporter email from source",
+              channel: "Email",
+              subject: "Check the Ormskirk appeal status before phase change",
+              body: "This editable browser-local working copy came from the Ormskirk Digital Campaign Pack and must stay selected instead of reopening a canned fixture draft tab.",
+              reviewerNote: "Keep Ormskirk source warnings attached.",
+              status: "review",
+              queuedAt: null,
+              createdAt: "2026-07-17T20:05:00.000Z",
+              updatedAt: "2026-07-17T20:06:00.000Z",
+              sourceWorkingCopy: {
+                id: draftId,
+                campaignId: id,
+                title: "Ormskirk supporter email from source",
+                channel: "Email",
+                sourceDocument: "Digital Campaign Pack",
+                sourceDocumentKey: "digital_campaign_pack",
+                createdAt: "2026-07-17T20:05:00.000Z",
+                warnings: ["Confirm Ormskirk appeal status before stronger claims."],
+                provenance: `Source campaign ${id}; copied from Digital Campaign Pack into browser-local operations.`,
+              },
+            },
+          ],
+          activeWorkingDraftId: draftId,
+          sourceWorkingCopy: null,
+          sourceRecheckStateVersion: null,
+          sourceRecheckLastSequence: null,
+          sourceRecheckDocumentSignature: null,
+          sourceRecheckVisitedViews: [],
+          activity: [{ id: "working-copy-tab", label: "Viewed a working copy while a canned draft tab was saved." }],
+        }),
+      );
+    },
+    { id: campaignId, draftId: workingCopyId },
+  );
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=drafts`);
+  await expect(page.getByText("Keep KFC Out of Ormskirk · Ormskirk, Lancashire")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Working copy: Ormskirk supporter email from source" })).toBeVisible();
+  await expect(page.getByText("Source provenance attached")).toBeVisible();
+  await expect(page.getByLabel("Subject")).toHaveValue("Check the Ormskirk appeal status before phase change");
+  await expect(page.getByRole("heading", { name: "Press pitch" })).not.toBeVisible();
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "";
+  expect(storedState).toContain('"activeDraft":"supporter_email"');
+  expect(storedState).toContain(`"activeWorkingDraftId":"${workingCopyId}"`);
+  expect(storedState).toContain("Ormskirk supporter email from source");
+});
+
 test("operations portfolio sanitizes malformed browser-local state before local counts", async ({ page }) => {
   const barnetId = "6b54225d-afa3-41d1-b053-89741094f153";
   const campaignTitles: Record<string, { title: string; place: string; status: "partial" | "completed" }> = {

@@ -1233,7 +1233,7 @@ function sanitizeStateForWorkspace(state: DemoState, expectedWorkspaceKey: strin
     : workingDrafts[0]?.id ?? null;
   const removedDuplicatedTopLevelSourceCopy = Boolean(sourceWorkingCopyCandidate && workingDrafts.some((draft) => draft.id === sourceWorkingCopyCandidate.id));
   const sourceWorkingCopy = removedDuplicatedTopLevelSourceCopy ? null : sourceWorkingCopyCandidate;
-  const activeDraft = sourceWorkingCopy || state.status !== "draft" || state.queuedAt ? "supporter_email" : state.activeDraft;
+  const activeDraft = activeWorkingDraftId || sourceWorkingCopy || state.status !== "draft" || state.queuedAt ? "supporter_email" : state.activeDraft;
   const removedMismatchedLocalWork = localActions.length !== state.localActions.length || workingDrafts.length !== state.workingDrafts.length;
   const removedFixtureSourceWorkingCopy = Boolean(state.sourceWorkingCopy && sourceWorkingCopyLooksFixtureBound(state.sourceWorkingCopy));
   const removedMismatchedTopLevelSourceCopy = Boolean(state.sourceWorkingCopy && !sourceWorkingCopyCandidate && !removedFixtureSourceWorkingCopy);
