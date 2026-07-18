@@ -432,7 +432,10 @@ function hasExplicitEmptyBody(response: Response) {
 }
 
 function sourceRunHeaderOnly(value: unknown) {
-  return typeof value === "object" && value !== null ? { ...(value as Record<string, unknown>), events: [] } : value;
+  if (typeof value !== "object" || value === null) return value;
+  const header: Record<string, unknown> = { ...(value as Record<string, unknown>), events: [] };
+  if (header.batchId !== undefined && typeof header.batchId !== "string") delete header.batchId;
+  return header;
 }
 
 function uniqueStrings(values: unknown) {

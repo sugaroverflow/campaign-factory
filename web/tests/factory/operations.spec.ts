@@ -3437,7 +3437,7 @@ test("operations source API: normalizes recoverable legacy source references bef
   const curatedId = "6b54225d-afa3-41d1-b053-89741094f153";
   const originalFetch = globalThis.fetch;
   const requestedUrls: string[] = [];
-  const runBody = JSON.stringify({ campaignId: curatedId, status: "completed", stateVersion: 88, lastSequence: 900, events: [] });
+  const runBody = JSON.stringify({ campaignId: curatedId, batchId: null, status: "completed", stateVersion: 88, lastSequence: 900, events: [] });
   const documents = canonicalOperationsDocuments("Stop the leisure park redevelopment in Barnet");
   documents[0].flags = [
     "Unresolved load-bearing claim: Unresolved source claim 1",
@@ -3497,7 +3497,8 @@ test("operations source API: normalizes recoverable legacy source references bef
     expect(response.status).toBe(200);
     expectPublicSourceJsonBoundary(response.headers, "normalized legacy source references");
 
-    const body = (await response.json()) as { documents?: Array<{ flags?: string[] }>; evidence?: { groups?: Array<{ count?: number; claims?: Array<{ affectedOutputs?: string[]; contradictsClaimIds?: string[] }> }>; totals?: { claims?: number; loadBearing?: number; verifiedLoadBearing?: number; unresolvedLoadBearing?: number }; conflicts?: Array<{ id?: string; contradictsClaimIds?: string[] }>; nextChecks?: Array<{ claimIds?: string[]; affectedSections?: string[] }>; terminalGaps?: Array<{ id?: string }> }; sourceFailureKind?: string };
+    const body = (await response.json()) as { run?: { batchId?: unknown }; documents?: Array<{ flags?: string[] }>; evidence?: { groups?: Array<{ count?: number; claims?: Array<{ affectedOutputs?: string[]; contradictsClaimIds?: string[] }> }>; totals?: { claims?: number; loadBearing?: number; verifiedLoadBearing?: number; unresolvedLoadBearing?: number }; conflicts?: Array<{ id?: string; contradictsClaimIds?: string[] }>; nextChecks?: Array<{ claimIds?: string[]; affectedSections?: string[] }>; terminalGaps?: Array<{ id?: string }> }; sourceFailureKind?: string };
+    expect(body.run).not.toHaveProperty("batchId");
     expect(body.documents?.[0]?.flags).toEqual(["Unresolved load-bearing claim: Unresolved source claim 1"]);
     expect(body.evidence?.groups).toHaveLength(1);
     expect(body.evidence?.groups?.[0]?.count).toBe(2);
