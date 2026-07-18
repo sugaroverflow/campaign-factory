@@ -3677,6 +3677,58 @@ test("operations source API: normalizes recoverable legacy source references bef
   }
 });
 
+test("operations source API: rejects draft notes outside canonical source documents", async () => {
+  const curatedId = "6b54225d-afa3-41d1-b053-89741094f153";
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  const runBody = JSON.stringify({ campaignId: curatedId, status: "completed", stateVersion: 89, lastSequence: 901, events: [] });
+  const evidence = campaignEvidence([{ id: "canonical-draft-note-section", description: "Check Barnet source records", reason: "Draft note section guard", affectedSections: ["digital_pack"] }]);
+  evidence.draftNotes = [
+    { text: "Valid source note should be canonicalised to its document name.", section: "digital_campaign_pack" },
+    { text: "Fixture note section must not hydrate into the real operations workspace.", section: "Fixture outreach script" },
+  ] as typeof evidence.draftNotes;
+  const documentsBody = JSON.stringify({
+    documents: campaignOperationsDocuments({ title: "Stop the leisure park redevelopment in Barnet", place: "Barnet, London", next: "Check Barnet source records" }),
+    evidence,
+  });
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    requestedUrls.push(String(input));
+    expect(init?.headers).toEqual(SOURCE_FETCH_HEADERS);
+    expect(init?.cache).toBe("no-store");
+    expect(init?.redirect).toBe("manual");
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}`)) {
+      return new Response(runBody, { status: 200, headers: { "content-type": "application/json", "content-length": String(Buffer.byteLength(runBody)) } });
+    }
+
+    if (String(input).endsWith(`/api/factory/runs/${curatedId}/documents`)) {
+      return new Response(documentsBody, { status: 200, headers: { "content-type": "application/json", "content-length": String(Buffer.byteLength(documentsBody)) } });
+    }
+
+    throw new Error(`Unexpected source request: ${String(input)}`);
+  }) as typeof fetch;
+
+  try {
+    const response = await getOperationsSource(new Request(`http://localhost/api/operations/sources/${curatedId}`), { params: Promise.resolve({ id: curatedId }) });
+    expect(response.status).toBe(502);
+    expectPublicSourceJsonBoundary(response.headers, "non-canonical draft note source section");
+
+    const body = (await response.json()) as { error?: string; detail?: string; sourceStep?: string; sourceFailureKind?: string; documents?: unknown[] };
+    expect(body.error).toBe("Campaign source contract mismatch");
+    expect(body.detail).toBe("The public source did not return compiled documents and evidence in the expected shape.");
+    expect(body.sourceStep).toBe("documents");
+    expect(body.sourceFailureKind).toBe("contract_mismatch");
+    expect(body.documents).toBeUndefined();
+    expect(requestedUrls).toEqual([
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}`,
+      `https://campaign-factory.vercel.app/api/factory/runs/${curatedId}/documents`,
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("operations source API: restores legacy group-level claim labels before hydration", async () => {
   const curatedId = "57678ae0-29fd-4b4b-8a53-5c711cdb21cf";
   const originalFetch = globalThis.fetch;

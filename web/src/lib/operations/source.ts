@@ -92,6 +92,10 @@ function sourceTextIncludes(value: string, expected: string) {
   return normaliseSourceInlineText(value).includes(normaliseSourceInlineText(expected));
 }
 
+function sourceTextIncludesIgnoreCase(value: string, expected: string) {
+  return normaliseSourceInlineText(value).toLowerCase().includes(normaliseSourceInlineText(expected).toLowerCase());
+}
+
 const OPERATIONS_SOURCE_HTML_ENTITIES: Record<string, string> = {
   aacute: "á",
   Aacute: "Á",
@@ -516,6 +520,10 @@ export function hasConsistentOperationsDocumentEvidence(documents: CompiledDocum
       if (normalizedFlag === OPERATIONS_DOCUMENT_FLAG_NEEDS_VERIFICATION && (!sourceTextIncludes(plainText, OPERATIONS_DOCUMENT_NEEDS_VERIFICATION_NOTE) || !sourceTextIncludes(renderedText, OPERATIONS_DOCUMENT_NEEDS_VERIFICATION_NOTE))) return false;
       if (normalizedFlag === OPERATIONS_DOCUMENT_FLAG_PLACEHOLDERS && (!doc.isPack || !sourceTextIncludes(plainText, OPERATIONS_PACK_VERIFICATION_NOTES_HEADING) || !sourceTextIncludes(renderedText, OPERATIONS_PACK_VERIFICATION_NOTES_HEADING))) return false;
     }
+  }
+
+  for (const note of evidence.draftNotes) {
+    if (!documents.some((doc) => sourceTextIncludesIgnoreCase(doc.plainText, note.section) || sourceTextIncludesIgnoreCase(visibleRenderedText(doc.html), note.section))) return false;
   }
 
   return true;

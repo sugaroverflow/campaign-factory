@@ -1022,7 +1022,13 @@ function normalizeSourceDraftNotes(value: unknown) {
       notes.push(note);
       continue;
     }
-    const normalizedSection = normalizeSourceVisibleText(record.section);
+    const visibleSection = normalizeSourceVisibleText(record.section);
+    const normalizedSectionKey = visibleSection ? SOURCE_DOCUMENT_KEY_BY_VISIBLE_TEXT.get(visibleSection) ?? SOURCE_DOCUMENT_KEY_BY_VISIBLE_TEXT.get(visibleSection.toLowerCase()) : undefined;
+    const normalizedSection = normalizedSectionKey
+      ? SOURCE_CANONICAL_DOCUMENTS_BY_KEY.get(normalizedSectionKey)?.name
+      : visibleSection
+        ? SOURCE_DOCUMENT_NAME_BY_VISIBLE_TEXT.get(visibleSection) ?? SOURCE_DOCUMENT_NAME_BY_VISIBLE_TEXT.get(visibleSection.toLowerCase())
+        : undefined;
     const normalizedText = normalizeSourceVisibleText(record.text);
     if (!normalizedSection || !normalizedText) {
       notes.push(note);
