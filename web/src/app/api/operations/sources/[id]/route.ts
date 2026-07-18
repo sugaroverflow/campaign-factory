@@ -97,6 +97,8 @@ const SOURCE_AFFECTED_SECTION_ALIASES: Record<string, string> = {
 const SOURCE_VERIFICATION_LABELS = new Set<string>(VERIFICATION_LABELS);
 const SOURCE_VERIFICATION_LABEL_BY_VISIBLE_TEXT = new Map<string, string>(VERIFICATION_LABELS.map((label) => [normaliseOperationsSourceInlineText(label), label]));
 const SOURCE_UNRESOLVED_LABELS = new Set(["Conflicting evidence", "Verification incomplete", "External information unavailable"]);
+const SOURCE_CLAIM_TYPES = new Set(["authority", "process", "deadline", "officeholder", "policy", "stakeholder_position", "number", "context", "other"]);
+const SOURCE_CLAIM_CONFIDENCES = new Set(["high", "medium", "low"]);
 const SOURCE_DOCUMENT_FLAG_PREFIX_CLAIM = "Unresolved load-bearing claim: ";
 // Operations only needs the source run header; request an event-free polling
 // page when recovering from an empty canonical run-read failure so large public
@@ -488,6 +490,22 @@ function normalizeSourceVerificationLabel(value: unknown) {
   return normalized ? SOURCE_VERIFICATION_LABEL_BY_VISIBLE_TEXT.get(normalized) : undefined;
 }
 
+function normalizeSourceClaimType(value: unknown) {
+  const normalized = normalizeSourceVisibleText(value);
+  if (!normalized) return undefined;
+  const key = normalized
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return SOURCE_CLAIM_TYPES.has(key) ? key : undefined;
+}
+
+function normalizeSourceClaimConfidence(value: unknown) {
+  const normalized = normalizeSourceVisibleText(value)?.toLowerCase();
+  return normalized && SOURCE_CLAIM_CONFIDENCES.has(normalized) ? normalized : undefined;
+}
+
 function normalizeSourceAffectedSectionKey(value: string) {
   const visibleValue = normaliseOperationsSourceInlineText(value);
   if (SOURCE_AFFECTED_SECTION_KEYS.has(visibleValue)) return visibleValue;
@@ -639,11 +657,15 @@ function normalizeSourceEvidenceClaim(value: unknown, claimIds: Set<string>, fal
   const affectedOutputs = normalizeSourceAffectedSectionValues(record.affectedOutputs);
   const contradictsClaimIds = Array.isArray(record.contradictsClaimIds) ? (uniqueSourceReferenceIds(record.contradictsClaimIds) as string[]) : record.contradictsClaimIds;
   const label = normalizeSourceVerificationLabel(record.label) ?? fallbackLabel;
+  const type = normalizeSourceClaimType(record.type);
+  const confidence = normalizeSourceClaimConfidence(record.confidence);
   return {
     ...record,
     ...(id ? { id } : {}),
     ...(text ? { text } : {}),
     ...(label ? { label } : {}),
+    ...(type ? { type } : {}),
+    ...(confidence ? { confidence } : {}),
     ...(record.excerpt === null ? { excerpt: undefined } : excerpt ? { excerpt } : {}),
     affectedOutputs,
     contradictsClaimIds: Array.isArray(contradictsClaimIds) && claimIds.size > 0 ? contradictsClaimIds.filter((claimId) => claimId !== id && claimIds.has(claimId)) : contradictsClaimIds === null ? undefined : contradictsClaimIds,
