@@ -12677,6 +12677,55 @@ test("operations workbench: source terminal gaps require public text and journey
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
+test("operations workbench: future-dated source terminal gaps do not hydrate a real workspace", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "partial", stateVersion: 10, lastSequence: 100, events: [] },
+        documents: canonicalOperationsDocuments("Future terminal gap Ormskirk"),
+        evidence: {
+          groups: [],
+          conflicts: [],
+          nextChecks: [
+            {
+              id: "future-gap-check",
+              description: "Future-dated terminal gaps should fail closed",
+              reason: "Source chronology must not describe checks as complete before their public timestamp exists.",
+              claimIds: [],
+              affectedSections: ["evidence"],
+            },
+          ],
+          terminalGaps: [
+            {
+              id: "future-terminal-gap",
+              description: "Future terminal gap should not hydrate Ormskirk",
+              step: 3,
+              at: "2999-07-16T20:30:00Z",
+            },
+          ],
+          draftNotes: [],
+          totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 },
+        },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/typed public document contract/i)).toBeVisible();
+  await expect(page.getByText("Future terminal gap Ormskirk")).toHaveCount(0);
+  await expect(page.getByText("Future-dated terminal gaps should fail closed")).toHaveCount(0);
+  await expect(page.getByText("Future terminal gap should not hydrate Ormskirk")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
 test("operations workbench: source evidence conflicts must match ledger claims", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 

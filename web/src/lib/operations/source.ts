@@ -595,13 +595,15 @@ function isOperationsNextCheck(value: unknown) {
 }
 
 function isOperationsTerminalGap(value: unknown) {
+  const at = isRecord(value) ? value.at : undefined;
   return (
     isRecord(value) &&
     isNonEmptyString(value.id) &&
     isNonEmptyString(value.description) &&
     isOptionalString(value.agentRunId) &&
     isOptionalJourneyStep(value.step) &&
-    isIsoDateTimeString(value.at)
+    isIsoDateTimeString(at) &&
+    Date.parse(at) <= Date.now()
   );
 }
 
