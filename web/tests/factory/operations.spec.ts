@@ -14486,6 +14486,112 @@ test("operations workbench trims and drops blank restored local action fields", 
   expect(storedState).not.toContain("blank-action-title");
 });
 
+test("operations workbench rejects restored local actions with invalid workflow enums", async ({ page }) => {
+  const campaignId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "completed", stateVersion: 64, lastSequence: 2140, events: [] },
+        documents: campaignOperationsDocuments({
+          title: "Stop the leisure park redevelopment in Barnet",
+          place: "Barnet, London",
+          next: "Check Barnet committee records",
+        }),
+        evidence: campaignEvidence([{ id: "invalid-local-action-enums", description: "Check Barnet committee records", reason: "Invalid restored action enum guard", affectedSections: ["strategy"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 64,
+        sourceLastSequence: 2140,
+        sourceDocumentSignature: `source:${id}:current-baseline`,
+        sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+        selectedSegment: "source_primary",
+        subject: "Barnet local source draft",
+        body: "This browser-local draft keeps Barnet source context while invalid restored action workflow values are sanitized.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "actions",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [
+          {
+            id: `source:${id}:barnet-valid-action`,
+            title: "Check Barnet committee records",
+            source: "Tactics and Timeline",
+            owner: "Campaigner",
+            timing: "Next",
+            priority: "High",
+            status: "next",
+            provenance: `Source campaign ${id}; created from Barnet source records.`,
+          },
+          {
+            id: `source:${id}:invalid-priority-action`,
+            title: "Escalate Barnet action with invalid priority",
+            source: "Tactics and Timeline",
+            owner: "Campaigner",
+            timing: "Next",
+            priority: "Urgent",
+            status: "next",
+            provenance: `Source campaign ${id}; invalid priority should be scrubbed.`,
+          },
+          {
+            id: `source:${id}:invalid-status-action`,
+            title: "Escalate Barnet action with invalid status",
+            source: "Tactics and Timeline",
+            owner: "Campaigner",
+            timing: "Next",
+            priority: "Medium",
+            status: "queued",
+            provenance: `Source campaign ${id}; invalid status should be scrubbed.`,
+          },
+        ],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [
+          { id: "valid-action-note", label: "Created action: Check Barnet committee records" },
+          { id: "invalid-priority-note", label: "Created action: Escalate Barnet action with invalid priority" },
+          { id: "invalid-status-note", label: "Created action: Escalate Barnet action with invalid status" },
+        ],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=actions`);
+  await expect(page.getByText("Stop the leisure park redevelopment in Barnet · Barnet, London")).toBeVisible();
+  await expect(page.getByText("Check Barnet committee records", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Escalate Barnet action with invalid priority")).toHaveCount(0);
+  await expect(page.getByText("Escalate Barnet action with invalid status")).toHaveCount(0);
+
+  const storedState = (await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "";
+  const parsed = JSON.parse(storedState) as { localActions: Array<{ id: string; priority: string; status: string }> };
+  expect(parsed.localActions).toHaveLength(1);
+  expect(parsed.localActions[0]).toMatchObject({ id: `source:${campaignId}:barnet-valid-action`, priority: "High", status: "next" });
+  expect(storedState).toContain("workspace-sanitized");
+  expect(storedState).not.toContain("invalid-priority-action");
+  expect(storedState).not.toContain("invalid-status-action");
+  expect(storedState).not.toContain("invalid priority");
+  expect(storedState).not.toContain("invalid status");
+});
+
 test("operations workbench keeps one sanitized activity note when state is cleaned again", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 

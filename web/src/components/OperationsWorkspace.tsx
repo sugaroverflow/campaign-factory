@@ -917,7 +917,9 @@ function localActionHasMalformedField(action: Record<string, unknown>) {
   return ["id", "title", "source", "owner", "timing", "provenance", "priority", "status"].some((field) => {
     const value = action[field];
     return value !== undefined && typeof value !== "string";
-  });
+  }) ||
+    (action.priority !== undefined && action.priority !== "High" && action.priority !== "Medium" && action.priority !== "Low") ||
+    (action.status !== undefined && action.status !== "next" && action.status !== "in_progress" && action.status !== "blocked" && action.status !== "done");
 }
 
 function normaliseLocalActions(actions: unknown): LocalAction[] {
