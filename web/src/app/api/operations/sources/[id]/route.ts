@@ -667,6 +667,15 @@ function normalizeSourceDocumentSectionKeys(value: unknown, documentKey: unknown
   return normalized;
 }
 
+function normalizeSourceDocumentResourceCount(value: unknown) {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) return value;
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (!/^\d{1,6}$/.test(trimmed)) return value;
+  const count = Number.parseInt(trimmed, 10);
+  return Number.isSafeInteger(count) ? count : value;
+}
+
 function normalizeSourceDocuments(value: unknown) {
   return Array.isArray(value)
     ? value.map((document) => {
@@ -675,6 +684,7 @@ function normalizeSourceDocuments(value: unknown) {
           ...(document as Record<string, unknown>),
           plainText: normalizeSourceDocumentPlainText((document as Record<string, unknown>).plainText),
           sectionKeys: normalizeSourceDocumentSectionKeys((document as Record<string, unknown>).sectionKeys, (document as Record<string, unknown>).key),
+          resourceCount: normalizeSourceDocumentResourceCount((document as Record<string, unknown>).resourceCount),
         };
         return { ...normalizedDocument, flags: normalizeSourceDocumentFlags((document as Record<string, unknown>).flags, normalizedDocument) };
       })
