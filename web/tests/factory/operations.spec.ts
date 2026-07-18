@@ -20753,6 +20753,78 @@ test("operations workbench rejects source actions for non-canonical incomplete d
   expect(JSON.stringify(storedState)).not.toContain("Shadow Pack");
 });
 
+test("operations workbench rejects current source incomplete-document actions whose metadata drifts", async ({ page }) => {
+  const campaignId = "6b54225d-afa3-41d1-b053-89741094f153";
+
+  await page.route(/\/api\/operations\/sources\/([^/]+)$/, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: { campaignId, status: "completed", stateVersion: 78, lastSequence: 2280, events: [] },
+        documents: campaignOperationsDocuments({ title: "Stop the leisure park redevelopment in Barnet", place: "Barnet, London", next: "Check Barnet planning records" }),
+        evidence: campaignEvidence([{ id: "incomplete-document-metadata", description: "Check Barnet planning records", reason: "Incomplete document metadata guard", affectedSections: ["media_pack"] }]),
+      }),
+    });
+  });
+
+  await page.goto("/operations?demo=fixture");
+  await page.evaluate((id) => {
+    localStorage.setItem(
+      `cf_operations_demo_v3:${id}`,
+      JSON.stringify({
+        workspaceKey: id,
+        sourceStateVersion: 78,
+        sourceLastSequence: 2280,
+        sourceDocumentSignature: `source:${id}:completed:current-baseline`,
+        sourceAcknowledgedAt: "2026-07-17T20:00:00.000Z",
+        selectedSegment: "source_primary",
+        subject: "Local source draft reset",
+        body: "This browser-local workspace has a current incomplete-document action with shadow metadata.",
+        reviewerNote: "",
+        status: "draft",
+        mode: "compose",
+        activeDraft: "supporter_email",
+        activeView: "actions",
+        contactFilter: "all",
+        contactReadinessFilter: "all",
+        scheduleIntent: "after_approval",
+        queuedAt: null,
+        localActions: [
+          {
+            id: `source:${id}:incomplete:media_pack`,
+            title: "Follow up incomplete Media Pack",
+            source: "Campaign source · Media Pack incomplete",
+            owner: "Shadow reviewer",
+            timing: "After the primary source check and evidence warnings are understood",
+            priority: "Medium",
+            status: "blocked",
+            provenance: `Source campaign ${id}; Media Pack remains assembling, so this is a local work item rather than a false ready state.`,
+          },
+        ],
+        workingDrafts: [],
+        activeWorkingDraftId: null,
+        sourceWorkingCopy: null,
+        sourceRecheckStateVersion: null,
+        sourceRecheckLastSequence: null,
+        sourceRecheckDocumentSignature: null,
+        sourceRecheckVisitedViews: [],
+        activity: [{ id: "shadow-incomplete-owner", label: "Created action: Follow up incomplete Media Pack for Shadow reviewer" }],
+      }),
+    );
+  }, campaignId);
+
+  await page.goto(`/operations?campaignId=${campaignId}&view=actions`);
+  await expect(page.getByRole("heading", { name: "Owned local work from source checks" })).toBeVisible();
+  await expect(page.locator("main")).toContainText("Actions: 0 local items");
+  await expect(page.locator("main")).not.toContainText("Shadow reviewer");
+
+  const storedState = JSON.parse((await page.evaluate((id) => localStorage.getItem(`cf_operations_demo_v3:${id}`), campaignId)) ?? "{}");
+  expect(storedState.localActions).toHaveLength(0);
+  expect(storedState.activity.some((item: { id: string }) => item.id === "workspace-sanitized")).toBe(true);
+  expect(JSON.stringify(storedState)).not.toContain("Shadow reviewer");
+});
+
 test("operations workbench canonicalizes restored real campaign workspace keys", async ({ page }) => {
   const campaignId = "6b54225d-afa3-41d1-b053-89741094f153";
   const upperCampaignId = campaignId.toUpperCase();

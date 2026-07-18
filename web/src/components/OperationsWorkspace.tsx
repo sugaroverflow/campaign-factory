@@ -1323,7 +1323,15 @@ function localActionMatchesCurrentSourceAction(action: LocalAction, source: Camp
   if (currentCheckAction) return true;
 
   const currentIncompleteDocumentAction = source.incompleteDocuments.some(
-    (doc) => action.id === incompleteDocumentActionId(source, doc) && normaliseOperationsSourceInlineText(action.title) === normaliseOperationsSourceInlineText(`Follow up incomplete ${doc.name}`),
+    (doc) =>
+      action.id === incompleteDocumentActionId(source, doc) &&
+      normaliseOperationsSourceInlineText(action.title) === normaliseOperationsSourceInlineText(incompleteDocumentActionTitle(doc)) &&
+      normaliseOperationsSourceInlineText(action.source) === normaliseOperationsSourceInlineText(incompleteDocumentActionSource(doc)) &&
+      normaliseOperationsSourceInlineText(action.owner) === normaliseOperationsSourceInlineText(incompleteDocumentActionOwner(doc)) &&
+      normaliseOperationsSourceInlineText(action.timing) === normaliseOperationsSourceInlineText(incompleteDocumentActionTiming()) &&
+      action.priority === incompleteDocumentActionPriority(doc) &&
+      action.status === "blocked" &&
+      normaliseOperationsSourceInlineText(action.provenance) === normaliseOperationsSourceInlineText(incompleteDocumentActionProvenance(source, doc)),
   );
   if (currentIncompleteDocumentAction) return true;
 
@@ -2545,6 +2553,30 @@ function sourceCheckActionProvenance(source: CampaignSource, check: EvidenceAndN
 
 function incompleteDocumentActionId(source: CampaignSource, doc: CompiledDocument) {
   return `source:${source.campaignId}:incomplete:${doc.key}`;
+}
+
+function incompleteDocumentActionTitle(doc: CompiledDocument) {
+  return `Follow up incomplete ${doc.name}`;
+}
+
+function incompleteDocumentActionSource(doc: CompiledDocument) {
+  return `Campaign source · ${doc.name} incomplete`;
+}
+
+function incompleteDocumentActionOwner(doc: CompiledDocument) {
+  return doc.key === "media_pack" ? "Local organiser" : "Reviewer";
+}
+
+function incompleteDocumentActionTiming() {
+  return "After the primary source check and evidence warnings are understood";
+}
+
+function incompleteDocumentActionPriority(doc: CompiledDocument): LocalAction["priority"] {
+  return doc.key === "media_pack" ? "Medium" : "Low";
+}
+
+function incompleteDocumentActionProvenance(source: CampaignSource, doc: CompiledDocument) {
+  return `Source campaign ${source.campaignId}; ${doc.name} remains ${doc.status}, so this is a local work item rather than a false ready state.`;
 }
 
 function buildSourceAudienceSegments(source: CampaignSource): Segment[] {
@@ -4344,13 +4376,13 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
     if (!source) return;
     createLocalAction({
       id: incompleteDocumentActionId(source, doc),
-      title: `Follow up incomplete ${doc.name}`,
-      source: `Campaign source · ${doc.name} incomplete`,
-      owner: doc.key === "media_pack" ? "Local organiser" : "Reviewer",
-      timing: "After the primary source check and evidence warnings are understood",
-      priority: doc.key === "media_pack" ? "Medium" : "Low",
+      title: incompleteDocumentActionTitle(doc),
+      source: incompleteDocumentActionSource(doc),
+      owner: incompleteDocumentActionOwner(doc),
+      timing: incompleteDocumentActionTiming(),
+      priority: incompleteDocumentActionPriority(doc),
       status: "blocked",
-      provenance: `Source campaign ${source.campaignId}; ${doc.name} remains ${doc.status}, so this is a local work item rather than a false ready state.`,
+      provenance: incompleteDocumentActionProvenance(source, doc),
     });
   };
 
@@ -4816,9 +4848,9 @@ function OperationsCampaignWorkspace({ campaignId, initialView }: { campaignId?:
           const id = incompleteDocumentActionId(source, doc);
           return {
             id,
-            title: `Follow up incomplete ${doc.name}`,
+            title: incompleteDocumentActionTitle(doc),
             detail: `${doc.name} is ${doc.status}; create owned local follow-up instead of treating the source pack as ready.`,
-            priority: doc.key === "media_pack" ? "Medium" as const : "Low" as const,
+            priority: incompleteDocumentActionPriority(doc),
             disabled: state.localActions.some((action) => action.id === id),
             create: () => createIncompleteDocumentAction(doc),
           };
