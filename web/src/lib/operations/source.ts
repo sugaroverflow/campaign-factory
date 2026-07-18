@@ -220,8 +220,10 @@ function isUniqueNonEmptyStringArray(value: unknown): value is string[] {
   if (!Array.isArray(value)) return false;
   const seen = new Set<string>();
   for (const item of value) {
-    if (!isNonEmptyString(item) || seen.has(item)) return false;
-    seen.add(item);
+    if (!isNonEmptyString(item)) return false;
+    const normalized = item.trim().normalize("NFC");
+    if (!normalized || seen.has(normalized)) return false;
+    seen.add(normalized);
   }
   return true;
 }
