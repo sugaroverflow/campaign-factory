@@ -224,18 +224,6 @@ function hasCompiledDocumentDisclaimer(value: Pick<CompiledDocument, "html" | "p
   return sourceTextIncludes(value.plainText, DOCUMENT_DISCLAIMER) && sourceTextIncludes(visibleRenderedText(value.html), DOCUMENT_DISCLAIMER);
 }
 
-function isUniqueNonEmptyStringArray(value: unknown): value is string[] {
-  if (!Array.isArray(value)) return false;
-  const seen = new Set<string>();
-  for (const item of value) {
-    if (!isNonEmptyString(item)) return false;
-    const normalized = item.trim().normalize("NFC");
-    if (!normalized || seen.has(normalized)) return false;
-    seen.add(normalized);
-  }
-  return true;
-}
-
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
@@ -307,10 +295,6 @@ function isIsoDateTimeString(value: unknown): value is string {
   if (typeof value !== "string") return false;
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return false;
   return Number.isFinite(Date.parse(value));
-}
-
-function isOptionalUniqueNonEmptyStringArray(value: unknown): value is string[] | undefined {
-  return value === undefined || isUniqueNonEmptyStringArray(value);
 }
 
 function isUniqueCanonicalSourceIdArray(value: unknown): value is string[] {
@@ -410,8 +394,8 @@ function isOperationsFactoryEvent(value: unknown, campaignId: string): value is 
     isOptionalString(payload.verb) &&
     isOptionalString(payload.agentKey) &&
     isOptionalString(payload.agentDisplayName) &&
-    isOptionalUniqueNonEmptyStringArray(payload.sourceIds) &&
-    isOptionalUniqueNonEmptyStringArray(payload.claimIds) &&
+    isOptionalUniqueCanonicalSourceIdArray(payload.sourceIds) &&
+    isOptionalUniqueCanonicalSourceIdArray(payload.claimIds) &&
     isOptionalString(payload.proposalId) &&
     isOptionalString(payload.judgementId) &&
     isOptionalString(payload.handoffToAgentRunId) &&

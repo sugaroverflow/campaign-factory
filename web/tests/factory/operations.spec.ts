@@ -13505,6 +13505,52 @@ test("operations workbench: padded source event ids do not hydrate a real worksp
   await expect(page.getByText("A. Patel")).toHaveCount(0);
 });
 
+test("operations workbench: padded source event reference ids do not hydrate a real workspace", async ({ page }) => {
+  const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
+
+  await page.route(`**/api/operations/sources/${campaignId}`, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sourceOrigin: "https://campaign-factory.vercel.app",
+        run: {
+          campaignId,
+          status: "partial",
+          stateVersion: 10,
+          lastSequence: 100,
+          events: [
+            {
+              eventId: "event-1",
+              sequence: 1,
+              campaignId,
+              type: "document.status",
+              at: "2026-07-16T20:40:00Z",
+              visibility: "public",
+              payload: {
+                summary: "Padded source event references should not hydrate Ormskirk",
+                sourceIds: [" source-1 "],
+                claimIds: [" claim-1 "],
+              },
+            },
+          ],
+        },
+        documents: canonicalOperationsDocuments("Padded source event references Ormskirk"),
+        evidence: { groups: [], conflicts: [], nextChecks: [], terminalGaps: [], draftNotes: [], totals: { claims: 0, loadBearing: 0, verifiedLoadBearing: 0, unresolvedLoadBearing: 0 } },
+      }),
+    });
+  });
+
+  await page.goto(`/operations?campaignId=${campaignId}`);
+
+  await expect(page.getByRole("heading", { name: "Campaign source unavailable" })).toBeVisible();
+  await expect(page.getByText("No fixture fallback used", { exact: true })).toBeVisible();
+  await expect(page.getByText(/did not match the requested campaign|typed public document contract/i)).toBeVisible();
+  await expect(page.getByText("Padded source event references should not hydrate Ormskirk")).toHaveCount(0);
+  await expect(page.getByText("Padded source event references Ormskirk")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Make the St John the Baptist school street/i })).toHaveCount(0);
+  await expect(page.getByText("A. Patel")).toHaveCount(0);
+});
+
 test("operations workbench: invisible source event summaries do not hydrate a real workspace", async ({ page }) => {
   const campaignId = "69f257b6-9913-4395-94f7-5c25b4b5fe95";
 
