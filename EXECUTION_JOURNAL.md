@@ -192,3 +192,34 @@ not consume the audience's allowance on the venue's shared egress IP. The
 caps themselves are unchanged (session and per-IP defaults both 200 for the
 event). One-off `update ... set run_count = 0` against the production
 sessions/ip_usage tables; no schema change.
+
+## 17 Jul 2026 ~20:50 BST — database migrated to Campaign Lab's Neon project
+
+Post-conference discovery: the app had been running the whole time on a
+free-tier Neon project (`neon-claret-kettle`, us-east-1) inside the
+sugaroverflow personal Vercel org — created by the Vercel storage
+integration — not on Campaign Lab's `CampaignFactoryDB` (eu-west-2). The
+free tier's 5 GB/month data-transfer quota was exhausted on conference day
+(universal 2.5s polling caused by the SSE localhost-URL bug, since fixed),
+hard-blocking all connections until the personal resource was upgraded to
+Launch as an emergency measure.
+
+Tonight's migration: full pg_dump (212 MB DB → 76 MB custom-format dump,
+neon_auth excluded) restored into `CampaignFactoryDB` with zero errors; all
+13 spot-checked table counts match exactly (111,706 factory events, 121
+runs, 27 batches). Repointed DATABASE_URL / DATABASE_URL_UNPOOLED /
+FACTORY_DATABASE_URL on Vercel (prod + preview), FACTORY_DATABASE_URL on
+the Railway worker (direct/unpooled, required for LISTEN), and
+web/.env.local. Web redeployed; worker rebooted clean (migrations already
+applied, environment identity ok). Cutover proven with a create-and-cancel
+probe run that landed in CampaignFactoryDB and left zero rows in the old
+project. Pre-migration safety copies on the operator's machine:
+`~/campaign-factory-migration/` (source dump + the target's small
+pre-overwrite backup, which held 6 dev-test legacy runs never shown on the
+live site).
+
+Outstanding: rotate the old project's `neondb_owner` password (credential
+was exposed in a session transcript on 16 Jul), disconnect the Neon
+integration from the Vercel project, then downgrade/delete
+`neon-claret-kettle` once comfortable. Conference-day caps (session/IP 200,
+kill-switch $600) still await the post-event posture decision.
