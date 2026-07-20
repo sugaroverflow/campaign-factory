@@ -15,7 +15,7 @@ import { MAX_JUDGEMENT_REQUESTS_PER_RUN } from "@web/lib/factory/contracts/state
 // does not re-export document reads.
 import { listLatestDocuments } from "@web/lib/factory/store/documents.js";
 import { config } from "../config.js";
-import { isByokBlob, openByok } from "../byok.js";
+import { openForRun } from "../byok.js";
 import type { ModelProvider } from "@web/lib/anthropic.js";
 import { sql } from "../db/pool.js";
 import type { Sql } from "../db/pool.js";
@@ -91,22 +91,16 @@ export function makeRunner(agents: RuntimeAgents): RunFn {
     }
     const emitter = new Emitter(s, campaignId, effectiveBatchId);
 
-    // BYOK: open the visitor's sealed key for this execution only. A byokRun
-    // whose seal is missing or no longer opens (stripped early,
-    // FACTORY_BYOK_SECRET changed) is SYSTEMIC — throw so pg-boss retries and
-    // dead-letters visibly, never a silent fall-through to the house key.
-    let byokKey: string | undefined;
-    if (run.meta.byokRun === true) {
-      if (!isByokBlob(run.meta.byok)) {
-        releaseRun(campaignId);
-        throw new Error(`runCampaign: BYOK run ${campaignId} has no sealed key`);
-      }
-      byokKey = openByok(run.meta.byok);
+    // BYOK: open the visitor's sealed key for this execution only (null for
+    // house-key runs). openForRun throws on a missing/unopenable seal —
+    // SYSTEMIC, so release the registry slot and let pg-boss retry.
+    let byok: { key: string; provider: ModelProvider } | null;
+    try {
+      byok = openForRun(run.meta, campaignId);
+    } catch (e) {
+      releaseRun(campaignId);
+      throw e;
     }
-    // Provider the key belongs to (meta.byokProvider, written at intake).
-    // House-key runs are always Anthropic.
-    const apiProvider: ModelProvider =
-      byokKey && run.meta.byokProvider === "openrouter" ? "openrouter" : "anthropic";
 
     try {
       const ctx: RuntimeContext = {
@@ -119,8 +113,8 @@ export function makeRunner(agents: RuntimeAgents): RunFn {
         profile,
         batchId: effectiveBatchId,
         signal: handle.controller.signal,
-        apiKey: config.modelMode === "live" ? (byokKey ?? config.anthropicApiKey) : undefined,
-        apiProvider,
+        apiKey: config.modelMode === "live" ? (byok?.key ?? config.anthropicApiKey) : undefined,
+        apiProvider: byok?.provider ?? "anthropic",
         executeAgentTurn: agents.executeAgentTurn,
         review: agents.review,
         runQA: agents.runQA,

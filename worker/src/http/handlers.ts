@@ -11,7 +11,7 @@ import type {
 } from "@web/lib/factory/contracts/api.js";
 import { RUNTIME_LIMITS } from "@web/lib/factory/contracts/limits.js";
 import { config } from "../config.js";
-import { byokEnabled, sealByok } from "../byok.js";
+import { byokEnabled, byokMatchesProvider, sealIntoMeta } from "../byok.js";
 import { sql } from "../db/pool.js";
 import { mintStreamToken, verifyStreamToken } from "./signing.js";
 import { enqueueRun, cancelQueuedRun } from "../queue/boss.js";
@@ -71,14 +71,13 @@ export async function handleStartRun(body: unknown): Promise<HandlerResult> {
         : undefined;
   if (rawByokKey) {
     const provider = b.byokProvider === "openrouter" ? "openrouter" : "anthropic";
-    const prefixOk = provider === "openrouter" ? /^sk-or-/.test(rawByokKey) : /^sk-ant-/.test(rawByokKey);
-    if (!prefixOk) {
+    if (!byokMatchesProvider(rawByokKey, provider)) {
       return bad(400, `byok key does not match the declared provider (${provider})`);
     }
     if (!byokEnabled()) {
       return bad(503, "BYOK is not configured on this worker (FACTORY_BYOK_SECRET unset)");
     }
-    byokMeta = { byokRun: true, byokProvider: provider, byok: sealByok(rawByokKey) };
+    byokMeta = { ...sealIntoMeta(rawByokKey, provider) };
   }
 
   const s = sql();

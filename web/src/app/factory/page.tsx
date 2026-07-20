@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { startFactoryRun } from "@/lib/factory/client/api";
+import { keyLooksValid, PROVIDER_META, BYOK_TYPICAL_COST, BYOK_HARD_CAP } from "@/lib/byok";
 import { rememberFactoryRun } from "@/lib/factory/client";
 import styles from "./factory-intake.module.css";
 
@@ -56,10 +57,6 @@ const EXAMPLE = {
   place: "Leicester (St John the Baptist CofE Primary School)",
 };
 
-function keyLooksValid(key: string): boolean {
-  const k = key.trim();
-  return /^sk-ant-[A-Za-z0-9_-]{10,}$/.test(k) || /^sk-or-[A-Za-z0-9_-]{10,}$/.test(k);
-}
 
 export default function FactoryIntakePage() {
   const router = useRouter();
@@ -187,44 +184,45 @@ export default function FactoryIntakePage() {
               Keys start with <code>sk-ant-</code> (Anthropic) or <code>sk-or-</code> (OpenRouter) — paste the
               whole key. Create one at{" "}
               <a
-                href="https://console.anthropic.com/settings/keys"
+                href={PROVIDER_META.anthropic.consoleUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="underline underline-offset-2"
               >
-                console.anthropic.com
+                {PROVIDER_META.anthropic.consoleLabel}
               </a>{" "}
               or{" "}
               <a
-                href="https://openrouter.ai/settings/keys"
+                href={PROVIDER_META.openrouter.consoleUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="underline underline-offset-2"
               >
-                openrouter.ai
+                {PROVIDER_META.openrouter.consoleLabel}
               </a>
               .
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              A campaign typically costs $1.50–$3 of your credit, hard-capped at $20. Your key is encrypted,
-              used only for this campaign&apos;s agents, and deleted when the run finishes — get one at{" "}
+              A campaign typically costs {BYOK_TYPICAL_COST} of your credit, hard-capped at {BYOK_HARD_CAP}. Your
+              key is encrypted, used only for this campaign&apos;s agents, and deleted when the run finishes — get
+              one at{" "}
               <a
-                href="https://console.anthropic.com/settings/keys"
+                href={PROVIDER_META.anthropic.consoleUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="underline underline-offset-2"
               >
-                console.anthropic.com
+                {PROVIDER_META.anthropic.consoleLabel}
               </a>{" "}
               or{" "}
               <a
-                href="https://openrouter.ai/settings/keys"
+                href={PROVIDER_META.openrouter.consoleUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="underline underline-offset-2"
               >
-                openrouter.ai
+                {PROVIDER_META.openrouter.consoleLabel}
               </a>
               .
             </p>

@@ -75,3 +75,37 @@ export async function refundIpRun(ip: string): Promise<void> {
     where ip = ${ip}
   `;
 }
+
+export type SlotOutcome<T> = { kind: "session_cap" } | { kind: "ip_cap" } | { kind: "done"; result: T };
+
+/** Claim BOTH run counters atomically, run the guarded step, refund on
+ * failure — the whole choreography behind one call so a route can't forget a
+ * refund leg. Order is load-bearing (commit 7fb2411): session first, then
+ * IP; if the IP claim loses after the session claim won, the session slot is
+ * refunded. If `fn` throws or `failed(result)` is true, both slots are
+ * refunded (throws are rethrown after the refund). */
+export async function withRunSlots<T>(
+  sid: string,
+  ip: string,
+  caps: { runCap: number; ipRunCap: number },
+  fn: () => Promise<T>,
+  failed: (result: T) => boolean,
+): Promise<SlotOutcome<T>> {
+  if (!(await claimRun(sid, caps.runCap))) return { kind: "session_cap" };
+  if (!(await claimIpRun(ip, caps.ipRunCap))) {
+    await refundRun(sid);
+    return { kind: "ip_cap" };
+  }
+  try {
+    const result = await fn();
+    if (failed(result)) {
+      await refundRun(sid);
+      await refundIpRun(ip);
+    }
+    return { kind: "done", result };
+  } catch (err) {
+    await refundRun(sid);
+    await refundIpRun(ip);
+    throw err;
+  }
+}
