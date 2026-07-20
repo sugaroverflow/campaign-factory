@@ -24,10 +24,15 @@ function detectProvider(key: string): ByokProvider | null {
 
 // Zero-cost key check against the key's own provider. Anthropic: /v1/models
 // lists models without spending tokens. OpenRouter: /api/v1/key returns the
-// key's metadata. Only a definite 401/403 counts as "rejected"; network
+// key's metadata, then /api/v1/credits catches an authenticated-but-empty
+// account ("no_credits") — otherwise the run starts and every agent fails
+// fast on 402s. Only a definite 401/403 counts as "rejected"; network
 // trouble or 5xx must not bounce a valid key, so it maps to "unverifiable"
 // (caller returns 502).
-async function validateByokKey(key: string, provider: ByokProvider): Promise<"ok" | "rejected" | "unverifiable"> {
+async function validateByokKey(
+  key: string,
+  provider: ByokProvider,
+): Promise<"ok" | "rejected" | "unverifiable" | "no_credits"> {
   const req: { url: string; headers: Record<string, string> } =
     provider === "openrouter"
       ? { url: "https://openrouter.ai/api/v1/key", headers: { authorization: `Bearer ${key}` } }
@@ -37,9 +42,26 @@ async function validateByokKey(key: string, provider: ByokProvider): Promise<"ok
         };
   try {
     const r = await fetch(req.url, { headers: req.headers, signal: AbortSignal.timeout(8000) });
-    if (r.ok) return "ok";
     if (r.status === 401 || r.status === 403) return "rejected";
-    return "unverifiable";
+    if (!r.ok) return "unverifiable";
+    if (provider === "openrouter") {
+      // Balance check is advisory: a definite ≤0 balance rejects, anything
+      // unreadable passes through (the executor fails fast on 402 anyway).
+      try {
+        const c = await fetch("https://openrouter.ai/api/v1/credits", {
+          headers: req.headers,
+          signal: AbortSignal.timeout(8000),
+        });
+        if (c.ok) {
+          const j = (await c.json()) as { data?: { total_credits?: number; total_usage?: number } };
+          const remaining = (j.data?.total_credits ?? NaN) - (j.data?.total_usage ?? NaN);
+          if (Number.isFinite(remaining) && remaining <= 0) return "no_credits";
+        }
+      } catch {
+        /* balance unknown — let the run proceed */
+      }
+    }
+    return "ok";
   } catch {
     return "unverifiable";
   }
@@ -117,15 +139,13 @@ export async function POST(req: Request) {
       provider === "openrouter" ? "openrouter.ai/settings/keys" : "console.anthropic.com → API keys";
     const check = await validateByokKey(byokKey, provider);
     if (check !== "ok") {
-      return NextResponse.json(
-        {
-          error:
-            check === "rejected"
-              ? `${providerName} rejected that API key. Check it in ${consoleHint} and try again.`
-              : `We couldn't verify your API key with ${providerName} just now — please try again in a moment.`,
-        },
-        { status: check === "rejected" ? 400 : 502 },
-      );
+      const error =
+        check === "rejected"
+          ? `${providerName} rejected that API key. Check it in ${consoleHint} and try again.`
+          : check === "no_credits"
+            ? "That OpenRouter key works, but the account has no remaining credits — top up at openrouter.ai/settings/credits and try again."
+            : `We couldn't verify your API key with ${providerName} just now — please try again in a moment.`;
+      return NextResponse.json({ error }, { status: check === "unverifiable" ? 502 : 400 });
     }
   }
 
