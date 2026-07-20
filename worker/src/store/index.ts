@@ -6,7 +6,23 @@
 // bypassed it for functions it forgot; architecture review 2026-07-20, W7).
 // The worker-only readiness probes below are this barrel's real value-add.
 
-export * from "@web/lib/factory/store/index.js";
+// Module-level star re-exports with explicit .js paths: the web barrel's own
+// extensionless re-exports resolve under the web bundler but are silently
+// dropped by the worker's ESM runtime (learned the hard way — deployment
+// 550d5349 FAILED at boot with every store fn undefined). New store functions
+// still flow through automatically; only a brand-new store MODULE needs a
+// line here (tsc + src/__checks__/barrel-load.ts both catch a miss).
+export type { Db, JsonInput, Row } from "@web/lib/factory/store/types.js";
+export * from "@web/lib/factory/store/events.js";
+export * from "@web/lib/factory/store/runs.js";
+export * from "@web/lib/factory/store/agent-runs.js";
+export * from "@web/lib/factory/store/evidence.js";
+export * from "@web/lib/factory/store/state-versions.js";
+export * from "@web/lib/factory/store/proposals.js";
+export * from "@web/lib/factory/store/judgements.js";
+export * from "@web/lib/factory/store/documents.js";
+export * from "@web/lib/factory/store/ledger.js";
+export * from "@web/lib/factory/store/replay.js";
 export * from "@web/lib/factory/state/reducer.js";
 
 // Environment Identity Check (ADR 0014) — w1-db's authoritative fail-closed
