@@ -27,10 +27,15 @@ function factorySql(): ReturnType<typeof postgres> {
 
 async function factorySpentTodayUSD(): Promise<number> {
   try {
+    // BYOK runs (meta.byokRun) spend the visitor's own Anthropic budget, not
+    // ours — exclude them from the house daily cap. The flag outlives the
+    // sealed key (which is stripped at the terminal event).
     const rows = await factorySql()`
-      select coalesce(sum(cost_usd), 0) as usd
-      from factory.cost_ledger
-      where at >= date_trunc('day', now() at time zone 'utc') at time zone 'utc'
+      select coalesce(sum(c.cost_usd), 0) as usd
+      from factory.cost_ledger c
+      left join factory.factory_runs r on r.campaign_id = c.campaign_id
+      where c.at >= date_trunc('day', now() at time zone 'utc') at time zone 'utc'
+        and coalesce((r.meta->>'byokRun')::boolean, false) = false
     `;
     return rows[0] ? Number(rows[0].usd) : 0;
   } catch (err) {

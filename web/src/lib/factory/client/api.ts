@@ -13,12 +13,19 @@ export interface StartFactoryResult {
   error?: string;
 }
 
-export async function startFactoryRun(intake: CampaignIntake): Promise<StartFactoryResult> {
+export async function startFactoryRun(
+  intake: CampaignIntake,
+  opts?: { anthropicApiKey?: string },
+): Promise<StartFactoryResult> {
   try {
     const r = await fetch("/api/factory/runs", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ intake, mode: "public" }),
+      body: JSON.stringify({
+        intake,
+        mode: "public",
+        ...(opts?.anthropicApiKey ? { anthropicApiKey: opts.anthropicApiKey } : {}),
+      }),
     });
     const data = await r.json().catch(() => ({}));
     if (r.status === 202 || r.ok) {

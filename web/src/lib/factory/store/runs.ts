@@ -163,6 +163,16 @@ export async function createRun(sql: Db, input: CreateRunInput): Promise<Campaig
   return id;
 }
 
+/** Remove the sealed BYOK key from run meta once a run is terminal — no
+ * credential outlives its run. The `byokRun` flag is preserved: spend
+ * accounting reads it to keep excluding the run from the house budget. */
+export async function stripRunByok(sql: Db, campaignId: CampaignId): Promise<void> {
+  await sql`
+    update factory.factory_runs
+       set meta = meta - 'byok', updated_at = now()
+     where campaign_id = ${campaignId} and meta ? 'byok'`;
+}
+
 export async function getRun(sql: Db, campaignId: CampaignId): Promise<RunRecord | null> {
   const rows = await sql<Row[]>`select * from factory.factory_runs where campaign_id = ${campaignId}`;
   return rows.length ? mapRun(rows[0]) : null;

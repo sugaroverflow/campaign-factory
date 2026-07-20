@@ -16,6 +16,7 @@ export {
   setRunStatus,
   setRunStateVersion,
   setRunCost,
+  stripRunByok,
   getRunReadModel,
   type RunRecord,
   type BatchRecord,

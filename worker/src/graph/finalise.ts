@@ -129,6 +129,10 @@ export function finaliseNode() {
       payload: { summary: `Run ${status}`, detail: { status } },
     });
 
+    // BYOK: no credential outlives its run — drop the sealed key now that the
+    // run is terminal (byokRun stays for spend accounting).
+    await store.stripRunByok(ctx.sql, campaignId);
+
     return { finalStatus: status };
   };
 }

@@ -89,6 +89,9 @@ export const config = {
   presenterSpendCeilingUSD: num("CF_PRESENTER_SPEND_CEILING_USD", 80),
   // Live-mode model key. Presence is checked by /ready without spending tokens.
   anthropicApiKey: str("ANTHROPIC_API_KEY"),
+  // Secret sealing visitors' BYOK Anthropic keys at rest (worker/src/byok.ts).
+  // Unset ⇒ the worker rejects runs that carry a key rather than store plaintext.
+  byokSecret: str("FACTORY_BYOK_SECRET"),
   // Apply w1-db's db/factory/migrations on boot (dev convenience). In a managed
   // deploy, run `npm run migrate` in the release step and set this to 0.
   autoMigrate: bool("FACTORY_AUTO_MIGRATE", true),

@@ -15,6 +15,7 @@ import { MAX_JUDGEMENT_REQUESTS_PER_RUN } from "@web/lib/factory/contracts/state
 // does not re-export document reads.
 import { listLatestDocuments } from "@web/lib/factory/store/documents.js";
 import { config } from "../config.js";
+import { isByokBlob, openByok } from "../byok.js";
 import { sql } from "../db/pool.js";
 import type { Sql } from "../db/pool.js";
 import { Emitter } from "../events/emit.js";
@@ -89,6 +90,19 @@ export function makeRunner(agents: RuntimeAgents): RunFn {
     }
     const emitter = new Emitter(s, campaignId, effectiveBatchId);
 
+    // BYOK: open the visitor's sealed Anthropic key for this execution only.
+    // A byokRun whose seal is missing or no longer opens (stripped early,
+    // FACTORY_BYOK_SECRET changed) is SYSTEMIC — throw so pg-boss retries and
+    // dead-letters visibly, never a silent fall-through to the house key.
+    let byokKey: string | undefined;
+    if (run.meta.byokRun === true) {
+      if (!isByokBlob(run.meta.byok)) {
+        releaseRun(campaignId);
+        throw new Error(`runCampaign: BYOK run ${campaignId} has no sealed key`);
+      }
+      byokKey = openByok(run.meta.byok);
+    }
+
     try {
       const ctx: RuntimeContext = {
         sql: s,
@@ -100,7 +114,7 @@ export function makeRunner(agents: RuntimeAgents): RunFn {
         profile,
         batchId: effectiveBatchId,
         signal: handle.controller.signal,
-        apiKey: config.modelMode === "live" ? config.anthropicApiKey : undefined,
+        apiKey: config.modelMode === "live" ? (byokKey ?? config.anthropicApiKey) : undefined,
         executeAgentTurn: agents.executeAgentTurn,
         review: agents.review,
         runQA: agents.runQA,
@@ -240,4 +254,6 @@ export const deadHandler: DeadFn = async ({ campaignId, batchId }, reason) => {
   await emitter.emit({ type: "gap.terminal", payload: { summary: `Run abandoned: ${reason}` } });
   await store.setRunStatus(s, campaignId, "failed", { error: reason });
   await emitter.emit({ type: "run.failed", payload: { summary: "Run failed (dead-lettered)", detail: { reason } } });
+  // Dead-lettered runs bypass finalise — strip any sealed BYOK key here too.
+  await store.stripRunByok(s, campaignId);
 };

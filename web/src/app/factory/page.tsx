@@ -56,25 +56,36 @@ const EXAMPLE = {
   place: "Leicester (St John the Baptist CofE Primary School)",
 };
 
+function keyLooksValid(key: string): boolean {
+  return /^sk-ant-[A-Za-z0-9_-]{10,}$/.test(key.trim());
+}
+
 export default function FactoryIntakePage() {
   const router = useRouter();
   const [problem, setProblem] = useState("");
   const [place, setPlace] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touchedPlace, setTouchedPlace] = useState(false);
+  const [touchedKey, setTouchedKey] = useState(false);
 
   const problemOk = problem.trim().length >= 8;
   const placeOk = placeIsNamed(place);
-  const canSubmit = problemOk && placeOk && !busy;
+  const keyOk = keyLooksValid(apiKey);
+  const canSubmit = problemOk && placeOk && keyOk && !busy;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouchedPlace(true);
+    setTouchedKey(true);
     if (!canSubmit) return;
     setBusy(true);
     setError(null);
-    const res = await startFactoryRun({ problem: problem.trim(), place: place.trim() });
+    const res = await startFactoryRun(
+      { problem: problem.trim(), place: place.trim() },
+      { anthropicApiKey: apiKey.trim() },
+    );
     if (res.ok && res.data) {
       rememberFactoryRun({
         campaignId: res.data.campaignId,
@@ -147,6 +158,55 @@ export default function FactoryIntakePage() {
           ) : (
             <p className="text-sm text-muted-foreground">
               The agent factory researches a real decision route, so it needs to know exactly where.
+            </p>
+          )}
+        </div>
+
+        <div className="mt-6 space-y-2.5">
+          <Label htmlFor="apiKey" className="flex-wrap text-base">
+            Your Anthropic API key{" "}
+            <span className="font-normal text-muted-foreground">
+              (the agents run on your key — <span className="font-medium text-[var(--brand)]">required</span>)
+            </span>
+          </Label>
+          <Input
+            id="apiKey"
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            onBlur={() => setTouchedKey(true)}
+            placeholder="sk-ant-…"
+            autoComplete="off"
+            spellCheck={false}
+            className={`${styles.field} h-auto rounded-full px-4 py-2.5 text-base`}
+            aria-invalid={touchedKey && !keyOk}
+          />
+          {touchedKey && !keyOk ? (
+            <p className="text-sm text-[var(--bad)]">
+              Anthropic keys start with <code>sk-ant-</code> — paste the whole key. Create one at{" "}
+              <a
+                href="https://console.anthropic.com/settings/keys"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                console.anthropic.com
+              </a>
+              .
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              A campaign typically costs $1.50–$3 of your Anthropic credit, hard-capped at $20. Your key is
+              encrypted, used only for this campaign&apos;s agents, and deleted when the run finishes — get one at{" "}
+              <a
+                href="https://console.anthropic.com/settings/keys"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                console.anthropic.com
+              </a>
+              .
             </p>
           )}
         </div>

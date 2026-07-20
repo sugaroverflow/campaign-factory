@@ -11,6 +11,7 @@ import type {
 } from "@web/lib/factory/contracts/api.js";
 import { RUNTIME_LIMITS } from "@web/lib/factory/contracts/limits.js";
 import { config } from "../config.js";
+import { byokEnabled, sealByok } from "../byok.js";
 import { sql } from "../db/pool.js";
 import { mintStreamToken, verifyStreamToken } from "./signing.js";
 import { enqueueRun, cancelQueuedRun } from "../queue/boss.js";
@@ -56,6 +57,22 @@ export async function handleStartRun(body: unknown): Promise<HandlerResult> {
   }
   const profile: RunProfile = b.profile ?? "full";
 
+  // BYOK: seal the visitor's key before it touches the database. Policy (the
+  // key being REQUIRED for non-admin public runs) lives in the web gate; the
+  // worker's job is to never store or log the plaintext. byokRun survives the
+  // terminal strip so spend accounting can keep excluding the run.
+  let byokMeta: Record<string, unknown> = {};
+  if (typeof b.byokAnthropicKey === "string" && b.byokAnthropicKey.trim() !== "") {
+    const key = b.byokAnthropicKey.trim();
+    if (!/^sk-ant-/.test(key)) {
+      return bad(400, "byokAnthropicKey does not look like an Anthropic API key");
+    }
+    if (!byokEnabled()) {
+      return bad(503, "BYOK is not configured on this worker (FACTORY_BYOK_SECRET unset)");
+    }
+    byokMeta = { byokRun: true, byok: sealByok(key) };
+  }
+
   const s = sql();
   const campaignId = await store.createRun(s, {
     environmentId: config.environmentId,
@@ -65,7 +82,7 @@ export async function handleStartRun(body: unknown): Promise<HandlerResult> {
     status: "queued",
     // Durable: orphan-recovery re-enqueues carry no job data, so the runner
     // falls back to run.meta.profile.
-    meta: { profile },
+    meta: { profile, ...byokMeta },
   });
   await store.appendEvent(s, {
     campaignId,

@@ -12,6 +12,23 @@ import { forwardSigned, factoryEnvId, type ForwardResult } from "../_lib/worker"
 
 export const runtime = "nodejs";
 
+// Zero-cost key check: /v1/models lists models without spending tokens. Only
+// a definite 401/403 counts as "rejected"; network trouble or 5xx must not
+// bounce a valid key, so it maps to "unverifiable" (caller returns 502).
+async function validateAnthropicKey(key: string): Promise<"ok" | "rejected" | "unverifiable"> {
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/models?limit=1", {
+      headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (r.ok) return "ok";
+    if (r.status === 401 || r.status === 403) return "rejected";
+    return "unverifiable";
+  } catch {
+    return "unverifiable";
+  }
+}
+
 export async function POST(req: Request) {
   if (config.readonly) {
     return NextResponse.json(
@@ -30,6 +47,7 @@ export async function POST(req: Request) {
     intake?: { problem?: unknown; place?: unknown };
     problem?: unknown;
     place?: unknown;
+    anthropicApiKey?: unknown;
   };
   const problem = typeof b.intake?.problem === "string" ? b.intake.problem : (b.problem as string);
   const place = typeof b.intake?.place === "string" ? b.intake.place : (b.place as string);
@@ -48,8 +66,44 @@ export async function POST(req: Request) {
 
   const isAdmin = !!config.adminKey && (req.headers.get("x-cf-admin-key") || "").trim() === config.adminKey;
 
-  // Global spend kill-switch.
-  if (await overBudget()) {
+  // BYOK gate (user decision, 20 Jul 2026): public runs ALWAYS run on the
+  // visitor's own Anthropic key — the house key never funds a public run.
+  // Admin callers may omit the key (organizer testing on the house key).
+  const byokKey = typeof b.anthropicApiKey === "string" ? b.anthropicApiKey.trim() : "";
+  if (!byokKey && !isAdmin) {
+    return NextResponse.json(
+      {
+        byokRequired: true,
+        error:
+          "An Anthropic API key is required — your campaign's agents run on your key, so its cost (typically $1.50–$3, hard-capped at $20) goes to your account.",
+      },
+      { status: 400 },
+    );
+  }
+  if (byokKey) {
+    if (!/^sk-ant-[A-Za-z0-9_-]{10,}$/.test(byokKey)) {
+      return NextResponse.json(
+        { error: "That doesn't look like an Anthropic API key — they start with sk-ant-. Check for missing characters." },
+        { status: 400 },
+      );
+    }
+    const check = await validateAnthropicKey(byokKey);
+    if (check !== "ok") {
+      return NextResponse.json(
+        {
+          error:
+            check === "rejected"
+              ? "Anthropic rejected that API key. Check it in console.anthropic.com → API keys and try again."
+              : "We couldn't verify your API key with Anthropic just now — please try again in a moment.",
+        },
+        { status: check === "rejected" ? 400 : 502 },
+      );
+    }
+  }
+
+  // Global spend kill-switch — house-key runs only. BYOK runs spend the
+  // visitor's own budget, so they never trip (or count toward) ours.
+  if (!byokKey && (await overBudget())) {
     return NextResponse.json(
       { capacity: true, reason: "budget", error: "We're at capacity right now. Explore existing campaigns while we catch up." },
       { status: 503 },
@@ -91,6 +145,7 @@ export async function POST(req: Request) {
       mode: "public",
       profile: "express",
       environmentId: factoryEnvId(),
+      ...(byokKey ? { byokAnthropicKey: byokKey } : {}),
     });
   } catch (err) {
     if (!isAdmin) {
