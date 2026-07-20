@@ -174,6 +174,7 @@ function buildDeps(
     modelMode: ctx.modelMode,
     signal: ctx.signal,
     apiKey: ctx.apiKey,
+    apiProvider: ctx.apiProvider,
     now: () => new Date(),
   };
 }
@@ -606,6 +607,7 @@ export function reviewerNode(pass: ReviewPass, journeySteps: number[]) {
       modelMode: ctx.modelMode,
       signal: ctx.signal,
       apiKey: ctx.apiKey,
+      apiProvider: ctx.apiProvider,
       now: () => new Date(),
     };
 

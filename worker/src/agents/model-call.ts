@@ -143,7 +143,7 @@ const cleanSnippet = (s: string, cap = 140): string => s.replace(/\s+/g, " ").tr
 type Block = { type: string; [k: string]: unknown };
 
 export async function runModelTurn(spec: ModelTurnSpec, deps: ExecutorDeps): Promise<ModelTurnResult> {
-  const client = getClient(deps.apiKey);
+  const client = getClient(deps.apiKey, deps.apiProvider);
   const nowMs = () => (deps.now?.() ?? new Date()).getTime();
   const deadline = nowMs() + spec.timeoutMs;
   const remaining = () => deadline - nowMs();

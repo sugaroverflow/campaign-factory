@@ -2,10 +2,53 @@ import Anthropic from "@anthropic-ai/sdk";
 import { type Effort } from "./pipeline/models";
 import { type Usage, type UsageSink } from "./spend/pricing";
 
+// Which upstream serves a run's model calls. "anthropic" is the house default;
+// "openrouter" is the BYOK path for visitors with an OpenRouter key (sk-or-…).
+export type ModelProvider = "anthropic" | "openrouter";
+
+// OpenRouter's Anthropic-compatible Messages endpoint ("Anthropic skin"): the
+// SDK appends /v1/messages to this base. Auth is a Bearer token (the sk-or-
+// key), NOT x-api-key — hence authToken below with apiKey nulled, mirroring
+// OpenRouter's own Claude Code setup (ANTHROPIC_AUTH_TOKEN + empty API key).
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api";
+
+// The provider a client was constructed for — read back by call() to map the
+// canonical model name to the provider's wire slug without changing any call
+// site's signature.
+const clientProvider = new WeakMap<Anthropic, ModelProvider>();
+
+export function providerOf(client: Anthropic): ModelProvider {
+  return clientProvider.get(client) ?? "anthropic";
+}
+
+// Canonical model id → OpenRouter slug. OpenRouter uses DOTTED minor versions
+// (anthropic/claude-opus-4.8) but plain names for unversioned models
+// (anthropic/claude-sonnet-5) — verified against GET /api/v1/models.
+const OPENROUTER_SLUGS: Record<string, string> = {
+  "claude-sonnet-5": "anthropic/claude-sonnet-5",
+  "claude-opus-4-8": "anthropic/claude-opus-4.8",
+  "claude-sonnet-4-6": "anthropic/claude-sonnet-4.6",
+  "claude-haiku-4-5": "anthropic/claude-haiku-4.5",
+};
+
+/** Map a canonical Anthropic model id to the wire id for the given provider.
+ * Internal records (agent_runs, cost ledger, events) always keep the
+ * canonical name; only the outgoing request body carries the slug. */
+export function wireModel(model: string, provider: ModelProvider): string {
+  if (provider !== "openrouter") return model;
+  return OPENROUTER_SLUGS[model] ?? `anthropic/${model.replace(/-(\d+)-(\d+)$/, "-$1.$2")}`;
+}
+
 // Client factory. Key resolution: explicit per-run key (BYOK seam) → server env.
 // AI Gateway swap point: to route spend through Vercel AI Gateway, set baseURL +
 // the gateway key here once the web_search passthrough is verified (PLAN §12).
-export function getClient(apiKey?: string): Anthropic {
+export function getClient(apiKey?: string, provider: ModelProvider = "anthropic"): Anthropic {
+  if (provider === "openrouter") {
+    if (!apiKey) throw new Error("No OpenRouter API key provided for this run.");
+    const client = new Anthropic({ authToken: apiKey, apiKey: null, baseURL: OPENROUTER_BASE_URL });
+    clientProvider.set(client, "openrouter");
+    return client;
+  }
   const key = apiKey || process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("No Anthropic API key configured (set ANTHROPIC_API_KEY or pass one per run).");
   return new Anthropic({ apiKey: key });
@@ -216,7 +259,9 @@ export async function call(
   p: CallParams,
   opts: CallOptions = {},
 ): Promise<Anthropic.Message> {
-  const base = buildParams(p);
+  // Wire-level model slug for the client's provider; p.model stays canonical
+  // everywhere else (usage records, cost pricing, agent_runs).
+  const base = buildParams({ ...p, model: wireModel(p.model, providerOf(client)) });
   let msg = await streamOnce(client, base, opts);
   opts.onUsage?.(p.model, msg.usage as Usage);
   // The container id (code-execution-backed server tools, e.g. web_search) may

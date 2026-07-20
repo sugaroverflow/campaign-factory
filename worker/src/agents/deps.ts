@@ -23,6 +23,7 @@ import type {
   FactoryEventType,
   ModelMode,
 } from "@web/lib/factory/contracts/index.js";
+import type { ModelProvider } from "@web/lib/anthropic.js";
 
 // ---- Event emission -------------------------------------------------------
 // W2 fills eventId, sequence, campaign/batch/agent ids, parentAgentRunId, `at`,
@@ -75,7 +76,8 @@ export interface ExecutorDeps {
   agentDef: AgentDef;
   modelMode: ModelMode; // "mock" | "live"
   signal: AbortSignal; // run-level cancellation
-  apiKey?: string; // optional per-run Anthropic key (BYOK seam); else server env
+  apiKey?: string; // optional per-run model-provider key (BYOK seam); else server env
+  apiProvider?: ModelProvider; // which upstream the key belongs to; default "anthropic"
   now?: () => Date; // injectable clock for deterministic mock pacing / tests
 }
 

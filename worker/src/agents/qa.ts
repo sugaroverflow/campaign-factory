@@ -149,7 +149,7 @@ export async function runInvisibleQA(input: QAInput, deps: ExecutorDeps): Promis
   if (deps.modelMode === "mock" || deps.signal.aborted) return flags;
 
   try {
-    const client = getClient(deps.apiKey);
+    const client = getClient(deps.apiKey, deps.apiProvider);
     // The Haiku pass is a model call like any other: it goes through the
     // concurrency gate so QA cannot exceed the campaign/global call caps.
     const release = await deps.gate.acquire({

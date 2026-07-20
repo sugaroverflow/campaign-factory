@@ -59,18 +59,26 @@ export async function handleStartRun(body: unknown): Promise<HandlerResult> {
 
   // BYOK: seal the visitor's key before it touches the database. Policy (the
   // key being REQUIRED for non-admin public runs) lives in the web gate; the
-  // worker's job is to never store or log the plaintext. byokRun survives the
-  // terminal strip so spend accounting can keep excluding the run.
+  // worker's job is to never store or log the plaintext. byokRun and
+  // byokProvider survive the terminal strip — spend accounting reads the
+  // former, client construction the latter.
   let byokMeta: Record<string, unknown> = {};
-  if (typeof b.byokAnthropicKey === "string" && b.byokAnthropicKey.trim() !== "") {
-    const key = b.byokAnthropicKey.trim();
-    if (!/^sk-ant-/.test(key)) {
-      return bad(400, "byokAnthropicKey does not look like an Anthropic API key");
+  const rawByokKey =
+    typeof b.byokKey === "string" && b.byokKey.trim() !== ""
+      ? b.byokKey.trim()
+      : typeof b.byokAnthropicKey === "string" && b.byokAnthropicKey.trim() !== ""
+        ? b.byokAnthropicKey.trim() // legacy field: always an Anthropic key
+        : undefined;
+  if (rawByokKey) {
+    const provider = b.byokProvider === "openrouter" ? "openrouter" : "anthropic";
+    const prefixOk = provider === "openrouter" ? /^sk-or-/.test(rawByokKey) : /^sk-ant-/.test(rawByokKey);
+    if (!prefixOk) {
+      return bad(400, `byok key does not match the declared provider (${provider})`);
     }
     if (!byokEnabled()) {
       return bad(503, "BYOK is not configured on this worker (FACTORY_BYOK_SECRET unset)");
     }
-    byokMeta = { byokRun: true, byok: sealByok(key) };
+    byokMeta = { byokRun: true, byokProvider: provider, byok: sealByok(rawByokKey) };
   }
 
   const s = sql();

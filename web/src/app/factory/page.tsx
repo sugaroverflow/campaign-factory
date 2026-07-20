@@ -57,7 +57,8 @@ const EXAMPLE = {
 };
 
 function keyLooksValid(key: string): boolean {
-  return /^sk-ant-[A-Za-z0-9_-]{10,}$/.test(key.trim());
+  const k = key.trim();
+  return /^sk-ant-[A-Za-z0-9_-]{10,}$/.test(k) || /^sk-or-[A-Za-z0-9_-]{10,}$/.test(k);
 }
 
 export default function FactoryIntakePage() {
@@ -84,7 +85,7 @@ export default function FactoryIntakePage() {
     setError(null);
     const res = await startFactoryRun(
       { problem: problem.trim(), place: place.trim() },
-      { anthropicApiKey: apiKey.trim() },
+      { apiKey: apiKey.trim() },
     );
     if (res.ok && res.data) {
       rememberFactoryRun({
@@ -164,7 +165,7 @@ export default function FactoryIntakePage() {
 
         <div className="mt-6 space-y-2.5">
           <Label htmlFor="apiKey" className="flex-wrap text-base">
-            Your Anthropic API key{" "}
+            Your Anthropic or OpenRouter API key{" "}
             <span className="font-normal text-muted-foreground">
               (the agents run on your key — <span className="font-medium text-[var(--brand)]">required</span>)
             </span>
@@ -175,7 +176,7 @@ export default function FactoryIntakePage() {
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             onBlur={() => setTouchedKey(true)}
-            placeholder="sk-ant-…"
+            placeholder="sk-ant-… or sk-or-…"
             autoComplete="off"
             spellCheck={false}
             className={`${styles.field} h-auto rounded-full px-4 py-2.5 text-base`}
@@ -183,7 +184,8 @@ export default function FactoryIntakePage() {
           />
           {touchedKey && !keyOk ? (
             <p className="text-sm text-[var(--bad)]">
-              Anthropic keys start with <code>sk-ant-</code> — paste the whole key. Create one at{" "}
+              Keys start with <code>sk-ant-</code> (Anthropic) or <code>sk-or-</code> (OpenRouter) — paste the
+              whole key. Create one at{" "}
               <a
                 href="https://console.anthropic.com/settings/keys"
                 target="_blank"
@@ -191,13 +193,22 @@ export default function FactoryIntakePage() {
                 className="underline underline-offset-2"
               >
                 console.anthropic.com
+              </a>{" "}
+              or{" "}
+              <a
+                href="https://openrouter.ai/settings/keys"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                openrouter.ai
               </a>
               .
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              A campaign typically costs $1.50–$3 of your Anthropic credit, hard-capped at $20. Your key is
-              encrypted, used only for this campaign&apos;s agents, and deleted when the run finishes — get one at{" "}
+              A campaign typically costs $1.50–$3 of your credit, hard-capped at $20. Your key is encrypted,
+              used only for this campaign&apos;s agents, and deleted when the run finishes — get one at{" "}
               <a
                 href="https://console.anthropic.com/settings/keys"
                 target="_blank"
@@ -205,6 +216,15 @@ export default function FactoryIntakePage() {
                 className="underline underline-offset-2"
               >
                 console.anthropic.com
+              </a>{" "}
+              or{" "}
+              <a
+                href="https://openrouter.ai/settings/keys"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                openrouter.ai
               </a>
               .
             </p>

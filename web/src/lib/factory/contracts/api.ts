@@ -73,9 +73,15 @@ export interface StartRunRequest {
   mode: "public" | "presenter";
   environmentId: string; // must match worker's declared FACTORY_ENV_ID
   profile?: RunProfile; // default "full"
-  // BYOK: the visitor's own Anthropic API key. The web gate validates it
-  // against Anthropic and REQUIRES it for non-admin public runs; the worker
-  // seals it (AES-256-GCM) into run meta and strips it at the terminal event.
+  // BYOK: the visitor's own model-provider API key. The web gate validates it
+  // against the provider and REQUIRES one for non-admin public runs; the
+  // worker seals it (AES-256-GCM) into run meta and strips it at the terminal
+  // event. byokProvider defaults to "anthropic" when absent.
+  byokKey?: string;
+  byokProvider?: "anthropic" | "openrouter";
+  // Legacy field name (pre-OpenRouter); treated as byokKey + provider
+  // "anthropic". Kept so an older web deploy can talk to a newer worker
+  // during the cutover window.
   byokAnthropicKey?: string;
 }
 

@@ -8,6 +8,7 @@ import type { Sql } from "../db/pool.js";
 import type { Emitter } from "../events/emit.js";
 import type { Gate, RecordUsage, AgentTurnFn } from "../agents/deps.js";
 import type { ModelMode } from "../config.js";
+import type { ModelProvider } from "@web/lib/anthropic.js";
 import type { ReviewFn, QAFn } from "./review-contract.js";
 
 export interface RuntimeContext {
@@ -21,6 +22,7 @@ export interface RuntimeContext {
   batchId?: string;
   signal: AbortSignal;
   apiKey?: string;
+  apiProvider?: ModelProvider;
   executeAgentTurn: AgentTurnFn;
   review: ReviewFn;
   runQA: QAFn;

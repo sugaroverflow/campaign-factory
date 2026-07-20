@@ -132,6 +132,18 @@ function isOverloadError(e: unknown): boolean {
   return msg.includes('"overloaded_error"') || msg.includes('"rate_limit_error"');
 }
 
+// Auth/credit failures are NON-retryable: a rejected, revoked, or
+// out-of-credits key (Anthropic 401; OpenRouter 401/402/403 on BYOK runs)
+// fails identically on every rung, and the Opus fallback would burn the same
+// dead key. Fail the turn immediately with an honest gap instead.
+function isKeyOrCreditError(e: unknown): boolean {
+  const err = e as { status?: unknown; message?: unknown } | null;
+  const status = typeof err?.status === "number" ? err.status : undefined;
+  if (status === 401 || status === 402 || status === 403) return true;
+  const msg = typeof err?.message === "string" ? err.message : "";
+  return msg.includes('"authentication_error"') || msg.includes("Insufficient credits");
+}
+
 function overloadWaitMs(e: unknown): number {
   const headers = (e as { headers?: unknown })?.headers;
   const raw =
@@ -180,6 +192,10 @@ async function runWithOperationalRetry(
       diag(`${spec.def.key} attempt ${attempt} failed`, e);
       if (e instanceof TurnAbortedError || e instanceof EmptyOutputError) throw e;
       lastError = e;
+      if (isKeyOrCreditError(e)) {
+        work.work("The API key for this run was rejected or is out of credits — not retrying", "failed");
+        return null;
+      }
       if (!isOverloadError(e) || attempt >= 1 + OVERLOAD_EXTRA_ATTEMPTS) break;
       const waitMs = overloadWaitMs(e);
       if (headroomNow() - waitMs < MIN_RETRY_HEADROOM_MS) break;

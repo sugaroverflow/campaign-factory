@@ -15,7 +15,7 @@ export interface StartFactoryResult {
 
 export async function startFactoryRun(
   intake: CampaignIntake,
-  opts?: { anthropicApiKey?: string },
+  opts?: { apiKey?: string },
 ): Promise<StartFactoryResult> {
   try {
     const r = await fetch("/api/factory/runs", {
@@ -24,7 +24,7 @@ export async function startFactoryRun(
       body: JSON.stringify({
         intake,
         mode: "public",
-        ...(opts?.anthropicApiKey ? { anthropicApiKey: opts.anthropicApiKey } : {}),
+        ...(opts?.apiKey ? { apiKey: opts.apiKey } : {}),
       }),
     });
     const data = await r.json().catch(() => ({}));
