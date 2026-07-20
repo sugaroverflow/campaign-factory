@@ -7,6 +7,7 @@
 // the store functions (all of which take a `Db` as first argument).
 
 import postgres from "postgres";
+import { needsSsl } from "../../db/ssl";
 import type { Db } from "./types";
 
 const g = globalThis as unknown as { __cf_factory_sql?: Db };
@@ -17,8 +18,7 @@ function make(): Db {
   // DATABASE_URL (ADR 0014: no cross-environment fallback the other way).
   const url = process.env.FACTORY_DATABASE_URL || process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL is not set");
-  const needsSsl = /neon\.tech|sslmode=require/.test(url) || process.env.PGSSL === "require";
-  return postgres(url, { ssl: needsSsl ? "require" : false, max: 10, idle_timeout: 20 });
+  return postgres(url, { ssl: needsSsl(url) ? "require" : false, max: 10, idle_timeout: 20 });
 }
 
 /** Pooled factory client for web request/response reads and writes. */

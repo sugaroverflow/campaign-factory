@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { needsSsl } from "./ssl";
 
 // Portable Postgres client (works against local Docker and Neon alike — Neon
 // takes a standard connection string). Singleton across dev hot-reloads to avoid
@@ -9,8 +10,7 @@ const g = globalThis as unknown as { __cf_sql?: ReturnType<typeof postgres> };
 
 function make() {
   if (!url) throw new Error("DATABASE_URL is not set");
-  const needsSsl = /neon\.tech|sslmode=require/.test(url) || process.env.PGSSL === "require";
-  return postgres(url, { ssl: needsSsl ? "require" : false, max: 10, idle_timeout: 20 });
+  return postgres(url, { ssl: needsSsl(url) ? "require" : false, max: 10, idle_timeout: 20 });
 }
 
 export const sql = g.__cf_sql ?? (g.__cf_sql = make());

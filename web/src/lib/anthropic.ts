@@ -12,13 +12,13 @@ export type ModelProvider = "anthropic" | "openrouter";
 // OpenRouter's own Claude Code setup (ANTHROPIC_AUTH_TOKEN + empty API key).
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api";
 
-// The provider a client was constructed for — read back by call() to map the
-// canonical model name to the provider's wire slug without changing any call
-// site's signature.
-const clientProvider = new WeakMap<Anthropic, ModelProvider>();
-
-export function providerOf(client: Anthropic): ModelProvider {
-  return clientProvider.get(client) ?? "anthropic";
+// The model-call handle: the SDK client plus the provider it was built for,
+// so provider knowledge travels IN THE TYPE instead of a side channel. call()
+// reads .provider to map canonical model names to the provider's wire slugs;
+// .sdk is the escape hatch for anything not routed through call().
+export interface ModelClient {
+  readonly provider: ModelProvider;
+  readonly sdk: Anthropic;
 }
 
 // Canonical model id → OpenRouter slug. OpenRouter uses DOTTED minor versions
@@ -42,16 +42,17 @@ export function wireModel(model: string, provider: ModelProvider): string {
 // Client factory. Key resolution: explicit per-run key (BYOK seam) → server env.
 // AI Gateway swap point: to route spend through Vercel AI Gateway, set baseURL +
 // the gateway key here once the web_search passthrough is verified (PLAN §12).
-export function getClient(apiKey?: string, provider: ModelProvider = "anthropic"): Anthropic {
+export function getClient(apiKey?: string, provider: ModelProvider = "anthropic"): ModelClient {
   if (provider === "openrouter") {
     if (!apiKey) throw new Error("No OpenRouter API key provided for this run.");
-    const client = new Anthropic({ authToken: apiKey, apiKey: null, baseURL: OPENROUTER_BASE_URL });
-    clientProvider.set(client, "openrouter");
-    return client;
+    return {
+      provider: "openrouter",
+      sdk: new Anthropic({ authToken: apiKey, apiKey: null, baseURL: OPENROUTER_BASE_URL }),
+    };
   }
   const key = apiKey || process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("No Anthropic API key configured (set ANTHROPIC_API_KEY or pass one per run).");
-  return new Anthropic({ apiKey: key });
+  return { provider: "anthropic", sdk: new Anthropic({ apiKey: key }) };
 }
 
 // Minimal param surface we use. Cast to the SDK type at the call site so beta-ish
@@ -255,14 +256,14 @@ async function streamOnce(
 }
 
 export async function call(
-  client: Anthropic,
+  client: ModelClient,
   p: CallParams,
   opts: CallOptions = {},
 ): Promise<Anthropic.Message> {
   // Wire-level model slug for the client's provider; p.model stays canonical
   // everywhere else (usage records, cost pricing, agent_runs).
-  const base = buildParams({ ...p, model: wireModel(p.model, providerOf(client)) });
-  let msg = await streamOnce(client, base, opts);
+  const base = buildParams({ ...p, model: wireModel(p.model, client.provider) });
+  let msg = await streamOnce(client.sdk, base, opts);
   opts.onUsage?.(p.model, msg.usage as Usage);
   // The container id (code-execution-backed server tools, e.g. web_search) may
   // arrive on an EARLY pause segment and be null on later ones. Remember it,
@@ -279,7 +280,7 @@ export async function call(
       ...(p.messages as Anthropic.MessageParam[]),
       { role: "assistant" as const, content: msg.content },
     ]);
-    msg = await streamOnce(client, { ...base, messages, ...(containerId ? { container: containerId } : {}) }, opts);
+    msg = await streamOnce(client.sdk, { ...base, messages, ...(containerId ? { container: containerId } : {}) }, opts);
     opts.onUsage?.(p.model, msg.usage as Usage);
     containerId = msg.container?.id ?? containerId;
   }

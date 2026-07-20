@@ -116,6 +116,6 @@ export function requireDatabaseUrl(): string {
   return config.databaseUrl;
 }
 
-export function needsSsl(url: string): boolean {
-  return /neon\.tech|sslmode=require/.test(url) || (str("PGSSL") ?? "") === "require";
-}
+// Re-exported so existing worker imports keep working; the predicate itself
+// lives with the other DB plumbing in the shared web lib.
+export { needsSsl } from "@web/lib/db/ssl.js";

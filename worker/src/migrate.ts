@@ -18,6 +18,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import dotenv from "dotenv";
 import pg from "pg";
+import { needsSsl } from "@web/lib/db/ssl.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..", ".."); // worker/src -> repo root
@@ -44,9 +45,6 @@ function connectionString(): string {
   return url;
 }
 
-function needsSsl(url: string): boolean {
-  return /neon\.tech|sslmode=require/.test(url) || process.env.PGSSL === "require";
-}
 
 interface MigrationFile {
   version: string; // leading numeric prefix, e.g. "001"

@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import { sql, migrate } from "./client";
+import { needsSsl } from "./ssl";
 import { dailyBudgetUSD } from "@/lib/config";
 
 // Durable daily spend ledger (replaces the in-memory shim). Keyed by UTC date.
@@ -20,8 +21,7 @@ function factorySql(): ReturnType<typeof postgres> {
   const url = (process.env.FACTORY_DATABASE_URL || "").trim();
   if (!url || url === process.env.DATABASE_URL) return sql;
   if (factoryLedgerSql) return factoryLedgerSql;
-  const needsSsl = /neon\.tech|sslmode=require/.test(url) || process.env.PGSSL === "require";
-  factoryLedgerSql = postgres(url, { ssl: needsSsl ? "require" : false, max: 5, idle_timeout: 20 });
+  factoryLedgerSql = postgres(url, { ssl: needsSsl(url) ? "require" : false, max: 5, idle_timeout: 20 });
   return factoryLedgerSql;
 }
 
